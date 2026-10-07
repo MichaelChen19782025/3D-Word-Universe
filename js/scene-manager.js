@@ -1,6 +1,6 @@
 /**
- * 3D单词宇宙 - Three.js 核心场景、相机、控制器、灯光组及按需节能渲染管线
- * 严格复用 AppMath，杜绝全局 Scratch 变量重复声明
+ * 3D单词宇宙 - Three.js 核心场景管理与渲染管线
+ * 核心还原：原版图 2 的立体球形纬度/深度缩放与呼吸透视
  */
 (function() {
     const AppScene = {
@@ -244,6 +244,7 @@
             this.updateStudioLightSettings();
         },
 
+        // 核心渲染循环：完美复原图 2 的透视深度、球体弧度与呼吸光效
         animate(time) {
             if (time === undefined || time === null) time = performance.now();
             requestAnimationFrame((t) => AppScene.animate(t));
@@ -335,6 +336,7 @@
             }
             if (appState.coreSphere) appState.coreSphere.rotation.y += 0.00035;
 
+            // 悬浮大卡片动画插值
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
                 const lerpFactor = 0.1;
@@ -351,11 +353,7 @@
                     if (card.userData.refs.coreGlow) {
                         card.userData.refs.coreGlow.material.opacity = newOp * 1.5;
                     }
-                    if (newOp > 0.01 && card.scale.x > 0.01) {
-                        card.visible = true;
-                    } else {
-                        card.visible = false;
-                    }
+                    card.visible = (newOp > 0.01 && card.scale.x > 0.01);
                 }
 
                 if (appState.overlayCardTargetPosition) {
@@ -364,39 +362,84 @@
                 }
             }
 
-            // 使用统一共享的 AppMath 向量，杜绝变量重复声明
-            appState.camera.getWorldPosition(AppMath.vecCamWorld);
-
-            const grappleFactor = AppOrbit.tickGrapple(time);
-            const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.012 * appState.rotationMultiplier * appState.rotationMultiplierTemporary;
+            // 球体自转与擒拿加速
+            const grappleFactor = AppSphereEngine.tickGrapple(time);
+            const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.0058 * appState.rotationMultiplier * appState.rotationMultiplierTemporary;
 
             if (appState.autoRotate && baseRotationSpeed > 0 && appState.wordSphereGroup && !appState.isFlowMode) {
                 let dynamicSpeed = baseRotationSpeed * grappleFactor;
                 if (appState.rotationModel === 'sine-ease') {
                     dynamicSpeed = baseRotationSpeed * grappleFactor * (1.25 + 0.75 * Math.sin(time * 0.0005));
                 }
-                const lanes = appState.orbitLanes;
-                for (let i = 0; i < lanes.length; i++) {
-                    lanes[i].group.rotateZ(dynamicSpeed * lanes[i].speedFactor * lanes[i].dir);
-                }
+                const rx = document.getElementById('rotateX');
+                const ry = document.getElementById('rotateY');
+                const rz = document.getElementById('rotateZ');
+                if (rx && rx.checked) appState.wordSphereGroup.rotation.x += dynamicSpeed;
+                if (ry && ry.checked) appState.wordSphereGroup.rotation.y += dynamicSpeed;
+                if (rz && rz.checked) appState.wordSphereGroup.rotation.z += dynamicSpeed;
             }
 
-            AppOrbit.updateGrappleEffects();
+            AppSphereEngine.updateGrappleEffects();
 
-            if (!appState.isFlowMode && appState.wordSphereGroup) {
-                const parentQuat = appState.wordSphereGroup.quaternion;
-                const camQuat = appState.camera.quaternion;
-                appState.orbitLanes.forEach(lane => {
-                    AppMath.quadParentInv.copy(parentQuat).multiply(lane.group.quaternion).invert().multiply(camQuat);
-                    const children = lane.group.children;
-                    for (let i = 0; i < children.length; i++) {
-                        const card = children[i];
-                        card.quaternion.copy(AppMath.quadParentInv);
-                        if (appState.rt.cardSelfRotation && appState.rt.cardRotationSpeed > 0) {
-                            card.rotateOnAxis(card.userData.rotationAxis, card.userData.rotationSpeed * appState.rt.cardRotationSpeed);
+            appState.camera.getWorldPosition(AppMath.vecCamWorld);
+            const shouldCardsRotate = document.getElementById('cardSelfRotation')?.checked;
+            const cardMasterSpeed = parseFloat(document.getElementById('cardRotationSpeed')?.value || '2') * 0.00115;
+
+            if (appState.wordSphereGroup) {
+                appState.wordSphereGroup.updateMatrixWorld(true);
+            }
+
+            // 💡 图 2 核心视觉：根据到相机的距离 t 和纬度 Y 进行自适应缩放，营造完美球体立体弧度
+            if (!appState.isFlowMode) {
+                const radius = appState.sphereRadius || 85;
+                const camDist = AppMath.vecCamWorld.length();
+                const maxDist = camDist + radius;
+                const minDist = camDist - radius;
+                const distRange = 2 * radius;
+
+                const basePulse = 0.20 + Math.sin(time * 0.0012) * 0.15;
+                const glassBreath = 0.95 + Math.sin(time * 0.0012) * 0.05;
+
+                appState.wordObjects.forEach(card => {
+                    card.getWorldPosition(AppMath.vecCardWorld);
+                    const dist = AppMath.vecCardWorld.distanceTo(AppMath.vecCamWorld);
+                    const t = THREE.MathUtils.clamp((dist - minDist) / distRange, 0, 1);
+
+                    const depthScale = THREE.MathUtils.lerp(1.4, 0.32, t);
+                    const normalizedY = card.position.y / radius;
+                    const latScale = 1.0 - 0.45 * (normalizedY * normalizedY);
+
+                    const finalScale = latScale * depthScale * cardMult;
+                    card.scale.set(finalScale, finalScale, finalScale);
+
+                    const frontOpacity = THREE.MathUtils.lerp(0.95, 0.15, t) * glassBreath;
+                    const sideOpacity = THREE.MathUtils.lerp(0.35, 0.05, t) * glassBreath;
+
+                    if (Array.isArray(card.material)) {
+                        if (card.material[0]) card.material[0].opacity = frontOpacity;
+                        if (card.material[1]) {
+                            card.material[1].opacity = sideOpacity;
+                            card.material[1].emissiveIntensity = basePulse * (1.0 - t) * 1.5;
                         }
+                    } else if (card.material) {
+                        card.material.opacity = frontOpacity;
                     }
                 });
+
+                // 让所有卡片保持正对相机
+                AppMath.quadParentInv.copy(appState.wordSphereGroup.quaternion).invert();
+                AppMath.quadParentInv.multiply(appState.camera.quaternion);
+
+                appState.wordObjects.forEach(card => {
+                    card.quaternion.copy(AppMath.quadParentInv);
+                    if (shouldCardsRotate && cardMasterSpeed > 0) {
+                        card.rotateOnAxis(card.userData.rotationAxis, card.userData.rotationSpeed * cardMasterSpeed);
+                    }
+                });
+            }
+
+            if (appState.activeCardObject && appState.activeCardObject.userData.hoverSideMaterial) {
+                appState.activeCardObject.userData.hoverSideMaterial.emissiveIntensity = 0.78 + Math.sin(time * 0.0043) * 0.68;
             }
 
             if (appState.rt.visualFxEnabled && appState.composer) {

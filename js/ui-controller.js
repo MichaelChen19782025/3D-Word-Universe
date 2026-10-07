@@ -1,6 +1,5 @@
 /**
- * 3D单词宇宙 - 全局 UI 交互中枢、全功能面板、设置绑定与系统引导器
- * (IIFE 封闭作用域，杜绝全局变量污染与同名冲突)
+ * 3D单词宇宙 - 全功能 UI 交互控制器与启动总装中枢
  */
 (function() {
     let fontScale = 1.0;
@@ -17,10 +16,8 @@
 
     const AppUI = {
         async init() {
-            // 1. 初始化存储中枢（自动填入高频备用词库，防清缓存白屏变砖）
             await AppStorage.init();
 
-            // 2. 初始化 3D 场景与音频
             AppScene.init();
             AppAudio.init();
             AppParticles.initClickBurstParticles();
@@ -28,27 +25,27 @@
             AppParticles.initStarfield();
             AppParticles.initDynamicBackground();
             AppParticles.initNebulaColors();
-            AppOrbit.initGrapple();
+            AppParticles.initCardEmbers();
+            AppSphereEngine.initGrapple();
 
-            // 3. 构建 3D 悬浮详情大卡片骨架
             this.initPremiumHoverCard();
-
-            // 4. 装载持久化配置并挂载所有 DOM 事件
             this.initDOMEventListeners();
             this.initSettingsAndSliders();
             this.initMobileTouchHandlers();
             this.initClock();
-            this.initCardStyleSelector();
+            this.initSystemViews();
+            this.loadCustomViews();
+            this.loadCustomWordBanks();
+            this.loadCustomRotations();
+            this.loadCustomHoverPositions();
 
-            // 5. 自动还原词库并构建 3D 球体
             await this.loadWordDataAndBoot();
 
-            // 6. 标记准备就绪
             setTimeout(() => {
                 appState.isInitializing = false;
                 this.refreshRuntimeCache();
                 appState.needsRender = true;
-                console.log('3D 单词宇宙系统全量启动完毕！');
+                console.log('3D 单词宇宙系统以原版经典视觉成功启动！');
             }, 300);
         },
 
@@ -75,7 +72,7 @@
 
             if (!list || !list.length) {
                 appState.currentBatchWords = [];
-                AppOrbit.createWordSphere([]);
+                AppSphereEngine.createWordSphere([]);
                 this.updateBatchControls();
                 this.updateStats();
                 return;
@@ -86,7 +83,7 @@
             appState.currentBatchIndex = Math.max(0, Math.min(appState.currentBatchIndex, total - 1));
             appState.currentBatchWords = list.slice(appState.currentBatchIndex * size, (appState.currentBatchIndex + 1) * size);
 
-            AppOrbit.createWordSphere(appState.currentBatchWords);
+            AppSphereEngine.createWordSphere(appState.currentBatchWords);
             this.updateBatchControls();
             this.updateStats();
             appState.needsRender = true;
@@ -140,7 +137,7 @@
 
             const coreGlow = new THREE.Mesh(
                 new THREE.PlaneGeometry(1, 1),
-                new THREE.MeshBasicMaterial({ color: 0x68d0ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false })
+                new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false })
             );
             coreGlow.position.z = 0.01;
             coreGlow.renderOrder = 9996;
@@ -176,29 +173,6 @@
             };
             update();
             setInterval(update, 1000);
-        },
-
-        initCardStyleSelector() {
-            const sel = document.getElementById('cardStyleSelect');
-            if (!sel) return;
-            sel.innerHTML = APP_CONFIG.CARD_STYLES.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-            sel.value = appState.currentCardStyleId;
-
-            const updateDesc = () => {
-                const desc = document.getElementById('cardStyleDesc');
-                const s = APP_CONFIG.CARD_STYLES.find(x => x.id === sel.value) || APP_CONFIG.CARD_STYLES[0];
-                if (desc) desc.textContent = `当前风格：${s.name} · ${s.desc}`;
-            };
-
-            sel.addEventListener('change', () => {
-                appState.currentCardStyleId = sel.value;
-                updateDesc();
-                if (appState.currentBatchWords.length > 0) {
-                    AppOrbit.createWordSphere(appState.currentBatchWords);
-                }
-                appState.needsRender = true;
-            });
-            updateDesc();
         },
 
         initMobileTouchHandlers() {
@@ -237,7 +211,7 @@
                         raycaster.setFromCamera(mouse, appState.camera);
                         const hits = raycaster.intersectObjects(appState.wordObjects, false);
                         if (hits.length === 0) {
-                            AppOrbit.triggerManualGrapple();
+                            AppSphereEngine.triggerManualGrapple();
                             return;
                         }
                     }
@@ -256,7 +230,6 @@
             const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(mouse, appState.camera);
 
-            // 1. 悬浮 3D 卡片内部按钮点击响应
             if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
                 const screenMesh = appState.hoverOverlayCard.userData.refs?.screen;
                 const hits = raycaster.intersectObjects([appState.hoverOverlayCard], true);
@@ -273,17 +246,17 @@
                         if (word && word.hover_click_zones) {
                             for (const zone of word.hover_click_zones) {
                                 if (clickX >= zone.xMin && clickX <= zone.xMax && clickY >= zone.yMin && clickY <= zone.yMax) {
-                                    if (zone.type === 'speak' || zone.type === 'word') {
+                                    if (zone.type === 'word') {
                                         AppAudio.speakWord(word.words, 1);
                                     } else if (zone.type === 'fontSizeDown') {
                                         let s = parseFloat(document.getElementById('hoverOverlayCardScale').value);
-                                        s = Math.max(0.5, s - 0.15);
+                                        s = Math.max(0.5, s - 0.1);
                                         document.getElementById('hoverOverlayCardScale').value = s;
                                         document.getElementById('hoverOverlayCardScaleOutput').textContent = s.toFixed(2);
                                         this.triggerCardDisplay(appState.hoveredObject);
                                     } else if (zone.type === 'fontSizeUp') {
                                         let s = parseFloat(document.getElementById('hoverOverlayCardScale').value);
-                                        s = Math.min(2.5, s + 0.15);
+                                        s = Math.min(2.5, s + 0.1);
                                         document.getElementById('hoverOverlayCardScale').value = s;
                                         document.getElementById('hoverOverlayCardScaleOutput').textContent = s.toFixed(2);
                                         this.triggerCardDisplay(appState.hoveredObject);
@@ -307,7 +280,6 @@
                 }
             }
 
-            // 2. 拾取球面卡片
             const cardHits = raycaster.intersectObjects(appState.wordObjects, false);
             if (cardHits.length > 0) {
                 const card = cardHits[0].object;
@@ -375,7 +347,7 @@
 
             addField('词根形式', word.root_form);
             addField('记忆方法', word.method);
-            addField('词性', word['part of speech']);
+            addField('词性', word.part_of_speech);
             addField('年级大类', word.grade);
             addField('单元', word.unit);
             addField('来源', word.Source);
@@ -474,7 +446,6 @@
         },
 
         initSettingsAndSliders() {
-            // 滑块与数值联动监听
             const bindInputSync = (sliderId, numId, callback) => {
                 const slider = document.getElementById(sliderId);
                 const num = document.getElementById(numId);
@@ -499,14 +470,13 @@
             bindInputSync('defaultBrightnessOnLoad', 'defaultBrightnessOnLoadInput', (v) => {
                 const mult = document.getElementById('sphereCardBaseColorMultiplier');
                 if (mult) mult.value = v;
-                if (appState.currentBatchWords.length > 0) AppOrbit.createWordSphere(appState.currentBatchWords);
+                if (appState.currentBatchWords.length > 0) AppSphereEngine.createWordSphere(appState.currentBatchWords);
             });
 
             bindInputSync('vortexSpeed', 'vortexSpeedInput', (v) => {
                 appState.rt.vortexSpeed = safeParseFloat(v, 0);
             });
 
-            // 监听所有通用设置变动
             document.querySelectorAll('#controlsOverlay input, #controlsOverlay select').forEach(input => {
                 input.addEventListener('change', () => {
                     this.refreshRuntimeCache();
@@ -517,7 +487,6 @@
         },
 
         initDOMEventListeners() {
-            // 1. 右下角折叠控制菜单
             const masterToggle = document.getElementById('masterMenuToggleBtn');
             const viewGroup = document.getElementById('viewControlsContainer');
             if (masterToggle && viewGroup) {
@@ -534,7 +503,6 @@
                 });
             }
 
-            // 2. 侧边设置开关
             document.getElementById('settingsBtn')?.addEventListener('click', () => {
                 document.getElementById('controlsOverlay')?.classList.toggle('visible');
             });
@@ -542,7 +510,6 @@
                 document.getElementById('controlsOverlay')?.classList.remove('visible');
             });
 
-            // 3. 基础旋转与语言切换
             document.getElementById('rotateToggle')?.addEventListener('click', () => {
                 appState.autoRotate = !appState.autoRotate;
                 document.getElementById('rotateToggle').textContent = appState.autoRotate ? '🔁' : '⏹️';
@@ -556,16 +523,14 @@
                 this.displayCurrentBatch();
             });
 
-            // 4. 随机卡片乱序
             document.getElementById('randomShuffleBtn')?.addEventListener('click', () => {
                 const list = appState.isWordStormActive ? appState.wordStormProcessedWords : appState.filteredWords;
                 if (!list || !list.length) return;
                 appState.currentBatchWords = [...list].sort(() => Math.random() - 0.5).slice(0, appState.batchSize);
-                AppOrbit.createWordSphere(appState.currentBatchWords);
+                AppSphereEngine.createWordSphere(appState.currentBatchWords);
                 if (navigator.vibrate) navigator.vibrate(40);
             });
 
-            // 5. 批次翻页
             document.getElementById('prevBatchBtn')?.addEventListener('click', () => {
                 if (appState.currentBatchIndex > 0) {
                     appState.currentBatchIndex--;
@@ -579,7 +544,6 @@
                 }
             });
 
-            // 6. 详情面板与字号缩放
             document.getElementById('closeDetailBtn')?.addEventListener('click', () => this.hideImmersiveDetailPanel());
             document.getElementById('detailFontDownBtn')?.addEventListener('click', () => {
                 fontScale = Math.max(0.7, fontScale - 0.1);
@@ -594,25 +558,8 @@
                 this.adjustSphereViewForPanel();
             });
 
-            // 7. 语音播放
             document.getElementById('speakDetailWordBtn')?.addEventListener('click', () => {
                 if (appState.currentDetailWord?.words) AppAudio.speakWord(appState.currentDetailWord.words);
-            });
-
-            // 8. 屏蔽与清空屏蔽
-            document.getElementById('shieldSingleWordBtn')?.addEventListener('click', () => {
-                if (!appState.currentDetailWord) return;
-                const key = getWordKey(appState.currentDetailWord);
-                if (confirm(`确定要将单词 "${appState.currentDetailWord.words}" 移入屏蔽库吗？`)) {
-                    appState.shieldedWords.add(key);
-                    AppStorage.saveShieldedWords(appState.shieldedWords);
-                    appState.allWords = appState.allWords.filter(w => getWordKey(w) !== key);
-                    appState.filteredWords = appState.filteredWords.filter(w => getWordKey(w) !== key);
-                    this.displayCurrentBatch();
-                    this.updateClearShieldedBtnLabel();
-                    this.hideImmersiveDetailPanel();
-                    this.updateStats();
-                }
             });
 
             document.getElementById('clearShieldedBtn')?.addEventListener('click', () => {
@@ -627,14 +574,13 @@
                 }
             });
 
-            // 9. 布局流按钮组
-            document.getElementById('layoutTopRowBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('top_row'));
-            document.getElementById('layoutCenterRowBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('center_row'));
-            document.getElementById('layoutBottomRowBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('bottom_row'));
-            document.getElementById('layoutLeftColBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('left_col'));
-            document.getElementById('layoutRightColBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('right_col'));
+            document.getElementById('layoutTopRowBtn')?.addEventListener('click', () => AppSphereEngine.arrangeCardsInLayout('top_row'));
+            document.getElementById('layoutCenterRowBtn')?.addEventListener('click', () => AppSphereEngine.arrangeCardsInLayout('center_row'));
+            document.getElementById('layoutBottomRowBtn')?.addEventListener('click', () => AppSphereEngine.arrangeCardsInLayout('bottom_row'));
+            document.getElementById('layoutLeftColBtn')?.addEventListener('click', () => AppSphereEngine.arrangeCardsInLayout('left_col'));
+            document.getElementById('layoutRightColBtn')?.addEventListener('click', () => AppSphereEngine.arrangeCardsInLayout('right_col'));
 
-            // 10. 视角预设快捷
+            // 视角预设快捷
             document.getElementById('viewInsideBtn')?.addEventListener('click', () => {
                 appState.camera.position.set(0, 0, 0.1);
                 appState.controls.target.set(0, 0, (appState.sphereRadius || 85) * 2.3);
@@ -654,27 +600,36 @@
                 appState.needsRender = true;
             });
 
-            // 11. 帮助与提示模态窗
-            document.getElementById('helpBtn')?.addEventListener('click', () => {
-                document.getElementById('helpModalBackdrop')?.classList.add('visible');
-            });
-            document.getElementById('closeHelpModalBtn')?.addEventListener('click', () => {
-                document.getElementById('helpModalBackdrop')?.classList.remove('visible');
-            });
-
-            // 12. 键盘快捷键
-            document.addEventListener('keydown', (e) => {
-                if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-                if (e.key === 'Escape') {
-                    this.hideImmersiveDetailPanel();
-                    document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('visible'));
-                } else if (e.key === ' ') {
-                    e.preventDefault();
-                    document.getElementById('rotateToggle')?.click();
-                }
-            });
-
             this.updateStudyCounterDisplay();
+        },
+
+        initSystemViews() {
+            const r = appState.sphereRadius || 85;
+            appState.systemViews = {
+                'system_inside': { cameraPos: [0, 0, 0.1], controlsTarget: [0, 0, r * 2.3] },
+                'system_surface': { cameraPos: [0, 0, r + 19], controlsTarget: [0, 0, 0] },
+                'system_overall': { cameraPos: [0, 0, 165], controlsTarget: [0, 0, 0] }
+            };
+        },
+
+        loadCustomViews() {
+            const s = localStorage.getItem(APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY);
+            if (s) appState.customViews = safeJSONParse(s, []);
+        },
+
+        loadCustomWordBanks() {
+            const s = localStorage.getItem(APP_CONFIG.CUSTOM_WORDBANKS_STORAGE_KEY);
+            if (s) appState.customWordBanks = safeJSONParse(s, []);
+        },
+
+        loadCustomRotations() {
+            const s = localStorage.getItem(APP_CONFIG.CUSTOM_ROTATIONS_STORAGE_KEY);
+            if (s) appState.customRotations = safeJSONParse(s, []);
+        },
+
+        loadCustomHoverPositions() {
+            const s = localStorage.getItem(APP_CONFIG.CUSTOM_HOVER_POSITIONS_STORAGE_KEY);
+            if (s) appState.customHoverPositions = safeJSONParse(s, []);
         },
 
         saveSettings() {
@@ -700,7 +655,6 @@
 
     window.AppUI = AppUI;
 
-    // 页面加载完毕安全引导
     window.addEventListener('DOMContentLoaded', () => {
         AppUI.init().catch(err => console.error('系统引导异常:', err));
     });
