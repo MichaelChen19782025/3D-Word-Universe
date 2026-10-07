@@ -1,6 +1,6 @@
 /**
- * 3D单词宇宙 - 卡片工坊
- * 100% 还原图 2 原版经典的深邃太空幽蓝、荧光青蓝辉光与玻璃质感
+ * 3D单词宇宙 - 卡片工坊 (Card Factory)
+ * 彻底修复 UVGenerator 映射（文字 100% 清晰现身）与图 3 经典太空幽蓝发光质感
  */
 (function() {
     let _sharedTestCanvas = null;
@@ -56,8 +56,8 @@
             const stormStyleCb = document.getElementById('stormWordCardStyleEnabled');
             const isStormStyled = word.isStormWord && stormStyleCb && stormStyleCb.checked;
             const fontColor = isStormStyled ?
-                document.getElementById('stormWordCardFontColor')?.value || '#000000' :
-                document.getElementById('sphereCardFontColor')?.value || '#ffffff';
+                (document.getElementById('stormWordCardFontColor')?.value || '#000000') :
+                (document.getElementById('sphereCardFontColor')?.value || '#ffffff');
 
             const displayWordRaw = appState.showEnglish ? (word.words || 'N/A') : ((word.chinese || '').split(/,|，/)[0] || 'N/A');
 
@@ -128,7 +128,7 @@
 
             context.clearRect(0, 0, canvasWidth, canvasHeight);
 
-            // 1. 图 2 核心视觉：深邃太空幽蓝渐变背景
+            // 1. 图 3 经典太空幽蓝渐变背景底色
             const cardGradient = context.createLinearGradient(0, 0, 0, canvasHeight);
             if (isStormStyled) {
                 cardGradient.addColorStop(0, "rgba(255, 140, 0, 0.90)");
@@ -145,7 +145,7 @@
             drawRoundedRect(context, 4, 4, canvasWidth - 8, canvasHeight - 8, 12 * textureResolutionScale * downScale);
             context.fill();
 
-            // 3. 核心字体绘制：纯净白色与强深色描边阴影
+            // 3. 核心字体绘制：高对比白色 + 细黑描边与深投影
             context.fillStyle = fontColor;
             context.textAlign = 'center';
             context.textBaseline = 'middle';
@@ -162,7 +162,7 @@
                 context.fillText(line, canvasWidth / 2, textY + (index * scaledLineHeight));
             });
 
-            // 4. 球心方向背光光晕
+            // 4. 球心背光光晕
             const backlightGrad = context.createRadialGradient(canvasWidth/2, canvasHeight/2, 5, canvasWidth/2, canvasHeight/2, canvasWidth * 0.4);
             backlightGrad.addColorStop(0, "rgba(0, 240, 255, 0.12)");
             backlightGrad.addColorStop(1, "rgba(0, 0, 0, 0.0)");
@@ -170,7 +170,7 @@
             drawRoundedRect(context, 4, 4, canvasWidth - 8, canvasHeight - 8, 12 * textureResolutionScale * downScale);
             context.fill();
 
-            // 5. 科技青蓝荧光外发光辉光边框
+            // 5. 荧光青蓝外发光辉光边框
             context.save();
             context.shadowColor = isStormStyled ? "rgba(255, 140, 0, 0.45)" : "rgba(0, 220, 255, 0.38)";
             context.shadowBlur = 10 * textureResolutionScale * downScale;
@@ -190,16 +190,15 @@
             context.stroke();
             context.restore();
 
-            const tex = finalizeCanvasTexture(canvas, 8);
-
             return {
-                texture: tex,
+                texture: finalizeCanvasTexture(canvas, 8),
                 pxWidth: canvasWidth,
                 pxHeight: canvasHeight,
                 resolutionScale: textureResolutionScale
             };
         },
 
+        // 💡 核心修复：补全 UVGenerator，彻底解决文字丢失与拉伸小点的问题
         createIceCard(word) {
             const texData = this.createCardTexture(word);
             const pxH = texData.pxHeight || 92;
@@ -211,52 +210,68 @@
             const height = width / aspect;
             const depth = width * 0.04;
 
-            const geoKey = aspect.toFixed(2) + '|' + sphereRadius.toFixed(1);
-            let geometry = _cardGeoCache.get(geoKey);
+            const shape = new THREE.Shape();
+            const x = -width / 2, y = -height / 2;
+            const radius = width * 0.08;
+            const w = width, h = height;
 
-            if (!geometry) {
-                const shape = new THREE.Shape();
-                const x = -width / 2, y = -height / 2;
-                const radius = width * 0.08;
-                const w = width, h = height;
+            shape.moveTo(x + radius, y);
+            shape.lineTo(x + w - radius, y);
+            shape.quadraticCurveTo(x + w, y, x + w, y + radius);
+            shape.lineTo(x + w, y + h - radius);
+            shape.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+            shape.lineTo(x + radius, y + h);
+            shape.quadraticCurveTo(x, y + h, x, y + h - radius);
+            shape.lineTo(x, y + radius);
+            shape.quadraticCurveTo(x, y, x + radius, y);
 
-                shape.moveTo(x + radius, y);
-                shape.lineTo(x + w - radius, y);
-                shape.quadraticCurveTo(x + w, y, x + w, y + radius);
-                shape.lineTo(x + w, y + h - radius);
-                shape.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-                shape.lineTo(x + radius, y + h);
-                shape.quadraticCurveTo(x, y + h, x, y + h - radius);
-                shape.lineTo(x, y + radius);
-                shape.quadraticCurveTo(x, y, x + radius, y);
+            const bevelThickness = width * 0.012;
+            const bevelSize = width * 0.008;
 
-                const bevelThickness = width * 0.012;
-                const bevelSize = width * 0.008;
-
-                const extrudeSettings = {
-                    steps: 1,
-                    depth: depth - bevelThickness * 2,
-                    bevelEnabled: true,
-                    bevelThickness: bevelThickness,
-                    bevelSize: bevelSize,
-                    bevelOffset: -bevelSize,
-                    bevelSegments: 4,
-                    curveSegments: 16
-                };
-
-                try {
-                    geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-                    geometry.center();
-                } catch (e) {
-                    geometry = new THREE.BoxGeometry(width, height, depth);
+            const extrudeSettings = {
+                steps: 1,
+                depth: depth - bevelThickness * 2,
+                bevelEnabled: true,
+                bevelThickness: bevelThickness,
+                bevelSize: bevelSize,
+                bevelOffset: -bevelSize,
+                bevelSegments: 4,
+                curveSegments: 16,
+                // ⭐️ 核心关键：必须自定义 UVGenerator，将 (x, y) 顶点坐标精确归一化为 (0~1) 贴图坐标！
+                UVGenerator: {
+                    generateTopUV: function (geometry, vertices, indexA, indexB, indexC) {
+                        const ax = vertices[indexA * 3], ay = vertices[indexA * 3 + 1];
+                        const bx = vertices[indexB * 3], by = vertices[indexB * 3 + 1];
+                        const cx = vertices[indexC * 3], cy = vertices[indexC * 3 + 1];
+                        return [
+                            new THREE.Vector2((ax - x) / w, (ay - y) / h),
+                            new THREE.Vector2((bx - x) / w, (by - y) / h),
+                            new THREE.Vector2((cx - x) / w, (cy - y) / h)
+                        ];
+                    },
+                    generateSideWallUV: function () {
+                        return [
+                            new THREE.Vector2(0, 0),
+                            new THREE.Vector2(1, 0),
+                            new THREE.Vector2(1, 1),
+                            new THREE.Vector2(0, 1)
+                        ];
+                    }
                 }
-                _cardGeoCache.set(geoKey, geometry);
+            };
+
+            let geometry;
+            try {
+                geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+                geometry.center();
+            } catch (e) {
+                geometry = new THREE.BoxGeometry(width, height, depth);
             }
 
             const frontMat = new THREE.MeshStandardMaterial({
                 map: texData.texture,
-                roughness: 1.0,
-                metalness: 0.0,
+                roughness: 0.85,
+                metalness: 0.1,
                 transparent: true,
                 opacity: 0.95,
                 side: THREE.FrontSide
@@ -264,8 +279,8 @@
 
             const sideMat = new THREE.MeshStandardMaterial({
                 color: 0x07204c,
-                roughness: 1.0,
-                metalness: 0.0,
+                roughness: 0.85,
+                metalness: 0.1,
                 transparent: true,
                 opacity: 0.35,
                 emissive: new THREE.Color(0x00bfff),
@@ -291,13 +306,14 @@
             return card;
         },
 
+        // 💡 图 3 悬浮详情卡大贴图绘制
         createOverlayTexture(word) {
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             const fontFamily = "'Segoe UI', 'Roboto', 'Microsoft YaHei', sans-serif";
 
             const mainWordColor = document.getElementById('hoverCardTextMainWordColor')?.value || '#FFFFFF';
-            const valueColor = document.getElementById('hoverCardTextValueColor')?.value || '#FFFFFF';
+            const valueColor = document.getElementById('hoverCardTextValueColor')?.value || '#8CFEFF';
             const labelColor = document.getElementById('hoverCardTextLabelColor')?.value || '#8CFEFF';
             const textGlowColor = document.getElementById('hoverCardTextGlowColor')?.value || '#00FFFF';
             const textGlowIntensity = parseFloat(document.getElementById('hoverCardTextGlowIntensity')?.value || '0.5');
@@ -348,11 +364,13 @@
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
 
+            // 保持背景透明，依靠 3D backplate 提供暗色玻璃质感
             context.clearRect(0, 0, canvasWidth, canvasHeight);
             context.shadowColor = textGlowColor;
             context.shadowBlur = textGlowIntensity * 20 * scale;
             context.textBaseline = 'top';
 
+            // 1. 主单词 (如 tall)
             context.textAlign = "left";
             context.font = fontMain;
             context.fillStyle = mainWordColor;
@@ -361,10 +379,12 @@
             testCtx.font = fontMain;
             const wordWidth = testCtx.measureText(englishWord).width;
 
+            // 2. 音标 (如 /tɔ:l/)
             context.font = fontPhonetic;
             context.fillStyle = labelColor;
             context.fillText(phoneticSymbol, paddingX + wordWidth + 25 * scale, paddingY + (baseSize * 0.35));
 
+            // 3. 右上角精致胶囊按钮 (A-, A+, 屏蔽)
             const btnHeight = baseSize * 0.9;
             const spacing = 10 * scale;
             const btnY = paddingY + (baseSize * 1.55 - btnHeight) / 2;
@@ -379,8 +399,8 @@
 
             function drawPillButton(label, x, y, w, h) {
                 context.save();
-                context.fillStyle = "rgba(0, 240, 255, 0.04)";
-                context.strokeStyle = "rgba(0, 240, 255, 0.25)";
+                context.fillStyle = "rgba(0, 240, 255, 0.08)";
+                context.strokeStyle = "rgba(0, 240, 255, 0.38)";
                 context.lineWidth = Math.max(1.0, 1.2 * scale);
                 context.beginPath();
                 const r = h / 2;
@@ -398,7 +418,7 @@
                 context.stroke();
 
                 context.font = fontButton;
-                context.fillStyle = "rgba(162, 216, 255, 0.85)";
+                context.fillStyle = "rgba(162, 216, 255, 0.92)";
                 context.textAlign = "center";
                 context.textBaseline = "middle";
                 context.fillText(label, x + w / 2, y + h / 2);
@@ -432,6 +452,7 @@
                 yMin: paddingY - 5 * scale, yMax: paddingY + baseSize * 1.6
             });
 
+            // 4. 释义 (如 高的)
             let writeY = paddingY + baseSize * 1.8;
             context.font = fontMeaning;
             context.fillStyle = valueColor;
@@ -440,6 +461,7 @@
                 writeY += baseSize * 1.5;
             });
 
+            // 5. 分割线
             writeY += baseSize * 0.4;
             context.strokeStyle = "rgba(104, 240, 255, 0.25)";
             context.lineWidth = Math.max(1, Math.round(1 * scale));
@@ -448,11 +470,13 @@
             context.lineTo(canvasWidth - paddingX, writeY);
             context.stroke();
 
+            // 6. 记忆法标题 (黄色醒目)
             writeY += baseSize * 0.6;
             context.font = fontTitle;
             context.fillStyle = "#FFD700";
             context.fillText("💡 记忆方法 / Memory Association", paddingX, writeY);
 
+            // 7. 记忆法内容
             writeY += baseSize * 1.3;
             context.font = fontMethod;
             context.fillStyle = "rgba(255, 255, 192, 0.95)";
@@ -461,8 +485,11 @@
                 writeY += baseSize * 1.3;
             });
 
-            const tex = finalizeCanvasTexture(canvas, 4);
-            return { texture: tex, pxWidth: canvasWidth, pxHeight: canvasHeight };
+            return {
+                texture: finalizeCanvasTexture(canvas, 4),
+                pxWidth: canvasWidth,
+                pxHeight: canvasHeight
+            };
         },
 
         updateCardWordData(card, newWord) {

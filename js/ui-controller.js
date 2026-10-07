@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与启动总装中枢
- * 彻底恢复所有设置按钮监听（导入导出、模态窗、测试系统、管理抽屉等）
+ * 修复图 3 悬浮发光层（彻底去除实心青色块遮挡）并完美呈现全息科技四角光标
  */
 (function() {
     let fontScale = 1.0;
@@ -15,7 +15,6 @@
         }, 150);
     }
 
-    // 辅助本地文件选择器
     function selectLocalFile(accept, callback) {
         const input = document.createElement('input');
         input.type = 'file';
@@ -39,10 +38,8 @@
 
     const AppUI = {
         async init() {
-            // 1. 初始化本地离线存储
             await AppStorage.init();
 
-            // 2. 初始化 3D 渲染与场景
             AppScene.init();
             AppAudio.init();
             AppParticles.initClickBurstParticles();
@@ -53,10 +50,7 @@
             AppParticles.initCardEmbers();
             AppSphereEngine.initGrapple();
 
-            // 3. 构建 3D 悬浮详情卡片
             this.initPremiumHoverCard();
-
-            // 4. 全量挂载所有按钮、滑块、手势和模态窗
             this.initAllButtonsAndEvents();
             this.initSettingsAndSliders();
             this.initMobileTouchHandlers();
@@ -68,17 +62,13 @@
             this.loadCustomHoverPositions();
             this.initStudyLog();
 
-            // 5. 加载数据并构建震撼魔法球
             await this.loadWordDataAndBoot();
-
-            // 6. 恢复上次存储的全部界面与视角状态
-            this.loadAllPersistentStates();
 
             setTimeout(() => {
                 appState.isInitializing = false;
                 this.refreshRuntimeCache();
                 appState.needsRender = true;
-                console.log('3D 单词宇宙系统以完整功能全量装配就绪！');
+                console.log('3D 单词宇宙系统以原版经典视觉成功启动！');
             }, 300);
         },
 
@@ -158,25 +148,49 @@
             }
         },
 
+        // 💡 彻底修复图 3 悬浮发光层：恢复暗邃幽蓝磨砂玻璃底板 + 渐变微光 + 全息四角光标
         initPremiumHoverCard() {
             const group = new THREE.Group();
+
+            // 1. 底板：深邃幽蓝磨砂玻璃质感底色
             const backplate = new THREE.Mesh(
                 new THREE.PlaneGeometry(1, 1),
-                new THREE.MeshBasicMaterial({ color: 0x0a1428, transparent: true, opacity: 0, depthTest: false, depthWrite: false })
+                new THREE.MeshBasicMaterial({ color: 0x061126, transparent: true, opacity: 0, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
             );
+            backplate.name = "backplate";
             backplate.renderOrder = 9995;
             backplate.raycast = () => {};
             group.add(backplate);
 
+            // 2. 核心微光辉光贴图（不再是刺眼的实心纯青色平面，而是柔和发散的径向渐变）
+            const glowCanvas = document.createElement('canvas');
+            glowCanvas.width = 128; glowCanvas.height = 128;
+            const glowCtx = glowCanvas.getContext('2d');
+            const gradient = glowCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            gradient.addColorStop(0, "rgba(0, 200, 255, 0.22)");
+            gradient.addColorStop(1, "rgba(0, 30, 80, 0.0)");
+            glowCtx.fillStyle = gradient;
+            glowCtx.fillRect(0, 0, 128, 128);
+
+            const glowTexture = new THREE.CanvasTexture(glowCanvas);
             const coreGlow = new THREE.Mesh(
                 new THREE.PlaneGeometry(1, 1),
-                new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false })
+                new THREE.MeshBasicMaterial({
+                    map: glowTexture,
+                    blending: THREE.AdditiveBlending,
+                    transparent: true,
+                    opacity: 0,
+                    depthTest: false,
+                    depthWrite: false
+                })
             );
+            coreGlow.name = "coreGlow";
             coreGlow.position.z = 0.01;
             coreGlow.renderOrder = 9996;
             coreGlow.raycast = () => {};
             group.add(coreGlow);
 
+            // 3. 文字屏幕网格
             const screen = new THREE.Mesh(
                 new THREE.PlaneGeometry(1, 1),
                 new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false })
@@ -186,14 +200,71 @@
             screen.renderOrder = 9998;
             group.add(screen);
 
+            // 4. 图 3 经典全息四角科技光标 (Corner Brackets)
+            const cornerBracketsGroup = this.createCornerBrackets();
+            cornerBracketsGroup.name = 'frameGroup';
+            cornerBracketsGroup.position.z = 0.03;
+            cornerBracketsGroup.children.forEach(child => {
+                child.renderOrder = 9997;
+                child.material.depthTest = false;
+                child.material.depthWrite = false;
+                child.raycast = () => {};
+            });
+            group.add(cornerBracketsGroup);
+
             group.renderOrder = 9999;
             group.visible = false;
-            group.userData.refs = { screen, backplate, coreGlow };
+            group.userData.refs = { screen, backplate, coreGlow, frameGroup: cornerBracketsGroup };
 
             appState.hoverOverlayCard = group;
             appState.overlayCardTargetScale = new THREE.Vector3(0.001, 0.001, 0.001);
             appState.overlayCardTargetPosition = new THREE.Vector3(0, 0, 100);
             appState.scene.add(group);
+        },
+
+        createCornerBrackets() {
+            const bracketGroup = new THREE.Group();
+            const bracketCanvas = document.createElement('canvas');
+            bracketCanvas.width = 64;
+            bracketCanvas.height = 64;
+            const ctx = bracketCanvas.getContext('2d');
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(6, 32);
+            ctx.lineTo(6, 6);
+            ctx.lineTo(32, 6);
+            ctx.stroke();
+            const bracketTexture = new THREE.CanvasTexture(bracketCanvas);
+
+            const bracketMat = new THREE.MeshBasicMaterial({
+                map: bracketTexture,
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                depthTest: false
+            });
+
+            const size = 0.25;
+            const bracketGeo = new THREE.PlaneGeometry(size, size);
+
+            for (let i = 0; i < 4; i++) {
+                const bracket = new THREE.Mesh(bracketGeo, bracketMat.clone());
+                const signX = (i % 2 === 0) ? -1 : 1;
+                const signY = (i < 2) ? 1 : -1;
+                bracket.position.set(signX * 0.5, signY * 0.5, 0.01);
+
+                let rotation = 0;
+                if (signX === 1 && signY === 1) rotation = -Math.PI / 2;
+                else if (signX === -1 && signY === -1) rotation = Math.PI / 2;
+                else if (signX === 1 && signY === -1) rotation = Math.PI;
+                bracket.rotation.z = rotation;
+                bracketGroup.add(bracket);
+            }
+            return bracketGroup;
         },
 
         initClock() {
@@ -208,9 +279,7 @@
             setInterval(update, 1000);
         },
 
-        // ==================== 全量事件挂载中枢 ====================
         initAllButtonsAndEvents() {
-            // 1. 设置中心显示与关闭
             document.getElementById('settingsBtn')?.addEventListener('click', () => {
                 document.getElementById('controlsOverlay')?.classList.toggle('visible');
             });
@@ -218,14 +287,12 @@
                 document.getElementById('controlsOverlay')?.classList.remove('visible');
             });
 
-            // 2. 核心数据导入与导出按钮（修复用户指出的无响应问题）
             document.getElementById('uploadBtn')?.addEventListener('click', () => this.handleFileUpload());
             document.getElementById('appendUploadBtn')?.addEventListener('click', () => this.handleAppendUpload());
             document.getElementById('exportJSONBtn')?.addEventListener('click', () => this.exportJSON());
             document.getElementById('exportSettingsBtn')?.addEventListener('click', () => this.exportSettings());
             document.getElementById('importSettingsBtn')?.addEventListener('click', () => this.importSettings());
 
-            // 3. 复制粘贴数据模态窗
             const pasteModal = document.getElementById('pasteDataModalBackdrop');
             document.getElementById('openPasteModalBtn')?.addEventListener('click', () => {
                 if (pasteModal) pasteModal.classList.add('visible');
@@ -235,10 +302,8 @@
             });
             document.getElementById('submitPasteDataBtn')?.addEventListener('click', () => this.submitPasteData());
 
-            // 4. AI 提示词模板弹窗
             document.getElementById('showPromptTemplateBtn')?.addEventListener('click', () => this.showAIPromptModal());
 
-            // 5. 筛选与学习模式模态窗
             document.getElementById('filterBtn')?.addEventListener('click', () => this.showModeAndFilterModal());
             document.getElementById('applyFilterBtn')?.addEventListener('click', () => this.applyFiltersAndDisplay());
             document.getElementById('closeFilterModalBtn')?.addEventListener('click', () => {
@@ -248,7 +313,6 @@
                 document.getElementById('filterModalBackdrop')?.classList.remove('visible');
             });
 
-            // 6. 屏蔽与清空屏蔽词库
             document.getElementById('clearShieldedBtn')?.addEventListener('click', () => {
                 if (appState.shieldedWords.size === 0) {
                     alert('当前屏蔽词库为空。');
@@ -261,7 +325,6 @@
                 }
             });
 
-            // 7. 旋转开关、中英文切换、随机换词
             document.getElementById('rotateToggle')?.addEventListener('click', () => {
                 appState.autoRotate = !appState.autoRotate;
                 document.getElementById('rotateToggle').textContent = appState.autoRotate ? '🔁' : '⏹️';
@@ -285,7 +348,6 @@
                 if (navigator.vibrate) navigator.vibrate(40);
             });
 
-            // 8. 批次前后切换
             document.getElementById('prevBatchBtn')?.addEventListener('click', () => {
                 if (appState.currentBatchIndex > 0) {
                     appState.currentBatchIndex--;
@@ -299,7 +361,6 @@
                 }
             });
 
-            // 9. 详情面板操作
             document.getElementById('closeDetailBtn')?.addEventListener('click', () => this.hideImmersiveDetailPanel());
             document.getElementById('detailFontDownBtn')?.addEventListener('click', () => {
                 fontScale = Math.max(0.7, fontScale - 0.1);
@@ -331,18 +392,15 @@
                 }
             });
 
-            // 10. 管理抽屉（词库、视角预设、自转速度、悬浮位置）
             document.getElementById('viewsBtn')?.addEventListener('click', () => this.toggleManagementPanel('views'));
             document.getElementById('wordBanksBtn')?.addEventListener('click', () => this.toggleManagementPanel('wordBanks'));
             document.getElementById('rotationsBtn')?.addEventListener('click', () => this.toggleManagementPanel('rotations'));
             document.getElementById('hoverPosBtn')?.addEventListener('click', () => this.toggleManagementPanel('hoverPositions'));
 
-            // 11. 系统视角切换
             this.bindSystemViewButton(document.getElementById('viewInsideBtn'), 'inside');
             this.bindSystemViewButton(document.getElementById('viewSurfaceBtn'), 'surface');
             this.bindSystemViewButton(document.getElementById('viewOverallBtn'), 'overall');
 
-            // 12. 批量屏蔽功能
             document.getElementById('batchShieldToggleBtn')?.addEventListener('click', () => {
                 if (appState.batchShieldMode) {
                     this.exitBatchShieldMode();
@@ -371,7 +429,6 @@
                 }
             });
 
-            // 13. 搜索功能
             document.getElementById('detailSearchBtn')?.addEventListener('click', () => {
                 const q = document.getElementById('detailSearchInput')?.value.trim();
                 this.performAndDisplaySearch(q);
@@ -386,7 +443,6 @@
                 document.getElementById('searchResultsModalBackdrop')?.classList.remove('visible');
             });
 
-            // 14. 帮助弹窗
             document.getElementById('helpBtn')?.addEventListener('click', () => {
                 this.updateHelpModal();
                 document.getElementById('helpModalBackdrop')?.classList.add('visible');
@@ -395,7 +451,6 @@
                 document.getElementById('helpModalBackdrop')?.classList.remove('visible');
             });
 
-            // 15. 右上角主菜单折叠与展开
             const masterBtn = document.getElementById('masterMenuToggleBtn');
             const viewControls = document.getElementById('viewControlsContainer');
             if (masterBtn && viewControls) {
@@ -412,7 +467,6 @@
                 });
             }
 
-            // 16. 键盘快捷键
             document.addEventListener('keydown', (e) => {
                 if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
                 if (e.key === 'Escape') {
@@ -426,7 +480,6 @@
             });
         },
 
-        // ==================== 文件导入与导出处理 ====================
         handleFileUpload() {
             selectLocalFile('application/json,.json', async (file) => {
                 const reader = new FileReader();
@@ -581,7 +634,6 @@
             });
         },
 
-        // ==================== 筛选与学习模式 ====================
         showModeAndFilterModal() {
             const filterKeys = ['grade', 'term', 'unit', 'Source'];
             const container = document.getElementById('filterOptionsContainer');
@@ -655,175 +707,8 @@
 
             this.displayCurrentBatch();
             document.getElementById('filterModalBackdrop')?.classList.remove('visible');
-
-            const isPractice = document.querySelector('input[name="studyMode"]:checked')?.value === 'practice';
-            if (isPractice) {
-                this.startPracticeSession();
-            } else {
-                this.exitPracticeSession();
-            }
         },
 
-        // ==================== 词汇测试练习模式 ====================
-        startPracticeSession() {
-            const words = appState.currentBatchWords;
-            if (!words || words.length < 4) {
-                alert('当前批次单词数量过少（需至少4个词），无法开启测试。');
-                this.exitPracticeSession();
-                return;
-            }
-            appState.practiceSession.active = true;
-            appState.practiceSession.shuffledWords = [...words].sort(() => Math.random() - 0.5);
-            appState.practiceSession.currentIndex = 0;
-            appState.practiceSession.correctCount = 0;
-
-            appState.autoRotate = false;
-            document.getElementById('rotateToggle').textContent = '⏹️';
-            document.getElementById('practiceContainer')?.classList.remove('hidden');
-
-            this.bindPracticeControls();
-            this.showNextPracticeQuestion();
-        },
-
-        bindPracticeControls() {
-            document.getElementById('nextPracticeQuestionBtn').onclick = () => {
-                appState.practiceSession.currentIndex++;
-                this.showNextPracticeQuestion();
-            };
-            document.getElementById('exitPracticeBtn').onclick = () => {
-                if (confirm('确定要退出当前的词汇测试吗？')) this.exitPracticeSession();
-            };
-            document.getElementById('submitSpellingBtn').onclick = () => this.handleSpellingSubmit();
-            const spInput = document.getElementById('practiceSpellingInput');
-            if (spInput) {
-                spInput.onkeydown = (e) => {
-                    if (e.key === 'Enter') this.handleSpellingSubmit();
-                };
-            }
-        },
-
-        showNextPracticeQuestion() {
-            const session = appState.practiceSession;
-            session.hasAnswered = false;
-            const feedback = document.getElementById('practiceFeedback');
-            const nextBtn = document.getElementById('nextPracticeQuestionBtn');
-            if (feedback) feedback.textContent = '';
-            if (nextBtn) nextBtn.disabled = true;
-
-            if (session.currentIndex >= session.shuffledWords.length) {
-                const percentage = Math.round((session.correctCount / session.shuffledWords.length) * 100);
-                alert(`测试结束！\n正确率: ${percentage}%\n正确个数: ${session.correctCount} / ${session.shuffledWords.length}`);
-                this.exitPracticeSession();
-                return;
-            }
-
-            const currentWord = session.shuffledWords[session.currentIndex];
-            document.getElementById('practiceProgress').textContent = `${session.currentIndex + 1} / ${session.shuffledWords.length}`;
-            document.getElementById('practiceScore').textContent = session.correctCount;
-
-            const type = document.getElementById('practiceTypeSelect')?.value || 'multi-choice-en';
-            const optGrid = document.getElementById('practiceOptionsGrid');
-            const spBox = document.getElementById('practiceSpellingBox');
-
-            if (type === 'spelling') {
-                optGrid?.classList.add('hidden');
-                spBox?.classList.remove('hidden');
-                const input = document.getElementById('practiceSpellingInput');
-                if (input) { input.value = ''; input.focus(); }
-                document.getElementById('practiceQuestionText').textContent = (currentWord.chinese || '').split(/,|，/)[0];
-                document.getElementById('practiceQuestionPhonetic').textContent = currentWord.phonetic || '';
-            } else {
-                optGrid?.classList.remove('hidden');
-                spBox?.classList.add('hidden');
-
-                const otherWords = appState.allWords.filter(w => getWordKey(w) !== getWordKey(currentWord));
-                const shuffledOthers = [...otherWords].sort(() => Math.random() - 0.5);
-                const options = [currentWord, ...shuffledOthers.slice(0, 3)].sort(() => Math.random() - 0.5);
-
-                session.currentOptions = options;
-                session.correctAnswerIdx = options.findIndex(o => getWordKey(o) === getWordKey(currentWord));
-
-                optGrid.innerHTML = '';
-                options.forEach((opt, idx) => {
-                    const btn = document.createElement('button');
-                    btn.className = 'practice-option-btn';
-                    if (type === 'multi-choice-en') {
-                        document.getElementById('practiceQuestionText').textContent = currentWord.words;
-                        document.getElementById('practiceQuestionPhonetic').textContent = currentWord.phonetic || '';
-                        btn.textContent = `${idx + 1}. ${(opt.chinese || '').split(/,|，/)[0]}`;
-                    } else {
-                        document.getElementById('practiceQuestionText').textContent = (currentWord.chinese || '').split(/,|，/)[0];
-                        document.getElementById('practiceQuestionPhonetic').textContent = '';
-                        btn.textContent = `${idx + 1}. ${opt.words}`;
-                    }
-                    btn.onclick = () => this.handleOptionClick(idx);
-                    optGrid.appendChild(btn);
-                });
-            }
-        },
-
-        handleOptionClick(selectedIdx) {
-            const session = appState.practiceSession;
-            if (session.hasAnswered) return;
-            session.hasAnswered = true;
-
-            const correctIdx = session.correctAnswerIdx;
-            const options = document.getElementById('practiceOptionsGrid')?.children;
-            const currentWord = session.shuffledWords[session.currentIndex];
-            const feedback = document.getElementById('practiceFeedback');
-
-            if (selectedIdx === correctIdx) {
-                if (options[selectedIdx]) options[selectedIdx].classList.add('correct');
-                feedback.textContent = '🎉 回答正确！';
-                feedback.style.color = '#68FFC0';
-                session.correctCount++;
-                if (navigator.vibrate) navigator.vibrate(30);
-            } else {
-                if (options[selectedIdx]) options[selectedIdx].classList.add('incorrect');
-                if (options[correctIdx]) options[correctIdx].classList.add('correct');
-                feedback.textContent = `❌ 回答错误！正确答案是: ${correctIdx + 1}`;
-                feedback.style.color = '#FF6868';
-                if (navigator.vibrate) navigator.vibrate([60, 50, 60]);
-            }
-
-            AppAudio.speakWord(currentWord.words, 1);
-            document.getElementById('nextPracticeQuestionBtn').disabled = false;
-        },
-
-        handleSpellingSubmit() {
-            const session = appState.practiceSession;
-            if (session.hasAnswered) return;
-            session.hasAnswered = true;
-
-            const currentWord = session.shuffledWords[session.currentIndex];
-            const input = document.getElementById('practiceSpellingInput')?.value.trim().toLowerCase();
-            const correct = (currentWord.words || '').trim().toLowerCase();
-            const feedback = document.getElementById('practiceFeedback');
-
-            if (input === correct) {
-                feedback.textContent = '🎉 拼写正确！';
-                feedback.style.color = '#68FFC0';
-                session.correctCount++;
-                if (navigator.vibrate) navigator.vibrate(30);
-            } else {
-                feedback.textContent = `❌ 错误！正确拼写为: ${currentWord.words}`;
-                feedback.style.color = '#FF6868';
-                if (navigator.vibrate) navigator.vibrate([60, 50, 60]);
-            }
-
-            AppAudio.speakWord(currentWord.words, 1);
-            document.getElementById('nextPracticeQuestionBtn').disabled = false;
-        },
-
-        exitPracticeSession() {
-            appState.practiceSession.active = false;
-            document.getElementById('practiceContainer')?.classList.add('hidden');
-            appState.autoRotate = true;
-            document.getElementById('rotateToggle').textContent = '🔁';
-            appState.needsRender = true;
-        },
-
-        // ==================== 搜索与 AI 模板 ====================
         performAndDisplaySearch(query) {
             if (!query || query.length < 2) {
                 alert('请输入至少2个字符进行搜索。');
@@ -894,7 +779,6 @@
             });
         },
 
-        // ==================== 抽屉式管理面板 (Views, Banks, Rotations, Pos) ====================
         toggleManagementPanel(panelType) {
             const panel = document.getElementById('managementPanel');
             if (!panel) return;
@@ -916,7 +800,6 @@
             `;
         },
 
-        // ==================== 学习打卡与对比 ====================
         initStudyLog() {
             const counterHud = document.getElementById('studyCounterHud');
             const settleModal = document.getElementById('studySettleModalBackdrop');
@@ -982,7 +865,6 @@
             `;
         },
 
-        // ==================== 基础触控与面板微调 ====================
         initMobileTouchHandlers() {
             const container = document.getElementById('wordSphere');
             if (!container) return;
@@ -1309,14 +1191,67 @@
             });
         },
 
-        initSystemViews() {},
-        loadCustomViews() {},
-        loadCustomWordBanks() {},
-        loadCustomRotations() {},
-        loadCustomHoverPositions() {},
-        loadAllPersistentStates() {},
-        saveSettings() {},
-        saveLastState() {}
+        initSystemViews() {
+            const r = appState.sphereRadius || 85;
+            appState.systemViews = {
+                'system_inside': { cameraPos: [0, 0, 0.1], controlsTarget: [0, 0, r * 2.3] },
+                'system_surface': { cameraPos: [0, 0, r + 19], controlsTarget: [0, 0, 0] },
+                'system_overall': { cameraPos: [0, 0, 165], controlsTarget: [0, 0, 0] }
+            };
+        },
+
+        loadCustomViews() {
+            const s = localStorage.getItem(APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY);
+            if (s) appState.customViews = safeJSONParse(s, []);
+        },
+
+        loadCustomWordBanks() {
+            const s = localStorage.getItem(APP_CONFIG.CUSTOM_WORDBANKS_STORAGE_KEY);
+            if (s) appState.customWordBanks = safeJSONParse(s, []);
+        },
+
+        loadCustomRotations() {
+            const s = localStorage.getItem(APP_CONFIG.CUSTOM_ROTATIONS_STORAGE_KEY);
+            if (s) appState.customRotations = safeJSONParse(s, []);
+        },
+
+        loadCustomHoverPositions() {
+            const s = localStorage.getItem(APP_CONFIG.CUSTOM_HOVER_POSITIONS_STORAGE_KEY);
+            if (s) appState.customHoverPositions = safeJSONParse(s, []);
+        },
+
+        loadAllPersistentStates() {
+            const lastStateJSON = localStorage.getItem(APP_CONFIG.LAST_STATE_STORAGE_KEY);
+            if (lastStateJSON) {
+                const s = safeJSONParse(lastStateJSON, {});
+                if (s.showEnglish !== undefined) {
+                    appState.showEnglish = s.showEnglish;
+                    const toggleLang = document.getElementById('toggleLanguage');
+                    if (toggleLang) toggleLang.textContent = appState.showEnglish ? '中' : '英';
+                }
+            }
+        },
+
+        saveSettings() {
+            if (appState.isInitializing) return;
+            const settings = {
+                cardStyleId: appState.currentCardStyleId,
+                batchSize: appState.batchSize,
+                showEnglish: appState.showEnglish
+            };
+            localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+        },
+
+        saveLastState() {
+            if (appState.isInitializing) return;
+            const state = {
+                currentBatchIndex: appState.currentBatchIndex,
+                cameraPosition: appState.camera ? appState.camera.position.toArray() : [0, 0, 165],
+                controlsTarget: appState.controls ? appState.controls.target.toArray() : [0, 0, 0],
+                showEnglish: appState.showEnglish
+            };
+            localStorage.setItem(APP_CONFIG.LAST_STATE_STORAGE_KEY, JSON.stringify(state));
+        }
     };
 
     window.AppUI = AppUI;

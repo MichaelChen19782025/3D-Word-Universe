@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - Three.js 核心场景管理与渲染管线
- * 核心还原：原版图 2 的立体球形纬度/深度缩放与呼吸透视
+ * 100% 还原图 3 原版经典的深度自适应与纬度透视呼吸光效
  */
 (function() {
     const AppScene = {
@@ -244,7 +244,7 @@
             this.updateStudioLightSettings();
         },
 
-        // 核心渲染循环：完美复原图 2 的透视深度、球体弧度与呼吸光效
+        // 核心渲染循环：完美复原图 3 的透视深度、球体弧度与呼吸光效
         animate(time) {
             if (time === undefined || time === null) time = performance.now();
             requestAnimationFrame((t) => AppScene.animate(t));
@@ -336,7 +336,7 @@
             }
             if (appState.coreSphere) appState.coreSphere.rotation.y += 0.00035;
 
-            // 悬浮大卡片动画插值
+            // 💡 图 3 悬浮大卡片动画与透明度精确控制（告别纯青遮挡色块）
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
                 const lerpFactor = 0.1;
@@ -348,10 +348,16 @@
                     const newOp = THREE.MathUtils.lerp(currentOp, appState.overlayCardTargetOpacity, lerpFactor);
                     screen.material.opacity = newOp;
                     if (card.userData.refs.backplate) {
-                        card.userData.refs.backplate.material.opacity = newOp * appState.rt.hoverBgOpacity;
+                        card.userData.refs.backplate.material.opacity = newOp * 0.88;
                     }
                     if (card.userData.refs.coreGlow) {
-                        card.userData.refs.coreGlow.material.opacity = newOp * 1.5;
+                        card.userData.refs.coreGlow.material.opacity = newOp * 0.75;
+                    }
+                    const frameGroup = card.userData.refs.frameGroup;
+                    if (frameGroup) {
+                        frameGroup.children.forEach(child => {
+                            child.material.opacity = newOp * 0.9;
+                        });
                     }
                     card.visible = (newOp > 0.01 && card.scale.x > 0.01);
                 }
@@ -389,7 +395,7 @@
                 appState.wordSphereGroup.updateMatrixWorld(true);
             }
 
-            // 💡 图 2 核心视觉：根据到相机的距离 t 和纬度 Y 进行自适应缩放，营造完美球体立体弧度
+            // 💡 图 3 核心精髓：根据到相机的距离 t 和纬度 Y 进行自适应缩放与呼吸透视，营建完美球体曲面立体弧度
             if (!appState.isFlowMode) {
                 const radius = appState.sphereRadius || 85;
                 const camDist = AppMath.vecCamWorld.length();

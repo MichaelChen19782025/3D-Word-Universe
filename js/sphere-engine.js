@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 球体核心引擎 (Sphere Engine)
- * 核心还原：原版图 2 黄金螺旋斐波那契球面点阵排布 (Fibonacci Sphere Lattice)
+ * 100% 还原图 3 原版黄金螺旋斐波那契球面点阵排布 (Fibonacci Sphere Lattice)
  */
 (function() {
     let grapple = {
@@ -14,7 +14,7 @@
     };
 
     const AppSphereEngine = {
-        // 核心算法：斐波那契球面螺旋分布，完美生成图 2 的立体球形外观
+        // 核心算法：斐波那契球面螺旋分布，完美复原图 3 密集饱满的立体球形
         createWordSphere(wordsToDisplay, isFlowMode = false) {
             if (!isFlowMode) {
                 appState.isFlowMode = false;
@@ -39,7 +39,7 @@
             }
 
             const samples = wordsToDisplay.length;
-            const phi = Math.PI * (3 - Math.sqrt(5)); // 黄金分割角
+            const phi = Math.PI * (3 - Math.sqrt(5)); // 黄金角 (约 137.5 度)
 
             if (samples > 0 && samples <= APP_CONFIG.HEMISPHERE_LAYOUT_THRESHOLD) {
                 const maxAttempts = samples * 3;
@@ -66,7 +66,7 @@
             } else {
                 wordsToDisplay.forEach((word, i) => {
                     const yPos = (samples > 1) ? (1 - (i / (samples - 1)) * 2) : 0;
-                    const radiusAtY = Math.sqrt(Math.max(0, 1 - yPos * yPos));
+                    const radiusAtY = Math.sqrt(1 - yPos * yPos);
                     const theta = phi * i;
                     const card = AppCardFactory.createIceCard(word);
                     card.userData.latScale = 1.0 - 0.50 * (yPos * yPos);
