@@ -1,6 +1,5 @@
-const CACHE_NAME = 'word-universe-cache-v8.2';
+const CACHE_NAME = 'word-universe-cache-v8.5';
 
-// 核心预缓存资源清单（包含自身、样式、全部JS模块及关键CDN）
 const PRECACHE_ASSETS = [
     './',
     './index.html',
@@ -10,7 +9,7 @@ const PRECACHE_ASSETS = [
     './js/storage.js',
     './js/audio-tts.js',
     './js/card-factory.js',
-    './js/orbit-system.js',
+    './js/sphere-engine.js',
     './js/fx-particles.js',
     './js/scene-manager.js',
     './js/ui-controller.js',
@@ -29,9 +28,8 @@ const PRECACHE_ASSETS = [
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME).then(cache => {
-            console.log('[ServiceWorker] 预缓存静态资产中...');
             return cache.addAll(PRECACHE_ASSETS).catch(err => {
-                console.warn('[ServiceWorker] 部分外部CDN网络超时，继续激活基础缓存', err);
+                console.warn('[SW] 部分外部资源预存失败，跳过直接激活', err);
             });
         }).then(() => self.skipWaiting())
     );
@@ -43,7 +41,6 @@ self.addEventListener('activate', event => {
             return Promise.all(
                 keys.map(key => {
                     if (key !== CACHE_NAME) {
-                        console.log('[ServiceWorker] 清理旧版失效缓存:', key);
                         return caches.delete(key);
                     }
                 })
@@ -52,30 +49,33 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Cache-First 离线优先拦截策略
+// Network-First 策略：优先从网络拉取最新代码，断网时自动降级走离线缓存
 self.addEventListener('fetch', event => {
     if (event.request.method !== 'GET') return;
+    
+    // 关键过滤：忽略 chrome-extension:// 等插件发起的请求
+    if (!event.request.url.startsWith('http://') && !event.request.url.startsWith('https://')) {
+        return;
+    }
 
     event.respondWith(
-        caches.match(event.request).then(cachedResponse => {
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-            return fetch(event.request).then(networkResponse => {
-                if (!networkResponse || networkResponse.status !== 200 || networkResponse.type === 'opaque') {
-                    return networkResponse;
+        fetch(event.request)
+            .then(networkResponse => {
+                if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
+                    const responseToCache = networkResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseToCache);
+                    });
                 }
-                const responseToCache = networkResponse.clone();
-                caches.open(CACHE_NAME).then(cache => {
-                    cache.put(event.request, responseToCache);
-                });
                 return networkResponse;
-            }).catch(() => {
-                // 断网且未命中缓存时的兜底
-                if (event.request.headers.get('accept')?.includes('text/html')) {
-                    return caches.match('./index.html');
-                }
-            });
-        })
+            })
+            .catch(() => {
+                return caches.match(event.request).then(cached => {
+                    if (cached) return cached;
+                    if (event.request.headers.get('accept')?.includes('text/html')) {
+                        return caches.match('./index.html');
+                    }
+                });
+            })
     );
 });
