@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - Three.js 核心场景管理与渲染管线
- * 100% 还原图 3 原版经典的深度自适应与纬度透视呼吸光效
+ * 包含所有环境光、区域光、聚光灯、棚镜漫反射更新函数与辉光通道实时响应
  */
 (function() {
     const AppScene = {
@@ -67,6 +67,7 @@
             appState.scene.add(appState.hemisphereLight);
             appState.scene.add(appState.camera);
 
+            // 棚镜漫反射聚光灯
             appState.studioSpotLight = new THREE.SpotLight(0xffffff, 0);
             appState.studioSpotLight.decay = 0;
             appState.studioSpotLight.penumbra = 1.0;
@@ -106,6 +107,7 @@
             ).normalize();
             appState.scene.add(appState.directionalLight2);
 
+            // 自定义聚光灯与目标
             appState.customSpotLight = new THREE.SpotLight(APP_CONFIG.DEFAULT_CUSTOM_LIGHT_COLOR);
             appState.customSpotLight.decay = 0;
             appState.scene.add(appState.customSpotLight);
@@ -164,6 +166,131 @@
             }
         },
 
+        // ==================== 补齐所有灯光动态更新函数 ====================
+        updateHemiLightSettings() {
+            if (!appState.hemisphereLight) return;
+            const sky = document.getElementById('hemiSkyColor')?.value || '#add8e6';
+            const ground = document.getElementById('hemiGroundColor')?.value || '#404040';
+            const intensity = safeParseFloat(document.getElementById('hemiIntensity')?.value, 2.0);
+            appState.hemisphereLight.color.set(getColor(sky, 'three'));
+            appState.hemisphereLight.groundColor.set(getColor(ground, 'three'));
+            appState.hemisphereLight.intensity = intensity;
+            appState.needsRender = true;
+        },
+
+        updateRectAreaLight1Settings() {
+            if (!appState.rectAreaLight1) return;
+            const color = document.getElementById('rect1Color')?.value || '#ffffff';
+            const intensity = safeParseFloat(document.getElementById('rect1Intensity')?.value, 8.0);
+            appState.rectAreaLight1.color.set(getColor(color, 'three'));
+            appState.rectAreaLight1.intensity = intensity;
+            appState.needsRender = true;
+        },
+
+        updateRectAreaLight2Settings() {
+            if (!appState.rectAreaLight2) return;
+            const color = document.getElementById('rect2Color')?.value || '#ffe0b3';
+            const intensity = safeParseFloat(document.getElementById('rect2Intensity')?.value, 5.0);
+            appState.rectAreaLight2.color.set(getColor(color, 'three'));
+            appState.rectAreaLight2.intensity = intensity;
+            appState.needsRender = true;
+        },
+
+        updateDirectionalLight2Settings() {
+            if (!appState.directionalLight2) return;
+            const color = document.getElementById('directionalLight2Color')?.value || '#ffc080';
+            const intensity = safeParseFloat(document.getElementById('directionalLight2Intensity')?.value, 0.65);
+            const px = safeParseFloat(document.getElementById('directionalLight2PosX')?.value, -11);
+            const py = safeParseFloat(document.getElementById('directionalLight2PosY')?.value, -6);
+            const pz = safeParseFloat(document.getElementById('directionalLight2PosZ')?.value, -14);
+            appState.directionalLight2.color.set(getColor(color, 'three'));
+            appState.directionalLight2.intensity = intensity;
+            appState.directionalLight2.position.set(px, py, pz).normalize();
+            appState.needsRender = true;
+        },
+
+        updateCustomLightSettings() {
+            if (!appState.customSpotLight || !appState.lightSourceMesh) return;
+            const enabled = document.getElementById('customLightEnabled')?.checked;
+            const helperVisible = document.getElementById('customLightHelperVisible')?.checked;
+            appState.customSpotLight.visible = !!enabled;
+            appState.lightSourceMesh.visible = !!(enabled && helperVisible);
+            appState.lightTargetMesh.visible = !!(enabled && helperVisible);
+            appState.customSpotLightHelper.visible = !!(enabled && helperVisible);
+
+            if (!enabled) {
+                if (appState.transformControls) appState.transformControls.detach();
+                appState.needsRender = true;
+                return;
+            }
+
+            const colorHex = document.getElementById('customLightColor')?.value || '#ffffff';
+            const intensity = safeParseFloat(document.getElementById('customLightIntensity')?.value, 20) / 1000;
+            const distance = safeParseFloat(document.getElementById('customLightDistance')?.value, 500);
+            const angle = safeParseFloat(document.getElementById('customLightAngle')?.value, 0.8);
+            const penumbra = safeParseFloat(document.getElementById('customLightPenumbra')?.value, 0.2);
+
+            appState.customSpotLight.color.set(colorHex);
+            appState.customSpotLight.intensity = intensity;
+            appState.customSpotLight.distance = distance;
+            appState.customSpotLight.angle = angle;
+            appState.customSpotLight.penumbra = penumbra;
+
+            const sx = safeParseFloat(document.getElementById('customLightSourcePosX')?.value, 0);
+            const sy = safeParseFloat(document.getElementById('customLightSourcePosY')?.value, 0);
+            const sz = safeParseFloat(document.getElementById('customLightSourcePosZ')?.value, 150);
+            const tx = safeParseFloat(document.getElementById('customLightTargetPosX')?.value, 0);
+            const ty = safeParseFloat(document.getElementById('customLightTargetPosY')?.value, 0);
+            const tz = safeParseFloat(document.getElementById('customLightTargetPosZ')?.value, 0);
+
+            appState.customSpotLight.position.set(sx, sy, sz);
+            appState.customSpotLight.target.position.set(tx, ty, tz);
+            appState.lightSourceMesh.position.set(sx, sy, sz);
+            appState.lightTargetMesh.position.set(tx, ty, tz);
+            appState.customSpotLightHelper.update();
+            appState.needsRender = true;
+        },
+
+        setActiveGuideline(name) {
+            appState.activeGuideline = name;
+            const selectEl = document.getElementById('guidelineSelect');
+            if (selectEl) selectEl.value = name;
+            for (const key in appState.guidelines) {
+                appState.guidelines[key].visible = (key === name);
+            }
+            const posInput = document.getElementById('guidelinePosition');
+            if (posInput) posInput.disabled = (name === 'none');
+            this.updateLightOnGuideline();
+            appState.needsRender = true;
+        },
+
+        updateGuidelineRadius() {
+            const radius = safeParseFloat(document.getElementById('guidelineRadius')?.value, APP_CONFIG.DEFAULT_GUIDELINE_RADIUS);
+            appState.guidelineGroup.scale.setScalar(radius / APP_CONFIG.DEFAULT_GUIDELINE_RADIUS);
+            this.updateLightOnGuideline();
+            appState.needsRender = true;
+        },
+
+        updateLightOnGuideline() {
+            if (appState.activeGuideline === 'none') return;
+            const radius = safeParseFloat(document.getElementById('guidelineRadius')?.value, APP_CONFIG.DEFAULT_GUIDELINE_RADIUS);
+            const angle = THREE.MathUtils.degToRad(safeParseFloat(document.getElementById('guidelinePosition')?.value, 0));
+            let pos = new THREE.Vector3(radius * Math.cos(angle), radius * Math.sin(angle), 0);
+            const guide = appState.guidelines[appState.activeGuideline];
+            if (guide) pos.applyEuler(guide.rotation);
+
+            appState.customSpotLight.position.copy(pos);
+            appState.lightSourceMesh.position.copy(pos);
+            const sx = document.getElementById('customLightSourcePosX');
+            const sy = document.getElementById('customLightSourcePosY');
+            const sz = document.getElementById('customLightSourcePosZ');
+            if (sx) sx.value = pos.x.toFixed(0);
+            if (sy) sy.value = pos.y.toFixed(0);
+            if (sz) sz.value = pos.z.toFixed(0);
+            if (appState.customSpotLightHelper.visible) appState.customSpotLightHelper.update();
+            appState.needsRender = true;
+        },
+
         onWindowResize() {
             if (!appState.camera || !appState.renderer) return;
             const width = window.innerWidth;
@@ -210,7 +337,10 @@
             appState.studioSpotLight.visible = !!enabled;
             appState.studioLightHelperMesh.visible = !!(enabled && helperVisible);
 
-            if (!enabled) return;
+            if (!enabled) {
+                appState.needsRender = true;
+                return;
+            }
             appState.studioSpotLight.color.set(colorHex);
             appState.studioSpotLight.intensity = intensity;
             appState.studioSpotLight.angle = angle;
@@ -244,7 +374,7 @@
             this.updateStudioLightSettings();
         },
 
-        // 核心渲染循环：完美复原图 3 的透视深度、球体弧度与呼吸光效
+        // 核心渲染循环：响应辉光与各类动态参数
         animate(time) {
             if (time === undefined || time === null) time = performance.now();
             requestAnimationFrame((t) => AppScene.animate(t));
@@ -274,69 +404,28 @@
 
             const cardMult = appState.cardScaleMultiplier || 1.0;
 
-            if (appState.isFlowMode && appState.wordObjects && appState.wordObjects.length > 0) {
-                const fovRad = (appState.camera.fov * Math.PI) / 180;
-                const dist = appState.camera.position.length() || 165;
-                const visH = 2 * Math.tan(fovRad / 2) * dist * 0.82;
-                const visW = visH * appState.camera.aspect;
-
-                const mode = appState.flowModeType;
-                const isHorizontal = (mode === 'top_row' || mode === 'center_row' || mode === 'bottom_row');
-                const total = appState.wordObjects.length;
-                const baseCardW = 12 * cardMult;
-                const baseCardH = 6 * cardMult;
-
-                let minStep, span, halfSpan;
-                if (isHorizontal) {
-                    minStep = baseCardW + (visH / window.innerHeight) * 5;
-                    span = Math.max(visW * 1.3, minStep * total);
-                } else {
-                    minStep = baseCardH + (visH / window.innerHeight) * 5;
-                    span = Math.max(visH * 1.3, minStep * total);
-                }
-                halfSpan = span / 2;
-
-                const baseSpeed = 0.06 * (appState.actualDisplayRotationSpeed / APP_CONFIG.DEFAULT_ROTATION_SPEED);
-                const flowSpeed = baseSpeed * appState.rotationMultiplier * appState.rotationMultiplierTemporary;
-                const batchWords = appState.currentBatchWords;
-
-                appState.wordObjects.forEach(card => {
-                    card.quaternion.identity();
-                    card.scale.set(cardMult, cardMult, cardMult);
-                    if (isHorizontal) {
-                        card.position.x += flowSpeed;
-                        if (card.position.x > halfSpan) {
-                            card.position.x -= span;
-                            if (batchWords && batchWords.length > 0) {
-                                const nextWord = batchWords[appState.flowWordIndex % batchWords.length];
-                                appState.flowWordIndex++;
-                                AppCardFactory.updateCardWordData(card, nextWord);
-                            }
-                        }
-                    } else {
-                        card.position.y += flowSpeed;
-                        if (card.position.y > halfSpan) {
-                            card.position.y -= span;
-                            if (batchWords && batchWords.length > 0) {
-                                const nextWord = batchWords[appState.flowWordIndex % batchWords.length];
-                                appState.flowWordIndex++;
-                                AppCardFactory.updateCardWordData(card, nextWord);
-                            }
-                        }
-                    }
-                });
-                mustRender = true;
-            }
-
             if (!mustRender) return;
             appState.needsRender = false;
 
+            // 宇宙涡旋动态旋转（支持线性、正弦缓动、脉冲、阻尼振荡）
             if (appState.vortexParticles && appState.vortexParticles.visible) {
-                appState.vortexParticles.rotation.y += appState.rt.vortexSpeed;
+                const baseSpeed = appState.rt.vortexSpeed;
+                let dynamicSpeed = baseSpeed;
+                const model = appState.rt.vortexModel;
+                switch(model) {
+                    case 'sine-ease': dynamicSpeed = baseSpeed * (1 + 0.5 * Math.sin(time * 0.001)); break;
+                    case 'pulse': dynamicSpeed = baseSpeed * (1 + 2 * Math.pow(Math.sin(time * 0.002), 8)); break;
+                    case 'damped-oscillation': dynamicSpeed = baseSpeed * (1 + 0.5 * Math.sin(time * 0.005) * Math.exp(-0.0001 * time)); break;
+                    default: break;
+                }
+                appState.vortexParticles.rotation.y += dynamicSpeed;
             }
-            if (appState.coreSphere) appState.coreSphere.rotation.y += 0.00035;
 
-            // 💡 图 3 悬浮大卡片动画与透明度精确控制（告别纯青遮挡色块）
+            if (appState.coreSphere && appState.coreSphere.visible) {
+                appState.coreSphere.rotation.y += 0.00035;
+            }
+
+            // 悬浮大卡片动画与透明度精确控制
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
                 const lerpFactor = 0.1;
@@ -348,7 +437,7 @@
                     const newOp = THREE.MathUtils.lerp(currentOp, appState.overlayCardTargetOpacity, lerpFactor);
                     screen.material.opacity = newOp;
                     if (card.userData.refs.backplate) {
-                        card.userData.refs.backplate.material.opacity = newOp * 0.88;
+                        card.userData.refs.backplate.material.opacity = newOp * appState.rt.hoverBgOpacity;
                     }
                     if (card.userData.refs.coreGlow) {
                         card.userData.refs.coreGlow.material.opacity = newOp * 0.75;
@@ -395,7 +484,7 @@
                 appState.wordSphereGroup.updateMatrixWorld(true);
             }
 
-            // 💡 图 3 核心精髓：根据到相机的距离 t 和纬度 Y 进行自适应缩放与呼吸透视，营建完美球体曲面立体弧度
+            // 经典球体缩放与透视呼吸
             if (!appState.isFlowMode) {
                 const radius = appState.sphereRadius || 85;
                 const camDist = AppMath.vecCamWorld.length();
@@ -432,7 +521,6 @@
                     }
                 });
 
-                // 让所有卡片保持正对相机
                 AppMath.quadParentInv.copy(appState.wordSphereGroup.quaternion).invert();
                 AppMath.quadParentInv.multiply(appState.camera.quaternion);
 
@@ -448,7 +536,9 @@
                 appState.activeCardObject.userData.hoverSideMaterial.emissiveIntensity = 0.78 + Math.sin(time * 0.0043) * 0.68;
             }
 
-            if (appState.rt.visualFxEnabled && appState.composer) {
+            // 视觉增强系统（Bloom 与 Composer 后期渲染）
+            const isBloomActive = document.getElementById('visualEffectsEnabled')?.checked || appState.rt.visualFxEnabled;
+            if (isBloomActive && appState.composer) {
                 appState.composer.render();
             } else {
                 appState.renderer.render(appState.scene, appState.camera);

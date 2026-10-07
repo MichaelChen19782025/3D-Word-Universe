@@ -1,10 +1,11 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与启动总装中枢
- * 修复图 3 悬浮发光层（彻底去除实心青色块遮挡）并完美呈现全息科技四角光标
+ * 彻底恢复所有设置项（核心球体、涡旋、辉光、背景、星空、灯光、卡片外观等）的实时响应监听
  */
 (function() {
     let fontScale = 1.0;
     let _persistTimer = null;
+    let _sphereRebuildRaf = 0;
 
     function schedulePersist() {
         clearTimeout(_persistTimer);
@@ -13,6 +14,16 @@
             AppUI.saveSettings();
             AppUI.saveLastState();
         }, 150);
+    }
+
+    function scheduleSphereRebuild() {
+        if (_sphereRebuildRaf) return;
+        _sphereRebuildRaf = requestAnimationFrame(() => {
+            _sphereRebuildRaf = 0;
+            if (appState.currentBatchWords.length > 0 || appState.wordObjects.length > 0) {
+                AppSphereEngine.createWordSphere(appState.currentBatchWords);
+            }
+        });
     }
 
     function selectLocalFile(accept, callback) {
@@ -52,7 +63,7 @@
 
             this.initPremiumHoverCard();
             this.initAllButtonsAndEvents();
-            this.initSettingsAndSliders();
+            this.initDetailedSettingsListeners();
             this.initMobileTouchHandlers();
             this.initClock();
             this.initSystemViews();
@@ -63,12 +74,13 @@
             this.initStudyLog();
 
             await this.loadWordDataAndBoot();
+            this.loadAllPersistentStates();
 
             setTimeout(() => {
                 appState.isInitializing = false;
                 this.refreshRuntimeCache();
                 appState.needsRender = true;
-                console.log('3D 单词宇宙系统以原版经典视觉成功启动！');
+                console.log('3D 单词宇宙系统以全功能实时响应状态启动完毕！');
             }, 300);
         },
 
@@ -148,11 +160,9 @@
             }
         },
 
-        // 💡 彻底修复图 3 悬浮发光层：恢复暗邃幽蓝磨砂玻璃底板 + 渐变微光 + 全息四角光标
         initPremiumHoverCard() {
             const group = new THREE.Group();
 
-            // 1. 底板：深邃幽蓝磨砂玻璃质感底色
             const backplate = new THREE.Mesh(
                 new THREE.PlaneGeometry(1, 1),
                 new THREE.MeshBasicMaterial({ color: 0x061126, transparent: true, opacity: 0, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
@@ -162,7 +172,6 @@
             backplate.raycast = () => {};
             group.add(backplate);
 
-            // 2. 核心微光辉光贴图（不再是刺眼的实心纯青色平面，而是柔和发散的径向渐变）
             const glowCanvas = document.createElement('canvas');
             glowCanvas.width = 128; glowCanvas.height = 128;
             const glowCtx = glowCanvas.getContext('2d');
@@ -190,7 +199,6 @@
             coreGlow.raycast = () => {};
             group.add(coreGlow);
 
-            // 3. 文字屏幕网格
             const screen = new THREE.Mesh(
                 new THREE.PlaneGeometry(1, 1),
                 new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false })
@@ -200,7 +208,6 @@
             screen.renderOrder = 9998;
             group.add(screen);
 
-            // 4. 图 3 经典全息四角科技光标 (Corner Brackets)
             const cornerBracketsGroup = this.createCornerBrackets();
             cornerBracketsGroup.name = 'frameGroup';
             cornerBracketsGroup.position.z = 0.03;
@@ -277,6 +284,312 @@
             };
             update();
             setInterval(update, 1000);
+        },
+
+        // ==================== 彻底恢复所有设置项的事件监听 ====================
+        initDetailedSettingsListeners() {
+            const bindSync = (sliderId, numId, callback) => {
+                const slider = document.getElementById(sliderId);
+                const num = document.getElementById(numId);
+                if (!slider || !num) return;
+                slider.addEventListener('input', () => {
+                    num.value = slider.value;
+                    if (callback) callback(slider.value);
+                    schedulePersist();
+                });
+                num.addEventListener('change', () => {
+                    slider.value = num.value;
+                    if (callback) callback(num.value);
+                    schedulePersist();
+                });
+            };
+
+            // 1. 旋转速度双向绑定
+            bindSync('rotationSpeed', 'rotationSpeedInput', (v) => {
+                appState.actualDisplayRotationSpeed = safeParseFloat(v, 1.0) * appState.currentRotationSpeedBase;
+                appState.needsRender = true;
+            });
+            document.getElementById('rotationModelSelect')?.addEventListener('change', (e) => {
+                appState.rotationModel = e.target.value;
+                appState.needsRender = true;
+                schedulePersist();
+            });
+
+            // 2. 核心球体设置实时响应 (修复截图第一项)
+            ['coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const evt = (el.type === 'range' || el.type === 'color') ? 'input' : 'change';
+                el.addEventListener(evt, () => {
+                    AppParticles.updateCoreSphereSettings();
+                    appState.needsRender = true;
+                    schedulePersist();
+                });
+            });
+
+            // 3. 视觉增强系统 (Vortex & Bloom) (修复截图第二项)
+            document.getElementById('visualEffectsEnabled')?.addEventListener('change', (e) => {
+                appState.rt.visualFxEnabled = e.target.checked;
+                AppParticles.updateVisualEffects();
+                appState.needsRender = true;
+                schedulePersist();
+            });
+
+            document.getElementById('vortexRotationModelSelect')?.addEventListener('change', (e) => {
+                appState.rt.vortexModel = e.target.value;
+                appState.needsRender = true;
+                schedulePersist();
+            });
+
+            ['vortexParticleCount', 'vortexTightness'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', () => {
+                    AppParticles.initVortex();
+                    appState.needsRender = true;
+                    schedulePersist();
+                });
+            });
+
+            ['vortexColor', 'vortexSize'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', () => {
+                    AppParticles.updateVisualEffects();
+                    appState.needsRender = true;
+                    schedulePersist();
+                });
+            });
+
+            bindSync('vortexSpeed', 'vortexSpeedInput', (v) => {
+                appState.rt.vortexSpeed = safeParseFloat(v, 0);
+                appState.needsRender = true;
+            });
+
+            ['bloomThreshold', 'bloomStrength', 'bloomRadius'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', () => {
+                    AppParticles.updateVisualEffects();
+                    appState.needsRender = true;
+                    schedulePersist();
+                });
+            });
+
+            // 4. 动态背景设置
+            ['dynamicBgHueStart', 'dynamicBgHueEnd', 'dynamicBgLightness'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', () => {
+                    AppParticles.updateDynamicBackgroundCSS();
+                    appState.needsRender = true;
+                    schedulePersist();
+                });
+            });
+
+            document.getElementById('dynamicBgParticleCount')?.addEventListener('change', () => {
+                AppParticles.initDynamicBackground();
+                appState.needsRender = true;
+                schedulePersist();
+            });
+
+            document.getElementById('dynamicBgParticleSpeed')?.addEventListener('input', (e) => {
+                appState.rt.particleSpeed = safeParseFloat(e.target.value, 1);
+                appState.needsRender = true;
+                schedulePersist();
+            });
+
+            // 5. 星空背景设置
+            ['starfieldEnabled', 'starCount', 'starColor', 'starSize', 'starVelocityFactor', 'starDensityFalloff', 'starMinAlpha', 'starMaxAlpha', 'starTwinkleSpeed'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const evt = (el.type === 'range' || el.type === 'color') ? 'input' : 'change';
+                el.addEventListener(evt, () => {
+                    AppParticles.initStarfield();
+                    appState.needsRender = true;
+                    schedulePersist();
+                });
+            });
+
+            // 6. 灯光与补光系统设置
+            ['hemiSkyColor', 'hemiGroundColor', 'hemiIntensity'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', () => {
+                    AppScene.updateHemiLightSettings();
+                    schedulePersist();
+                });
+            });
+
+            ['rect1Color', 'rect1Intensity'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', () => {
+                    AppScene.updateRectAreaLight1Settings();
+                    schedulePersist();
+                });
+            });
+
+            ['rect2Color', 'rect2Intensity'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', () => {
+                    AppScene.updateRectAreaLight2Settings();
+                    schedulePersist();
+                });
+            });
+
+            ['directionalLight2Color', 'directionalLight2Intensity', 'directionalLight2PosX', 'directionalLight2PosY', 'directionalLight2PosZ'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', () => {
+                    AppScene.updateDirectionalLight2Settings();
+                    schedulePersist();
+                });
+            });
+
+            // 7. 棚镜漫反射光源
+            ['studioLightEnabled', 'studioLightDragActive', 'studioLightHelperVisible'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', () => {
+                    if (id === 'studioLightDragActive') {
+                        appState.studioLightDragActive = document.getElementById('studioLightDragActive').checked;
+                        appState.controls.enabled = !appState.studioLightDragActive;
+                    }
+                    AppScene.updateStudioLightSettings();
+                    schedulePersist();
+                });
+            });
+            ['studioLightColor', 'studioLightIntensity', 'studioLightAngle'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', () => {
+                    AppScene.updateStudioLightSettings();
+                    schedulePersist();
+                });
+            });
+
+            // 8. 自定义聚光灯与轨道
+            ['customLightEnabled', 'customLightHelperVisible'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', () => {
+                    AppScene.updateCustomLightSettings();
+                    schedulePersist();
+                });
+            });
+
+            ['customLightColor', 'customLightIntensity', 'customLightDistance', 'customLightAngle', 'customLightPenumbra',
+             'customLightSourcePosX', 'customLightSourcePosY', 'customLightSourcePosZ',
+             'customLightTargetPosX', 'customLightTargetPosY', 'customLightTargetPosZ'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', () => {
+                    AppScene.updateCustomLightSettings();
+                    schedulePersist();
+                });
+            });
+
+            document.getElementById('guidelineSelect')?.addEventListener('change', (e) => {
+                AppScene.setActiveGuideline(e.target.value);
+                schedulePersist();
+            });
+            document.getElementById('guidelineRadius')?.addEventListener('input', () => {
+                AppScene.updateGuidelineRadius();
+                schedulePersist();
+            });
+            document.getElementById('guidelinePosition')?.addEventListener('input', () => {
+                AppScene.updateLightOnGuideline();
+                schedulePersist();
+            });
+
+            // 9. 卡片外观重绘响应 (图 3 风格与字号/颜色调节)
+            const redrawProps = [
+                'sphereCardFontColor', 'sphereCardFontFamily', 'sphereCardBgOpacity', 'sphereCardEmissiveColor',
+                'sphereCardEmissiveIntensityFactor', 'sphereCardSideColor', 'sphereCardFontSizeFactorOverall',
+                'sphereCardFontSizeFactorCloseUp', 'stormWordCardStyleEnabled', 'stormWordCardBgColor',
+                'stormWordCardBgOpacity', 'stormWordCardFontColor', 'stormWordCardSideColor', 'stormWordCardEmissiveColor'
+            ];
+            redrawProps.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const evt = (el.type === 'range' || el.type === 'color') ? 'input' : 'change';
+                el.addEventListener(evt, () => {
+                    this.applyAppearanceSettings();
+                    scheduleSphereRebuild();
+                    schedulePersist();
+                });
+            });
+
+            bindSync('defaultBrightnessOnLoad', 'defaultBrightnessOnLoadInput', (v) => {
+                const mult = document.getElementById('sphereCardBaseColorMultiplier');
+                if (mult) mult.value = v;
+                scheduleSphereRebuild();
+            });
+
+            document.getElementById('sphereCardBaseColorMultiplier')?.addEventListener('input', () => {
+                scheduleSphereRebuild();
+                schedulePersist();
+            });
+
+            // 10. 悬浮大卡片样式调节
+            ['hoverOverlayCardScale', 'hoverCardBrightness', 'hoverCardEmissiveColor', 'hoverCardGlowFrequency',
+             'hoverAppendedBgColor', 'hoverAppendedBgOpacity', 'hoverAppendedFontColor', 'hoverAppendedFontSize',
+             'hoverCardTextMainWordColor', 'hoverCardTextLabelColor', 'hoverCardTextValueColor',
+             'hoverCardTextGlowColor', 'hoverCardTextGlowIntensity'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', () => {
+                    this.applyAppearanceSettings();
+                    if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
+                        this.triggerCardDisplay(appState.hoveredObject);
+                    }
+                    schedulePersist();
+                });
+            });
+        },
+
+        applyAppearanceSettings() {
+            const root = document.documentElement.style;
+            const getVal = (id, fallback = '') => document.getElementById(id)?.value || fallback;
+
+            root.setProperty('--sphere-card-font-color', getVal('sphereCardFontColor', '#ffffff'));
+            root.setProperty('--sphere-card-font-family', getVal('sphereCardFontFamily', "'Microsoft YaHei', sans-serif"));
+            root.setProperty('--sphere-card-bg-opacity', getVal('sphereCardBgOpacity', '0.8'));
+            root.setProperty('--sphere-card-emissive-color', getVal('sphereCardEmissiveColor', '#00b8ff'));
+            root.setProperty('--sphere-card-emissive-intensity-factor', getVal('sphereCardEmissiveIntensityFactor', '1.0'));
+            root.setProperty('--sphere-card-base-color-multiplier', getVal('sphereCardBaseColorMultiplier', '1.0'));
+            root.setProperty('--sphere-card-side-color', getVal('sphereCardSideColor', '#1f3568'));
+            root.setProperty('--storm-word-card-bg-color', getVal('stormWordCardBgColor', '#FFCC20'));
+            root.setProperty('--hover-appended-bg-color', getVal('hoverAppendedBgColor', '#0A1E46'));
+            root.setProperty('--hover-appended-bg-opacity', getVal('hoverAppendedBgOpacity', '0.75'));
+            root.setProperty('--hover-appended-font-color', getVal('hoverAppendedFontColor', '#D0E8FF'));
+            root.setProperty('--hover-appended-font-size', `${getVal('hoverAppendedFontSize', '12')}px`);
+
+            this.refreshRuntimeCache();
+            appState.needsRender = true;
+        },
+
+        refreshRuntimeCache() {
+            const rt = appState.rt;
+            const getChk = (id, fb = false) => {
+                const el = document.getElementById(id);
+                return el ? el.checked : fb;
+            };
+
+            rt.rotateX = getChk('rotateX', true);
+            rt.rotateY = getChk('rotateY', true);
+            rt.rotateZ = getChk('rotateZ', false);
+            rt.cardSelfRotation = getChk('cardSelfRotation', true);
+            rt.grappleEnabled = getChk('grappleEnabled', true);
+            rt.visualFxEnabled = getChk('visualEffectsEnabled', false);
+
+            const crs = document.getElementById('cardRotationSpeed');
+            if (crs) rt.cardRotationSpeed = safeParseFloat(crs.value, 0) * 0.00115;
+
+            const vs = document.getElementById('vortexSpeed');
+            if (vs) rt.vortexSpeed = safeParseFloat(vs.value, 0);
+
+            const vm = document.getElementById('vortexRotationModelSelect');
+            if (vm) rt.vortexModel = vm.value;
+
+            const hbo = document.getElementById('hoverAppendedBgOpacity');
+            if (hbo) rt.hoverBgOpacity = safeParseFloat(hbo.value, 0.75);
+
+            const gf = document.getElementById('hoverCardGlowFrequency');
+            if (gf) rt.glowFrequency = safeParseFloat(gf.value, 1.0);
+
+            const fOverall = document.getElementById('sphereCardFontSizeFactorOverall');
+            if (fOverall) rt.fontSizeFactorOverall = safeParseFloat(fOverall.value, 1.0);
+
+            const fClose = document.getElementById('sphereCardFontSizeFactorCloseUp');
+            if (fClose) rt.fontSizeFactorCloseUp = safeParseFloat(fClose.value, 1.0);
+
+            const eInt = document.getElementById('sphereCardEmissiveIntensityFactor');
+            if (eInt) rt.cardEmissiveIntensity = safeParseFloat(eInt.value, 1.0);
         },
 
         initAllButtonsAndEvents() {
@@ -1103,74 +1416,6 @@
                     </ul>
                 `;
             }
-        },
-
-        initSettingsAndSliders() {
-            const bindInputSync = (sliderId, numId, callback) => {
-                const slider = document.getElementById(sliderId);
-                const num = document.getElementById(numId);
-                if (!slider || !num) return;
-                slider.addEventListener('input', () => {
-                    num.value = slider.value;
-                    if (callback) callback(slider.value);
-                    schedulePersist();
-                });
-                num.addEventListener('change', () => {
-                    slider.value = num.value;
-                    if (callback) callback(num.value);
-                    schedulePersist();
-                });
-            };
-
-            bindInputSync('rotationSpeed', 'rotationSpeedInput', (v) => {
-                appState.actualDisplayRotationSpeed = safeParseFloat(v, 1.0) * appState.currentRotationSpeedBase;
-                appState.needsRender = true;
-            });
-
-            bindInputSync('defaultBrightnessOnLoad', 'defaultBrightnessOnLoadInput', (v) => {
-                const mult = document.getElementById('sphereCardBaseColorMultiplier');
-                if (mult) mult.value = v;
-                if (appState.currentBatchWords.length > 0) AppSphereEngine.createWordSphere(appState.currentBatchWords);
-            });
-
-            bindInputSync('vortexSpeed', 'vortexSpeedInput', (v) => {
-                appState.rt.vortexSpeed = safeParseFloat(v, 0);
-            });
-
-            document.querySelectorAll('#controlsOverlay input, #controlsOverlay select').forEach(input => {
-                input.addEventListener('change', () => {
-                    this.refreshRuntimeCache();
-                    appState.needsRender = true;
-                    schedulePersist();
-                });
-            });
-        },
-
-        refreshRuntimeCache() {
-            const rt = appState.rt;
-            const rx = document.getElementById('rotateX');
-            const ry = document.getElementById('rotateY');
-            const rz = document.getElementById('rotateZ');
-            const csr = document.getElementById('cardSelfRotation');
-            const grp = document.getElementById('grappleEnabled');
-            const crs = document.getElementById('cardRotationSpeed');
-
-            if (rx) rt.rotateX = rx.checked;
-            if (ry) rt.rotateY = ry.checked;
-            if (rz) rt.rotateZ = rz.checked;
-            if (csr) rt.cardSelfRotation = csr.checked;
-            if (grp) rt.grappleEnabled = grp.checked;
-            if (crs) rt.cardRotationSpeed = safeParseFloat(crs.value, 0) * 0.00115;
-
-            const ve = document.getElementById('visualEffectsEnabled');
-            const vs = document.getElementById('vortexSpeed');
-            const vm = document.getElementById('vortexRotationModelSelect');
-            if (ve) rt.visualFxEnabled = ve.checked;
-            if (vs) rt.vortexSpeed = safeParseFloat(vs.value, 0);
-            if (vm) rt.vortexModel = vm.value;
-
-            const hbo = document.getElementById('hoverAppendedBgOpacity');
-            if (hbo) rt.hoverBgOpacity = safeParseFloat(hbo.value, 0.75);
         },
 
         bindSystemViewButton(btn, key) {
