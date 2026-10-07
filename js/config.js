@@ -1,7 +1,18 @@
 /**
- * 3D单词宇宙 - 全局配置中心与基础常量
+ * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量
  */
 const IS_MOBILE_DEVICE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
+
+// 核心共享数学对象池（统一收拢，杜绝任何模块出现 duplicate declaration 语法死锁）
+const AppMath = {
+    vecCamWorld: new THREE.Vector3(),
+    vecCardWorld: new THREE.Vector3(),
+    vecView: new THREE.Vector3(),
+    quadParentInv: new THREE.Quaternion(),
+    color: new THREE.Color(),
+    zAxis: new THREE.Vector3(0, 0, 1)
+};
+window.AppMath = AppMath;
 
 const APP_CONFIG = {
     DEFAULT_ROTATION_SPEED: 0.135,
@@ -103,7 +114,7 @@ const APP_CONFIG = {
             bgTop: 'rgba(8,18,32,0.95)', bgMid: 'rgba(14,32,52,0.96)', bgBot: 'rgba(6,12,24,0.97)',
             accent: 'rgba(190,235,255,1)', accentSoft: 'rgba(190,235,255,0.4)', glow: 'rgba(160,225,255,0.10)',
             borderA: 'rgba(160,220,255,0.55)', borderB: 'rgba(255,255,255,0.4)',
-            textTop: 'rgba(250,252,255,1)', textBot: 'rgba(170,215,245,1)',
+            textTop: 'rgba(255,235,235,1)', textBot: 'rgba(170,215,245,1)',
             emBorder: 'rgba(190,235,255,0.55)', emBracket: 'rgba(220,245,255,0.5)', emDot: 'rgba(200,240,255,0.7)',
             sideColor: 0x12283e, sideEmissive: 0x9fd8ff, pattern: 'dots'
         },
@@ -225,7 +236,6 @@ const APP_CONFIG = {
     GRAPPLE_MAX_SPEED: 260
 };
 
-// 全局运行时状态字典
 const appState = {
     scene: null, camera: null, renderer: null, controls: null,
     composer: null, bloomPass: null,
@@ -268,7 +278,6 @@ const appState = {
     pendingHoveredObject: null, hoverIntentTimer: null,
     needsRender: true,
     
-    // 高频动画帧只读缓存（避免读DOM触发重排）
     rt: {
         rotateX: true, rotateY: true, rotateZ: false,
         cardSelfRotation: false, cardRotationSpeed: 0,
@@ -290,7 +299,6 @@ const appState = {
     }
 };
 
-// 基础安全解析助手
 function safeParseFloat(val, fallback = 0) {
     const parsed = parseFloat(val);
     return isNaN(parsed) ? fallback : parsed;

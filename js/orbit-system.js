@@ -1,16 +1,13 @@
 /**
  * 3D单词宇宙 - 多轨道编排、擒拿瞬间加速与流式传送带布局系统
- * (IIFE 封闭作用域，杜绝全局变量污染与同名冲突)
+ * 严格复用 AppMath，杜绝全局 Scratch 变量重复声明
  */
 (function() {
-    const _Z_AXIS = new THREE.Vector3(0, 0, 1);
-    const _scratchVecCamWorld = new THREE.Vector3();
-    const _scratchVecCardWorld = new THREE.Vector3();
     let _orbitLaneOrder = [];
 
     // 擒拿状态机
     let grapple = {
-        phase: 'idle', // 'idle' | 'rampUp' | 'cruise' | 'rampDown' | 'captured'
+        phase: 'idle',
         factor: 1.0,
         cruiseStart: 0,
         lastBatch: new Set(),
@@ -39,7 +36,7 @@
 
     function randomizeOrbitLane(lane, normal) {
         lane.axis.copy(normal);
-        lane.group.quaternion.setFromUnitVectors(_Z_AXIS, lane.axis);
+        lane.group.quaternion.setFromUnitVectors(AppMath.zAxis, lane.axis);
         lane.speedFactor = APP_CONFIG.ORBIT_LANE_SPEED_FACTOR_MIN + Math.random() * (APP_CONFIG.ORBIT_LANE_SPEED_FACTOR_MAX - APP_CONFIG.ORBIT_LANE_SPEED_FACTOR_MIN);
         lane.dir = (Math.random() < 0.5) ? -1 : 1;
         lane.phase = Math.random() * Math.PI * 2;
@@ -225,14 +222,14 @@
         currentFrontKeys() {
             const keys = new Set();
             if (!appState.camera || !appState.wordObjects || appState.wordObjects.length === 0) return keys;
-            appState.camera.getWorldPosition(_scratchVecCamWorld);
+            appState.camera.getWorldPosition(AppMath.vecCamWorld);
             const radius = appState.sphereRadius || 85;
-            const threshold = _scratchVecCamWorld.length() - radius * 0.3;
+            const threshold = AppMath.vecCamWorld.length() - radius * 0.3;
 
             for (let i = 0; i < appState.wordObjects.length; i++) {
                 const card = appState.wordObjects[i];
-                card.getWorldPosition(_scratchVecCardWorld);
-                if (_scratchVecCardWorld.distanceTo(_scratchVecCamWorld) < threshold) {
+                card.getWorldPosition(AppMath.vecCardWorld);
+                if (AppMath.vecCardWorld.distanceTo(AppMath.vecCamWorld) < threshold) {
                     keys.add(getWordKey(card.userData.word));
                 }
             }

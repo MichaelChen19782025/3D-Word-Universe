@@ -1,12 +1,8 @@
 /**
  * 3D单词宇宙 - Three.js 核心场景、相机、控制器、灯光组及按需节能渲染管线
- * (IIFE 封闭作用域，杜绝全局变量污染与同名冲突)
+ * 严格复用 AppMath，杜绝全局 Scratch 变量重复声明
  */
 (function() {
-    const _scratchVecCamWorld = new THREE.Vector3();
-    const _scratchVecCardWorld = new THREE.Vector3();
-    const _scratchQuadParentInv = new THREE.Quaternion();
-
     const AppScene = {
         init() {
             appState.scene = new THREE.Scene();
@@ -30,14 +26,12 @@
             const container = document.getElementById('wordSphere');
             container.appendChild(appState.renderer.domElement);
 
-            // 后期处理辉光通道
             const renderScene = new THREE.RenderPass(appState.scene, appState.camera);
             appState.bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
             appState.composer = new THREE.EffectComposer(appState.renderer);
             appState.composer.addPass(renderScene);
             appState.composer.addPass(appState.bloomPass);
 
-            // 控制器
             appState.controls = new THREE.OrbitControls(appState.camera, appState.renderer.domElement);
             appState.controls.enableDamping = true;
             appState.controls.dampingFactor = 0.035;
@@ -63,13 +57,8 @@
                 }
             });
 
-            // 初始化所有灯光
             this.initLights();
-
-            // 窗口响应监听
             window.addEventListener('resize', () => this.onWindowResize());
-
-            // 启动主渲染循环
             this.animate();
         },
 
@@ -78,7 +67,6 @@
             appState.scene.add(appState.hemisphereLight);
             appState.scene.add(appState.camera);
 
-            // 棚镜补光聚光灯
             appState.studioSpotLight = new THREE.SpotLight(0xffffff, 0);
             appState.studioSpotLight.decay = 0;
             appState.studioSpotLight.penumbra = 1.0;
@@ -118,7 +106,6 @@
             ).normalize();
             appState.scene.add(appState.directionalLight2);
 
-            // 自定义聚光灯与目标
             appState.customSpotLight = new THREE.SpotLight(APP_CONFIG.DEFAULT_CUSTOM_LIGHT_COLOR);
             appState.customSpotLight.decay = 0;
             appState.scene.add(appState.customSpotLight);
@@ -142,7 +129,6 @@
             appState.lightTargetMesh.visible = false;
             appState.scene.add(appState.lightTargetMesh);
 
-            // TransformControls
             appState.transformControls = new THREE.TransformControls(appState.camera, appState.renderer.domElement);
             appState.transformControls.setMode('translate');
             appState.transformControls.setSpace('world');
@@ -258,14 +244,12 @@
             this.updateStudioLightSettings();
         },
 
-        // 核心渲染循环（支持按需节能与零功耗静止）
         animate(time) {
             if (time === undefined || time === null) time = performance.now();
             requestAnimationFrame((t) => AppScene.animate(t));
 
             if (!appState.controls || !appState.renderer || !appState.scene || !appState.camera) return;
 
-            // 移动端帧率节流保护
             if (IS_MOBILE_DEVICE) {
                 if (!appState.lastRenderTime) appState.lastRenderTime = time;
                 const delta = time - appState.lastRenderTime;
@@ -289,7 +273,6 @@
 
             const cardMult = appState.cardScaleMultiplier || 1.0;
 
-            // 流式传送带模式滚动更新
             if (appState.isFlowMode && appState.wordObjects && appState.wordObjects.length > 0) {
                 const fovRad = (appState.camera.fov * Math.PI) / 180;
                 const dist = appState.camera.position.length() || 165;
@@ -347,13 +330,11 @@
             if (!mustRender) return;
             appState.needsRender = false;
 
-            // 涡旋与核心发光球转动
             if (appState.vortexParticles && appState.vortexParticles.visible) {
                 appState.vortexParticles.rotation.y += appState.rt.vortexSpeed;
             }
             if (appState.coreSphere) appState.coreSphere.rotation.y += 0.00035;
 
-            // 悬浮 3D 卡片平滑动画插值
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
                 const lerpFactor = 0.1;
@@ -383,9 +364,9 @@
                 }
             }
 
-            appState.camera.getWorldPosition(_scratchVecCamWorld);
+            // 使用统一共享的 AppMath 向量，杜绝变量重复声明
+            appState.camera.getWorldPosition(AppMath.vecCamWorld);
 
-            // 擒拿与轨道自转
             const grappleFactor = AppOrbit.tickGrapple(time);
             const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.012 * appState.rotationMultiplier * appState.rotationMultiplierTemporary;
 
@@ -402,16 +383,15 @@
 
             AppOrbit.updateGrappleEffects();
 
-            // 维持卡片正对屏幕
             if (!appState.isFlowMode && appState.wordSphereGroup) {
                 const parentQuat = appState.wordSphereGroup.quaternion;
                 const camQuat = appState.camera.quaternion;
                 appState.orbitLanes.forEach(lane => {
-                    _scratchQuadParentInv.copy(parentQuat).multiply(lane.group.quaternion).invert().multiply(camQuat);
+                    AppMath.quadParentInv.copy(parentQuat).multiply(lane.group.quaternion).invert().multiply(camQuat);
                     const children = lane.group.children;
                     for (let i = 0; i < children.length; i++) {
                         const card = children[i];
-                        card.quaternion.copy(_scratchQuadParentInv);
+                        card.quaternion.copy(AppMath.quadParentInv);
                         if (appState.rt.cardSelfRotation && appState.rt.cardRotationSpeed > 0) {
                             card.rotateOnAxis(card.userData.rotationAxis, card.userData.rotationSpeed * appState.rt.cardRotationSpeed);
                         }
@@ -419,7 +399,6 @@
                 });
             }
 
-            // 最终渲染
             if (appState.rt.visualFxEnabled && appState.composer) {
                 appState.composer.render();
             } else {
