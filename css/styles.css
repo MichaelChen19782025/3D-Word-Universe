@@ -249,8 +249,8 @@ body {
 #dailyGoalToast {
     position: fixed; top: 30px; left: 50%; transform: translateX(-50%) translateY(-100px);
     background: linear-gradient(45deg, #10b981, #059669); color: white;
-    padding: 14px 28px; border-radius: 30px; font-weight: bold; font-size: 1.1rem;
-    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.5); z-index: 9999; opacity: 0;
+    padding: 14px 28px; border-radius: 30px; font-weight: bold; font-size: 1.15rem;
+    box-shadow: 0 10px 35px rgba(16, 185, 129, 0.6); z-index: 9999; opacity: 0;
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none;
 }
 #dailyGoalToast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
@@ -295,6 +295,44 @@ body {
 #studyCounterHud .study-goal-sep { opacity: 0.5; font-weight: 400; }
 #studyGoalValue { cursor: pointer; border-bottom: 1px dashed rgba(255, 215, 120, 0.6); padding: 0 2px; transition: color 0.2s; }
 #studyGoalValue:hover { color: #ffd77a; text-shadow: 0 0 12px rgba(255, 200, 80, 0.9); }
+
+/* 局部焦点巡航 HUD 胶囊 (复习数字正下方) */
+#focusCruiseHud {
+    position: fixed; top: 68px; right: 20px;
+    z-index: 46;
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    font-size: 0.95rem; font-weight: 700;
+    color: #ffd875;
+    text-shadow: 0 0 8px rgba(255, 216, 117, 0.6);
+    opacity: 0.88;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 14px;
+    border-radius: 10px;
+    background: rgba(10, 20, 48, 0.38);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 216, 117, 0.35);
+    transition: all 0.25s;
+}
+#focusCruiseHud:hover {
+    opacity: 1; border-color: #ffd875; box-shadow: 0 0 14px rgba(255, 216, 117, 0.45);
+}
+#focusCruiseHud.disabled {
+    opacity: 0.42;
+    color: #a4b5c7;
+    text-shadow: none;
+    border-color: rgba(164, 181, 199, 0.25);
+    background: rgba(10, 20, 48, 0.22);
+}
+#focusCruiseIntervalVal {
+    cursor: pointer;
+    border-bottom: 1px dashed rgba(255, 216, 117, 0.7);
+    padding: 0 2px;
+}
+#focusCruiseIntervalVal:hover {
+    color: #ffffff;
+}
 
 .study-modal { max-width: 880px; }
 .study-modal-body { overflow-y: auto; padding-right: 6px; min-height: 0; }
@@ -385,9 +423,6 @@ body {
 #managementPanel .list-item-btn { background: transparent; border: 1px solid rgba(130, 200, 255, 0.4); color: white; border-radius: 5px; cursor: pointer; transition: all 0.2s; padding: 4px 6px; font-size: 0.8rem; }
 #managementPanel .list-item-btn:hover { background: rgba(79,172,254,0.8); border-color: transparent; }
 #managementPanel .create-btn { background: linear-gradient(45deg, #2c9ef8, #24d8fa); border: none; padding: 10px; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; margin-top: 10px; }
-
-.unmatched-modal { max-width: 600px; text-align: center; }
-.unmatched-modal textarea { width: 100%; height: 200px; margin-top: 15px; margin-bottom: 15px; padding: 10px; background: rgba(10, 20, 50, 0.9); border: 1px solid var(--border-color); color: #EFEFFF; border-radius: 8px; resize: vertical; }
 
 .header-controls { display: flex; align-items: center; gap: 15px; flex-shrink: 0; }
 #togglePanelSideBtn { background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; transition: color 0.3s, transform 0.3s; line-height: 1; padding: 0; }
