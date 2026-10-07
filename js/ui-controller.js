@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与启动总装中枢
- * 彻底恢复所有设置项（核心球体、涡旋、辉光、背景、星空、灯光、卡片外观等）的实时响应监听与全局状态持久化
+ * 修复学习日志达标提示、侧边放大缩小卡片按钮与局部巡航放大模式
  */
 (function() {
     let fontScale = 1.0;
@@ -66,6 +66,7 @@
             this.initDetailedSettingsListeners();
             this.initMobileTouchHandlers();
             this.initClock();
+            this.initFocusCruiseHud();
             this.initSystemViews();
             this.loadCustomViews();
             this.loadCustomWordBanks();
@@ -99,6 +100,7 @@
             this.displayCurrentBatch();
             this.updateStats();
             this.updateClearShieldedBtnLabel();
+            this.updateStudyCounterDisplay();
         },
 
         displayCurrentBatch() {
@@ -120,6 +122,14 @@
             appState.currentBatchWords = list.slice(appState.currentBatchIndex * size, (appState.currentBatchIndex + 1) * size);
 
             AppSphereEngine.createWordSphere(appState.currentBatchWords);
+
+            // 重置焦点巡航轮换池
+            if (appState.focusCruise) {
+                appState.focusCruise.remainingPool = [];
+                appState.focusCruise.currentSpotlightIndices.clear();
+                appState.focusCruise.lastSwitchTime = performance.now();
+            }
+
             this.updateBatchControls();
             this.updateStats();
             appState.needsRender = true;
@@ -287,6 +297,94 @@
             setInterval(update, 1000);
         },
 
+        initFocusCruiseHud() {
+            const hud = document.getElementById('focusCruiseHud');
+            const intervalVal = document.getElementById('focusCruiseIntervalVal');
+            if (!hud || !intervalVal) return;
+
+            const updateHudUI = () => {
+                hud.classList.toggle('disabled', !appState.focusCruise.enabled);
+                intervalVal.textContent = String(appState.focusCruise.interval);
+                const cb = document.getElementById('focusCruiseEnabled');
+                if (cb) cb.checked = appState.focusCruise.enabled;
+                const intInput = document.getElementById('focusCruiseIntervalInput');
+                if (intInput) intInput.value = String(appState.focusCruise.interval);
+            };
+
+            hud.addEventListener('click', (e) => {
+                if (e.target === intervalVal) return;
+                appState.focusCruise.enabled = !appState.focusCruise.enabled;
+                if (appState.focusCruise.enabled) {
+                    appState.focusCruise.lastSwitchTime = performance.now();
+                } else {
+                    appState.focusCruise.currentSpotlightIndices.clear();
+                }
+                updateHudUI();
+                appState.needsRender = true;
+                this.showToast(appState.focusCruise.enabled ? `✨ 局部巡航模式已开启 (${appState.focusCruise.interval}s/轮)` : '⏹️ 局部巡航模式已关闭');
+                schedulePersist();
+            });
+
+            intervalVal.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const current = appState.focusCruise.interval;
+                const input = prompt('请输入局部巡航轮换周期(秒):', String(current));
+                if (input !== null) {
+                    const sec = parseInt(input, 10);
+                    if (!isNaN(sec) && sec >= 5 && sec <= 600) {
+                        appState.focusCruise.interval = sec;
+                        appState.focusCruise.lastSwitchTime = performance.now();
+                        updateHudUI();
+                        this.showToast(`⏱️ 巡航周期已修改为: ${sec} 秒`);
+                        schedulePersist();
+                    } else {
+                        alert('请输入 5 到 600 之间的秒数');
+                    }
+                }
+            });
+
+            updateHudUI();
+        },
+
+        showToast(text, duration = 2000) {
+            let toast = document.getElementById('appDynamicToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'appDynamicToast';
+                toast.style.cssText = `
+                    position: fixed; top: 36px; left: 50%;
+                    transform: translateX(-50%) translateY(-25px);
+                    background: linear-gradient(135deg, rgba(16, 32, 70, 0.96), rgba(8, 18, 44, 0.96));
+                    border: 1px solid rgba(0, 240, 255, 0.65);
+                    color: #eaf6ff; padding: 12px 28px; border-radius: 999px;
+                    font-size: 1rem; font-weight: 700; letter-spacing: 0.5px;
+                    box-shadow: 0 8px 30px rgba(0, 240, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+                    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+                    z-index: 10002; opacity: 0; pointer-events: none;
+                    transition: opacity 0.25s, transform 0.25s;
+                `;
+                document.body.appendChild(toast);
+            }
+            toast.textContent = text;
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(-50%) translateY(0)';
+
+            if (toast._timer) clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(-50%) translateY(-20px)';
+            }, duration);
+        },
+
+        triggerDailyGoalAchievedToast() {
+            const toast = document.getElementById('dailyGoalToast');
+            if (!toast) return;
+            toast.textContent = `🎉 恭喜！您已完成今日复习目标 (${AppStorage.getStudyGoal()} 个单词)！`;
+            toast.classList.add('show');
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 150]);
+            setTimeout(() => { toast.classList.remove('show'); }, 3500);
+        },
+
         initDetailedSettingsListeners() {
             const bindSync = (sliderId, numId, callback) => {
                 const slider = document.getElementById(sliderId);
@@ -353,7 +451,29 @@
                 }
             });
 
-            // 2. 核心球体设置实时响应（半径、基础色、发光色、发光强度、透明度）
+            // 局部焦点巡航设置监听
+            document.getElementById('focusCruiseEnabled')?.addEventListener('change', (e) => {
+                appState.focusCruise.enabled = e.target.checked;
+                if (!e.target.checked) appState.focusCruise.currentSpotlightIndices.clear();
+                else appState.focusCruise.lastSwitchTime = performance.now();
+                const hud = document.getElementById('focusCruiseHud');
+                if (hud) hud.classList.toggle('disabled', !e.target.checked);
+                appState.needsRender = true;
+                schedulePersist();
+            });
+
+            document.getElementById('focusCruiseIntervalInput')?.addEventListener('change', (e) => {
+                const sec = parseInt(e.target.value, 10);
+                if (!isNaN(sec) && sec >= 5 && sec <= 600) {
+                    appState.focusCruise.interval = sec;
+                    appState.focusCruise.lastSwitchTime = performance.now();
+                    const valEl = document.getElementById('focusCruiseIntervalVal');
+                    if (valEl) valEl.textContent = String(sec);
+                    schedulePersist();
+                }
+            });
+
+            // 2. 核心球体设置实时响应
             ['coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -710,6 +830,32 @@
                 appState.currentBatchWords = [...list].sort(() => Math.random() - 0.5).slice(0, appState.batchSize);
                 AppSphereEngine.createWordSphere(appState.currentBatchWords);
                 if (navigator.vibrate) navigator.vibrate(40);
+                this.showToast('🎲 已手动随机更换球面卡片');
+            });
+
+            // 侧栏放大缩小按钮事件响应
+            document.getElementById('zoomInBtn')?.addEventListener('click', () => {
+                AppScene.zoomSphere(0.85);
+            });
+            document.getElementById('zoomOutBtn')?.addEventListener('click', () => {
+                AppScene.zoomSphere(1.15);
+            });
+
+            // 侧栏局部焦点巡航模式开关
+            document.getElementById('focusCruiseToggleBtn')?.addEventListener('click', () => {
+                appState.focusCruise.enabled = !appState.focusCruise.enabled;
+                if (!appState.focusCruise.enabled) {
+                    appState.focusCruise.currentSpotlightIndices.clear();
+                } else {
+                    appState.focusCruise.lastSwitchTime = performance.now();
+                }
+                const hud = document.getElementById('focusCruiseHud');
+                if (hud) hud.classList.toggle('disabled', !appState.focusCruise.enabled);
+                const cb = document.getElementById('focusCruiseEnabled');
+                if (cb) cb.checked = appState.focusCruise.enabled;
+                appState.needsRender = true;
+                this.showToast(appState.focusCruise.enabled ? `✨ 局部巡航模式已开启 (${appState.focusCruise.interval}s/轮)` : '⏹️ 局部巡航模式已关闭');
+                schedulePersist();
             });
 
             document.getElementById('prevBatchBtn')?.addEventListener('click', () => {
@@ -1196,6 +1342,7 @@
                     if (!isNaN(n) && n > 0) {
                         AppStorage.setStudyGoal(n);
                         document.getElementById('studyGoalValue').textContent = String(n);
+                        this.showToast(`🎯 今日学习目标已更新为: ${n} 个单词`);
                     }
                 }
             });
@@ -1338,10 +1485,13 @@
             if (cardHits.length > 0) {
                 const card = cardHits[0].object;
                 this.triggerCardDisplay(card);
-                if (AppStorage && typeof AppStorage.recordStudyClick === 'function') {
-                    AppStorage.recordStudyClick(card.userData.word);
-                }
+
+                // 核心复习计数与达标庆祝通知联动
+                const result = AppStorage.recordStudyClick(card.userData.word);
                 this.updateStudyCounterDisplay();
+                if (result.justReached) {
+                    this.triggerDailyGoalAchievedToast();
+                }
             } else {
                 if (appState.hoverOverlayCard) {
                     appState.overlayCardTargetOpacity = 0;
@@ -1383,6 +1533,13 @@
         showImmersiveDetailPanel(word) {
             if (!word) return;
             appState.currentDetailWord = word;
+
+            // 详情展开同样计入有效复习，并同步检测目标达成
+            const result = AppStorage.recordStudyClick(word);
+            this.updateStudyCounterDisplay();
+            if (result.justReached) {
+                this.triggerDailyGoalAchievedToast();
+            }
 
             document.getElementById('overlayWordName').textContent = word.words || 'N/A';
             document.getElementById('overlayPhoneticDisplay').textContent = word.phonetic || 'N/A';
@@ -1433,11 +1590,13 @@
 
         updateStudyCounterDisplay() {
             const valEl = document.getElementById('studyCounterValue');
-            if (!valEl) return;
-            const log = AppStorage.loadStudyLog();
-            const day = log[getDateKey()];
-            const count = (day && day.cards) ? Object.keys(day.cards).length : 0;
-            valEl.textContent = String(count);
+            const goalEl = document.getElementById('studyGoalValue');
+            if (valEl) {
+                valEl.textContent = String(AppStorage.getTodayStudiedCount());
+            }
+            if (goalEl) {
+                goalEl.textContent = String(AppStorage.getStudyGoal());
+            }
         },
 
         updateClearShieldedBtnLabel() {
@@ -1466,6 +1625,8 @@
                         <li><strong>拖拽旋转：</strong>滑动或鼠标拖拽自由旋转球体。</li>
                         <li><strong>双击空白：</strong>触发瞬间加速（手动擒拿）。</li>
                         <li><strong>点击卡片：</strong>显示 3D 发音弹窗与详细释义。</li>
+                        <li><strong>放大/缩小卡片：</strong>使用侧栏 <code>➕ / ➖</code> 自由缩放卡片大小。</li>
+                        <li><strong>局部焦点巡航：</strong>保持绝大多数卡片尺寸不变，仅抽取少量卡片单独放大 1.5 倍方便识读。</li>
                     </ul>
                 `;
             }
@@ -1527,6 +1688,17 @@
                     const toggleLang = document.getElementById('toggleLanguage');
                     if (toggleLang) toggleLang.textContent = appState.showEnglish ? '中' : '英';
                 }
+                if (s.cardScaleMultiplier !== undefined) {
+                    appState.cardScaleMultiplier = s.cardScaleMultiplier;
+                }
+                if (s.focusCruise !== undefined && typeof s.focusCruise === 'object') {
+                    appState.focusCruise.enabled = !!s.focusCruise.enabled;
+                    appState.focusCruise.interval = s.focusCruise.interval || 50;
+                    const hud = document.getElementById('focusCruiseHud');
+                    const valEl = document.getElementById('focusCruiseIntervalVal');
+                    if (hud) hud.classList.toggle('disabled', !appState.focusCruise.enabled);
+                    if (valEl) valEl.textContent = String(appState.focusCruise.interval);
+                }
                 if (s.cameraPosition && appState.camera) {
                     appState.camera.position.fromArray(s.cameraPosition);
                 }
@@ -1539,34 +1711,16 @@
 
         saveSettings() {
             if (appState.isInitializing) return;
-            const settings = {};
-            const settingIds = [
-                'rotationSpeed', 'rotationSpeedInput', 'rotationModelSelect', 'cardRotationSpeed',
-                'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'grappleEnabled', 'batchSize',
-                'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
-                'visualEffectsEnabled', 'vortexRotationModelSelect', 'vortexParticleCount', 'vortexColor', 'vortexSize',
-                'vortexSpeed', 'vortexSpeedInput', 'vortexTightness', 'bloomThreshold', 'bloomStrength', 'bloomRadius',
-                'dynamicBgHueStart', 'dynamicBgHueEnd', 'dynamicBgLightness', 'dynamicBgParticleCount', 'dynamicBgParticleSpeed',
-                'starfieldEnabled', 'starCount', 'starColor', 'starSize', 'starVelocityFactor', 'starDensityFalloff',
-                'starMinAlpha', 'starMaxAlpha', 'starTwinkleSpeed', 'cardStyleSelect', 'sphereCardBgOpacity',
-                'sphereCardFontSizeFactorOverall', 'sphereCardFontSizeFactorCloseUp', 'sphereCardFontColor',
-                'sphereCardFontFamily', 'sphereCardEmissiveColor', 'sphereCardEmissiveIntensityFactor',
-                'defaultBrightnessOnLoad', 'sphereCardBaseColorMultiplier', 'sphereCardSideColor',
-                'stormWordCardStyleEnabled', 'stormWordCardBgColor', 'stormWordCardBgOpacity', 'stormWordCardFontColor',
-                'stormWordCardSideColor', 'stormWordCardEmissiveColor', 'hoverCardBrightness', 'hoverOverlayCardScale',
-                'hoverCardEmissiveColor', 'hoverCardGlowFrequency', 'hoverAppendedBgColor', 'hoverAppendedBgOpacity',
-                'hoverAppendedFontColor', 'hoverAppendedFontSize', 'hoverCardTextMainWordColor', 'hoverCardTextLabelColor',
-                'hoverCardTextValueColor', 'hoverCardTextGlowColor', 'hoverCardTextGlowIntensity'
-            ];
-
-            settingIds.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    settings[id] = (el.type === 'checkbox') ? el.checked : el.value;
+            const settings = {
+                cardStyleId: appState.currentCardStyleId,
+                batchSize: appState.batchSize,
+                showEnglish: appState.showEnglish,
+                cardScaleMultiplier: appState.cardScaleMultiplier,
+                focusCruise: {
+                    enabled: appState.focusCruise.enabled,
+                    interval: appState.focusCruise.interval
                 }
-            });
-
-            settings.showEnglish = appState.showEnglish;
+            };
             localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
         },
 
@@ -1576,15 +1730,13 @@
             const settings = safeJSONParse(raw, null);
             if (!settings) return;
 
-            for (const key in settings) {
-                const el = document.getElementById(key);
-                if (el) {
-                    if (el.type === 'checkbox') {
-                        el.checked = !!settings[key];
-                    } else {
-                        el.value = settings[key];
-                    }
-                }
+            if (settings.focusCruise) {
+                appState.focusCruise.enabled = settings.focusCruise.enabled !== undefined ? settings.focusCruise.enabled : true;
+                appState.focusCruise.interval = settings.focusCruise.interval || 50;
+            }
+
+            if (settings.cardScaleMultiplier) {
+                appState.cardScaleMultiplier = settings.cardScaleMultiplier;
             }
 
             if (settings.showEnglish !== undefined) {
@@ -1606,7 +1758,12 @@
                 currentBatchIndex: appState.currentBatchIndex,
                 cameraPosition: appState.camera ? appState.camera.position.toArray() : [0, 0, 165],
                 controlsTarget: appState.controls ? appState.controls.target.toArray() : [0, 0, 0],
-                showEnglish: appState.showEnglish
+                showEnglish: appState.showEnglish,
+                cardScaleMultiplier: appState.cardScaleMultiplier,
+                focusCruise: {
+                    enabled: appState.focusCruise.enabled,
+                    interval: appState.focusCruise.interval
+                }
             };
             localStorage.setItem(APP_CONFIG.LAST_STATE_STORAGE_KEY, JSON.stringify(state));
         }

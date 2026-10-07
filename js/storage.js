@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 存储与离线容灾管理中枢
- * 包含开箱即用内置核心词库（保证冷启动或清缓存后自动铺满 500 张卡片，绝不稀疏）
+ * 修复学习日志记录逻辑与目标达成事件响应
  */
 
 const SEED_CORE_WORDS = [
@@ -36,7 +36,6 @@ const SEED_CORE_WORDS = [
     { words: "boy", phonetic: "/bɔɪ/", chinese: "n. 男孩", part_of_speech: "noun", root_form: "boy", method: "【形象】活泼朝气的少年" }
 ];
 
-// 核心自愈机制：如果本地没有足够单词，自动通过种子词汇扩充出饱满的 500 个球面词卡，重现图 2 的壮观大球
 function buildFullSphereFallbackWords(targetCount = 500) {
     const fullList = [];
     const seedLen = SEED_CORE_WORDS.length;
@@ -127,7 +126,6 @@ const AppStorage = {
         }
     },
 
-    // 加载词库：若为空，自动装载饱满密集的 500 个核心词汇
     async loadLibrary() {
         try {
             const records = await idbHelper.getAll('wordLibraries');
@@ -144,7 +142,6 @@ const AppStorage = {
             return localBackup;
         }
 
-        // 冷启动或缓存被清空：自动填满 500 张卡片，瞬间复现图 2 魔法球！
         console.log('未检测到外置词库，自动注入饱满的 500 张核心 3D 魔法球卡片...');
         const seededWords = buildFullSphereFallbackWords(500);
         await this.saveLibrary(seededWords);
@@ -202,6 +199,54 @@ const AppStorage = {
         if (isNaN(n) || n < 1) return false;
         localStorage.setItem(APP_CONFIG.STUDY_GOAL_STORAGE_KEY, String(n));
         return true;
+    },
+
+    getTodayStudiedCount() {
+        const log = this.loadStudyLog();
+        const day = log[getDateKey()];
+        return (day && day.cards && typeof day.cards === 'object') ? Object.keys(day.cards).length : 0;
+    },
+
+    // 记录点击复习并判断今日目标是否首次达成
+    recordStudyClick(word) {
+        if (!word) return { count: 0, justReached: false };
+        const now = new Date();
+        const dayKey = getDateKey(now);
+        const log = this.loadStudyLog();
+        if (!log[dayKey] || typeof log[dayKey] !== 'object' || !log[dayKey].cards) {
+            log[dayKey] = { cards: {} };
+        }
+        const key = getWordKey(word);
+        const cards = log[dayKey].cards;
+        let entry = cards[key];
+        if (!entry) {
+            entry = {
+                num: word.num,
+                words: word.words || '',
+                phonetic: word.phonetic || '',
+                chinese: word.chinese || '',
+                clickTimes: 0,
+                firstAt: timeHHMM(now),
+                lastAt: timeHHMM(now),
+                clicks: []
+            };
+            cards[key] = entry;
+        }
+        entry.clickTimes++;
+        entry.lastAt = timeHHMM(now);
+        if (!Array.isArray(entry.clicks)) entry.clicks = [];
+        entry.clicks.push(timeHHMM(now));
+        this.saveStudyLog(log);
+
+        const count = Object.keys(cards).length;
+        const goal = this.getStudyGoal();
+        const toastKey = '3DWordUniverseToastGoal_' + dayKey;
+        let justReached = false;
+        if (count >= goal && !localStorage.getItem(toastKey)) {
+            localStorage.setItem(toastKey, 'true');
+            justReached = true;
+        }
+        return { count, justReached };
     }
 };
 

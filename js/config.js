@@ -3,7 +3,7 @@
  */
 const IS_MOBILE_DEVICE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
 
-// 核心共享数学对象池（统一收拢，杜绝各模块重复声明冲突）
+// 核心共享数学对象池
 const AppMath = {
     vecCamWorld: new THREE.Vector3(),
     vecCardWorld: new THREE.Vector3(),
@@ -135,7 +135,13 @@ const APP_CONFIG = {
     DEFAULT_BLOOM_RADIUS: 0.2,
 
     HEMISPHERE_LAYOUT_THRESHOLD: 20,
-    GRAPPLE_MAX_SPEED: 260
+    GRAPPLE_MAX_SPEED: 260,
+
+    // 局部焦点巡航常量 (90-95%大小不变，5-10%放大1.5倍)
+    DEFAULT_FOCUS_CRUISE_ENABLED: true,
+    DEFAULT_FOCUS_CRUISE_INTERVAL: 50,
+    DEFAULT_FOCUS_CRUISE_SCALE: 1.5,
+    DEFAULT_FOCUS_CRUISE_RATIO: 0.08
 };
 
 const appState = {
@@ -150,6 +156,7 @@ const appState = {
     allWords: [], filteredWords: [], currentBatchWords: [], wordObjects: [],
     currentBatchIndex: 0, totalBatches: 0, autoRotate: true, showEnglish: false, sphereRadius: 85,
     rotationMultiplier: 1.0, rotationMultiplierTemporary: 1.0,
+    cardScaleMultiplier: 1.0,
     hoveredObject: null, lastHoveredObject: null, activeCardObject: null,
     currentRotationCombinationIndex: 0, currentRotationSpeedBase: APP_CONFIG.DEFAULT_ROTATION_SPEED, 
     actualDisplayRotationSpeed: APP_CONFIG.DEFAULT_ROTATION_SPEED,
@@ -188,6 +195,17 @@ const appState = {
         glowColor: null,
         fontSizeFactorOverall: 1.0, fontSizeFactorCloseUp: 1.0,
         cardEmissiveIntensity: 1.0
+    },
+
+    // 局部巡航放大状态中枢
+    focusCruise: {
+        enabled: true,
+        interval: 50,
+        scaleFactor: 1.5,
+        spotlightRatio: 0.08,
+        remainingPool: [],
+        currentSpotlightIndices: new Set(),
+        lastSwitchTime: 0
     },
     
     currentCardStyleId: 'deepspace',
