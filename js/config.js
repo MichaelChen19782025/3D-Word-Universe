@@ -181,9 +181,9 @@ const appState = {
     
     rt: {
         rotateX: true, rotateY: true, rotateZ: false,
-        cardSelfRotation: false, cardRotationSpeed: 0,
+        cardSelfRotation: true, cardRotationSpeed: 2,
         grappleEnabled: true,
-        visualFxEnabled: false, vortexSpeed: 0, vortexModel: 'linear',
+        visualFxEnabled: false, vortexSpeed: 0.02, vortexModel: 'linear',
         particleSpeed: 1, hoverBgOpacity: 0.75, glowFrequency: 1,
         glowColor: null,
         fontSizeFactorOverall: 1.0, fontSizeFactorCloseUp: 1.0,

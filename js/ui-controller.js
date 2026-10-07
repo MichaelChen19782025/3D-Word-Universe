@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与启动总装中枢
- * 彻底恢复所有设置项（核心球体、涡旋、辉光、背景、星空、灯光、卡片外观等）的实时响应监听
+ * 彻底恢复所有设置项（核心球体、涡旋、辉光、背景、星空、灯光、卡片外观等）的实时响应监听与全局状态持久化
  */
 (function() {
     let fontScale = 1.0;
@@ -73,6 +73,7 @@
             this.loadCustomHoverPositions();
             this.initStudyLog();
 
+            this.loadSettings();
             await this.loadWordDataAndBoot();
             this.loadAllPersistentStates();
 
@@ -286,7 +287,6 @@
             setInterval(update, 1000);
         },
 
-        // ==================== 彻底恢复所有设置项的事件监听 ====================
         initDetailedSettingsListeners() {
             const bindSync = (sliderId, numId, callback) => {
                 const slider = document.getElementById(sliderId);
@@ -315,19 +315,58 @@
                 schedulePersist();
             });
 
-            // 2. 核心球体设置实时响应 (修复截图第一项)
-            ['coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity'].forEach(id => {
-                const el = document.getElementById(id);
-                if (!el) return;
-                const evt = (el.type === 'range' || el.type === 'color') ? 'input' : 'change';
-                el.addEventListener(evt, () => {
-                    AppParticles.updateCoreSphereSettings();
+            // 卡片自转速度与开关
+            document.getElementById('cardRotationSpeed')?.addEventListener('input', (e) => {
+                appState.rt.cardRotationSpeed = safeParseFloat(e.target.value, 2) * 0.00115;
+                appState.needsRender = true;
+                schedulePersist();
+            });
+            document.getElementById('cardSelfRotation')?.addEventListener('change', (e) => {
+                appState.rt.cardSelfRotation = e.target.checked;
+                appState.needsRender = true;
+                schedulePersist();
+            });
+
+            // 旋转轴控制 (X/Y/Z)
+            ['rotateX', 'rotateY', 'rotateZ'].forEach(axisId => {
+                document.getElementById(axisId)?.addEventListener('change', () => {
+                    this.refreshRuntimeCache();
                     appState.needsRender = true;
                     schedulePersist();
                 });
             });
 
-            // 3. 视觉增强系统 (Vortex & Bloom) (修复截图第二项)
+            // 擒拿加速开关
+            document.getElementById('grappleEnabled')?.addEventListener('change', (e) => {
+                appState.rt.grappleEnabled = e.target.checked;
+                schedulePersist();
+            });
+
+            // 每批显示数量
+            document.getElementById('batchSize')?.addEventListener('change', (e) => {
+                const newSize = safeParseInt(e.target.value, 500);
+                if (newSize > 0) {
+                    appState.batchSize = newSize;
+                    appState.currentBatchIndex = 0;
+                    this.displayCurrentBatch();
+                    schedulePersist();
+                }
+            });
+
+            // 2. 核心球体设置实时响应（半径、基础色、发光色、发光强度、透明度）
+            ['coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const updateFn = () => {
+                    AppParticles.updateCoreSphereSettings();
+                    appState.needsRender = true;
+                    schedulePersist();
+                };
+                el.addEventListener('input', updateFn);
+                el.addEventListener('change', updateFn);
+            });
+
+            // 3. 视觉增强系统 (Vortex & Bloom)
             document.getElementById('visualEffectsEnabled')?.addEventListener('change', (e) => {
                 appState.rt.visualFxEnabled = e.target.checked;
                 AppParticles.updateVisualEffects();
@@ -342,36 +381,44 @@
             });
 
             ['vortexParticleCount', 'vortexTightness'].forEach(id => {
-                document.getElementById(id)?.addEventListener('change', () => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const updateFn = () => {
                     AppParticles.initVortex();
                     appState.needsRender = true;
                     schedulePersist();
-                });
+                };
+                el.addEventListener('input', updateFn);
+                el.addEventListener('change', updateFn);
             });
 
             ['vortexColor', 'vortexSize'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                el.addEventListener('input', () => {
+                const updateFn = () => {
                     AppParticles.updateVisualEffects();
                     appState.needsRender = true;
                     schedulePersist();
-                });
+                };
+                el.addEventListener('input', updateFn);
+                el.addEventListener('change', updateFn);
             });
 
             bindSync('vortexSpeed', 'vortexSpeedInput', (v) => {
-                appState.rt.vortexSpeed = safeParseFloat(v, 0);
+                appState.rt.vortexSpeed = safeParseFloat(v, 0.02);
                 appState.needsRender = true;
             });
 
             ['bloomThreshold', 'bloomStrength', 'bloomRadius'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                el.addEventListener('input', () => {
-                    AppParticles.updateVisualEffects();
+                const updateFn = () => {
+                    AppParticles.updateBloomSettings();
                     appState.needsRender = true;
                     schedulePersist();
-                });
+                };
+                el.addEventListener('input', updateFn);
+                el.addEventListener('change', updateFn);
             });
 
             // 4. 动态背景设置
@@ -399,12 +446,13 @@
             ['starfieldEnabled', 'starCount', 'starColor', 'starSize', 'starVelocityFactor', 'starDensityFalloff', 'starMinAlpha', 'starMaxAlpha', 'starTwinkleSpeed'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                const evt = (el.type === 'range' || el.type === 'color') ? 'input' : 'change';
-                el.addEventListener(evt, () => {
+                const updateFn = () => {
                     AppParticles.initStarfield();
                     appState.needsRender = true;
                     schedulePersist();
-                });
+                };
+                el.addEventListener('input', updateFn);
+                el.addEventListener('change', updateFn);
             });
 
             // 6. 灯光与补光系统设置
@@ -486,7 +534,7 @@
                 schedulePersist();
             });
 
-            // 9. 卡片外观重绘响应 (图 3 风格与字号/颜色调节)
+            // 9. 卡片外观重绘响应
             const redrawProps = [
                 'sphereCardFontColor', 'sphereCardFontFamily', 'sphereCardBgOpacity', 'sphereCardEmissiveColor',
                 'sphereCardEmissiveIntensityFactor', 'sphereCardSideColor', 'sphereCardFontSizeFactorOverall',
@@ -568,13 +616,13 @@
             rt.visualFxEnabled = getChk('visualEffectsEnabled', false);
 
             const crs = document.getElementById('cardRotationSpeed');
-            if (crs) rt.cardRotationSpeed = safeParseFloat(crs.value, 0) * 0.00115;
+            if (crs) rt.cardRotationSpeed = safeParseFloat(crs.value, 2) * 0.00115;
 
             const vs = document.getElementById('vortexSpeed');
-            if (vs) rt.vortexSpeed = safeParseFloat(vs.value, 0);
+            if (vs) rt.vortexSpeed = safeParseFloat(vs.value, 0.02);
 
             const vm = document.getElementById('vortexRotationModelSelect');
-            if (vm) rt.vortexModel = vm.value;
+            if (vm) rt.vortexModel = vm.value || 'linear';
 
             const hbo = document.getElementById('hoverAppendedBgOpacity');
             if (hbo) rt.hoverBgOpacity = safeParseFloat(hbo.value, 0.75);
@@ -651,6 +699,9 @@
                 const batchSizeInput = document.getElementById('batchSize');
                 if (batchSizeInput) batchSizeInput.value = appState.batchSize;
                 this.displayCurrentBatch();
+                this.applyAppearanceSettings();
+                scheduleSphereRebuild();
+                schedulePersist();
             });
 
             document.getElementById('randomShuffleBtn')?.addEventListener('click', () => {
@@ -1287,7 +1338,9 @@
             if (cardHits.length > 0) {
                 const card = cardHits[0].object;
                 this.triggerCardDisplay(card);
-                AppStorage.recordStudyClick(card.userData.word);
+                if (AppStorage && typeof AppStorage.recordStudyClick === 'function') {
+                    AppStorage.recordStudyClick(card.userData.word);
+                }
                 this.updateStudyCounterDisplay();
             } else {
                 if (appState.hoverOverlayCard) {
@@ -1474,17 +1527,77 @@
                     const toggleLang = document.getElementById('toggleLanguage');
                     if (toggleLang) toggleLang.textContent = appState.showEnglish ? '中' : '英';
                 }
+                if (s.cameraPosition && appState.camera) {
+                    appState.camera.position.fromArray(s.cameraPosition);
+                }
+                if (s.controlsTarget && appState.controls) {
+                    appState.controls.target.fromArray(s.controlsTarget);
+                    appState.controls.update();
+                }
             }
         },
 
         saveSettings() {
             if (appState.isInitializing) return;
-            const settings = {
-                cardStyleId: appState.currentCardStyleId,
-                batchSize: appState.batchSize,
-                showEnglish: appState.showEnglish
-            };
+            const settings = {};
+            const settingIds = [
+                'rotationSpeed', 'rotationSpeedInput', 'rotationModelSelect', 'cardRotationSpeed',
+                'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'grappleEnabled', 'batchSize',
+                'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
+                'visualEffectsEnabled', 'vortexRotationModelSelect', 'vortexParticleCount', 'vortexColor', 'vortexSize',
+                'vortexSpeed', 'vortexSpeedInput', 'vortexTightness', 'bloomThreshold', 'bloomStrength', 'bloomRadius',
+                'dynamicBgHueStart', 'dynamicBgHueEnd', 'dynamicBgLightness', 'dynamicBgParticleCount', 'dynamicBgParticleSpeed',
+                'starfieldEnabled', 'starCount', 'starColor', 'starSize', 'starVelocityFactor', 'starDensityFalloff',
+                'starMinAlpha', 'starMaxAlpha', 'starTwinkleSpeed', 'cardStyleSelect', 'sphereCardBgOpacity',
+                'sphereCardFontSizeFactorOverall', 'sphereCardFontSizeFactorCloseUp', 'sphereCardFontColor',
+                'sphereCardFontFamily', 'sphereCardEmissiveColor', 'sphereCardEmissiveIntensityFactor',
+                'defaultBrightnessOnLoad', 'sphereCardBaseColorMultiplier', 'sphereCardSideColor',
+                'stormWordCardStyleEnabled', 'stormWordCardBgColor', 'stormWordCardBgOpacity', 'stormWordCardFontColor',
+                'stormWordCardSideColor', 'stormWordCardEmissiveColor', 'hoverCardBrightness', 'hoverOverlayCardScale',
+                'hoverCardEmissiveColor', 'hoverCardGlowFrequency', 'hoverAppendedBgColor', 'hoverAppendedBgOpacity',
+                'hoverAppendedFontColor', 'hoverAppendedFontSize', 'hoverCardTextMainWordColor', 'hoverCardTextLabelColor',
+                'hoverCardTextValueColor', 'hoverCardTextGlowColor', 'hoverCardTextGlowIntensity'
+            ];
+
+            settingIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    settings[id] = (el.type === 'checkbox') ? el.checked : el.value;
+                }
+            });
+
+            settings.showEnglish = appState.showEnglish;
             localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+        },
+
+        loadSettings() {
+            const raw = localStorage.getItem(APP_CONFIG.SETTINGS_STORAGE_KEY);
+            if (!raw) return;
+            const settings = safeJSONParse(raw, null);
+            if (!settings) return;
+
+            for (const key in settings) {
+                const el = document.getElementById(key);
+                if (el) {
+                    if (el.type === 'checkbox') {
+                        el.checked = !!settings[key];
+                    } else {
+                        el.value = settings[key];
+                    }
+                }
+            }
+
+            if (settings.showEnglish !== undefined) {
+                appState.showEnglish = !!settings.showEnglish;
+                const toggleLang = document.getElementById('toggleLanguage');
+                if (toggleLang) toggleLang.textContent = appState.showEnglish ? '中' : '英';
+            }
+
+            this.applyAppearanceSettings();
+            AppParticles.updateCoreSphereSettings();
+            AppParticles.updateVisualEffects();
+            AppParticles.updateDynamicBackgroundCSS();
+            AppParticles.initStarfield();
         },
 
         saveLastState() {
