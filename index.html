@@ -8,13 +8,8 @@
     <meta name="theme-color" content="#0a1430">
     <title>3D单词宇宙 (V8 极致性能版)</title>
     
-    <!-- 内联矢量图标（彻底杜绝 favicon.ico 404 错误） -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230a1c3d' stroke='%2300f0ff' stroke-width='6'/><text x='50' y='58' font-size='32' text-anchor='middle' fill='%2368d0ff' font-family='sans-serif'>🪐</text></svg>">
-    
-    <!-- PWA 独立安装配置清单 -->
     <link rel="manifest" href="./manifest.json">
-
-    <!-- 样式表 -->
     <link rel="stylesheet" href="./css/styles.css">
 
     <!-- 核心三维引擎及控件 (CDN) -->
@@ -53,6 +48,12 @@
     <span class="study-goal-sep">/</span>
     <span class="study-counter-icon">🎯</span>
     <span id="studyGoalValue" title="点击修改每日学习目标">50</span>
+</div>
+
+<!-- 右上角局部焦点巡航 HUD (位于复习数字正下方) -->
+<div id="focusCruiseHud" title="点击开关局部焦点巡航，点击秒数修改轮换周期">
+    <span>✨ 巡航:</span>
+    <span id="focusCruiseIntervalVal">50</span><span>s</span>
 </div>
 
 <!-- 设置与控制中心抽屉面板 -->
@@ -107,6 +108,14 @@
             <div class="setting-item checkbox-item">
                 <input type="checkbox" id="cardSelfRotation" checked>
                 <label for="cardSelfRotation" title="每个单词卡片独立旋转">启用卡片自转</label>
+            </div>
+            <div class="setting-item checkbox-item">
+                <input type="checkbox" id="focusCruiseEnabled" checked>
+                <label for="focusCruiseEnabled" title="局部焦点巡航：保持92%以上卡片不变，仅抽取少量卡片放大1.5倍">启用局部焦点巡航 (✨)</label>
+            </div>
+            <div class="setting-item">
+                <label for="focusCruiseIntervalInput">巡航轮换周期(秒)</label>
+                <input type="number" id="focusCruiseIntervalInput" value="50" min="5" max="600" step="5" style="width: 80px; text-align: center;">
             </div>
             <div class="setting-item checkbox-item">
                 <input type="checkbox" id="grappleEnabled" checked>
@@ -360,7 +369,7 @@
         </div>
         <div class="control-section">
             <h3>今日目标与初始化视角</h3>
-            <div class="setting-item"><label for="dailyTargetInput">今日复习目标(词)</label><input type="number" id="dailyTargetInput" value="40" min="1" max="500" style="width: 80px;"></div>
+            <div class="setting-item"><label for="dailyTargetInput">今日复习目标(词)</label><input type="number" id="dailyTargetInput" value="50" min="1" max="500" style="width: 80px;"></div>
             <div class="setting-item"><label>今日已有效复习</label><span id="dailyStudiedCountDisplay" style="color: var(--success-color); font-weight: bold; font-size: 1.2rem;">0</span></div>
             <div class="setting-item"><label for="defaultStartupViewSelect">启动默认视角</label><select id="defaultStartupViewSelect" style="width: 160px;"></select></div>
         </div>
@@ -568,6 +577,9 @@
         <button class="control-btn" id="rotateToggle" title="切换自动旋转 (←)">🔁</button>
         <button class="control-btn" id="toggleLanguage" title="切换卡片语言 (英/中)">英</button>
         <button class="control-btn" id="randomShuffleBtn" title="随机切换卡片单词 (🎲)">🎲</button>
+        <button class="control-btn" id="zoomInBtn" title="放大卡片 (➕)">➕</button>
+        <button class="control-btn" id="zoomOutBtn" title="缩小卡片 (➖)">➖</button>
+        <button class="control-btn" id="focusCruiseToggleBtn" title="局部焦点巡航模式 (✨)">✨</button>
         <button class="control-btn" id="batchShieldToggleBtn" title="批量屏蔽模式 (🛡️)">🛡️</button>
         <button class="control-btn" id="wordBanksBtn" title="词库管理">📚</button>
         <button class="control-btn" id="rotationsBtn" title="自转速度预设">🌪️</button>
