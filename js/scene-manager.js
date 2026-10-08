@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - Three.js 核心场景管理与渲染管线
- * 包含：3D 四角发光角括号动态呼吸动画、浮动卡片平滑 Lerp 投影与零光照纯黑处理
+ * 包含：3D 四角发光直角括号 (frameGroup) 呼吸动画、摄像机视口锁定与零光照纯黑处理
  */
 (function() {
     const AppScene = {
@@ -126,7 +126,7 @@
             const minDist = camDist - radius;
             const distRange = 2 * radius;
 
-            // 局部焦点巡航处理
+            // 局部焦点巡航计算
             if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0) {
                 const fc = appState.focusCruise;
                 if (time - fc.lastSwitchTime >= fc.interval * 1000) {
@@ -170,65 +170,55 @@
             if (!mustRender) return;
             appState.needsRender = false;
 
-            // 3D 浮动查词卡片渲染管理 (100% 对齐老版本动画与零亮度规则)
+            // ★ 3D 浮动查词卡片渲染管线：平滑透明度、四角发光括号呼吸与零光照纯黑处理
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
-                const lerpFactor = 0.16;
-
-                card.scale.lerp(appState.overlayCardTargetScale, lerpFactor);
-
-                const screen = card.getObjectByName("textScreen");
-                const currentOp = screen ? screen.material.opacity : 0;
-                const targetOverallOpacity = appState.overlayCardTargetOpacity;
-                const newOverallOpacity = THREE.MathUtils.lerp(currentOp, targetOverallOpacity, lerpFactor);
-
-                const rawBrightness = parseFloat(document.getElementById('hoverCardBrightness')?.value || '1.0');
-                const isPitchBlack = (rawBrightness <= 0.001);
-
-                const backplate = card.getObjectByName("backplate");
-                if (backplate) {
-                    const configBgOpacity = isPitchBlack ? 1.0 : safeParseFloat(document.getElementById('hoverAppendedBgOpacity')?.value || '0.75', 0.75);
-                    const bgColorHex = document.getElementById('hoverAppendedBgColor')?.value || '#0a1428';
-                    backplate.material.color.set(isPitchBlack ? 0x000000 : getColor(bgColorHex, 'three'));
-                    backplate.material.opacity = newOverallOpacity * configBgOpacity;
-                }
-
-                const coreGlow = card.getObjectByName("coreGlow");
-                if (coreGlow) {
-                    coreGlow.material.opacity = isPitchBlack ? 0 : newOverallOpacity * 1.2;
-                }
-
+                const screen = card.getObjectByName("textScreen") || card.userData.refs?.screen;
                 if (screen) {
-                    screen.material.opacity = newOverallOpacity;
-                }
+                    const currentOp = screen.material.opacity;
+                    const newOp = THREE.MathUtils.lerp(currentOp, appState.overlayCardTargetOpacity, 0.22);
+                    screen.material.opacity = newOp;
 
-                const frameGroup = card.getObjectByName("frameGroup");
-                if (frameGroup) {
-                    frameGroup.children.forEach(child => {
-                        child.material.opacity = isPitchBlack ? 0 : newOverallOpacity;
-                    });
-                }
+                    const rawBrightness = parseFloat(document.getElementById('hoverCardBrightness')?.value || '1.0');
+                    const isPitchBlack = (rawBrightness <= 0.001);
 
-                if (appState.overlayCardTargetPosition) {
-                    card.position.lerp(appState.overlayCardTargetPosition, lerpFactor);
-                    card.quaternion.slerp(appState.camera.quaternion, lerpFactor);
-                }
-
-                if (newOverallOpacity > 0.01 && card.scale.x > 0.01) {
-                    if (!card.visible) card.visible = true;
-
-                    // 还原老版本中发光四角括号的周期性呼吸律动
-                    if (frameGroup && newOverallOpacity > 0.85 && !isPitchBlack) {
-                        const glowFrequency = parseFloat(document.getElementById('hoverCardGlowFrequency')?.value || '2.5');
-                        const glowColorHex = document.getElementById('hoverCardEmissiveColor')?.value || '#00ffff';
-                        const glowColor = getColor(glowColorHex, 'three');
-                        frameGroup.children.forEach((child, i) => {
-                            child.material.color.lerp(glowColor, 0.1);
-                            child.material.opacity = 0.65 + Math.sin(time * 0.001 * glowFrequency + i * 1.57) * 0.35;
-                        });
+                    const backplate = card.getObjectByName("backplate") || card.userData.refs?.backplate;
+                    if (backplate) {
+                        if (isPitchBlack) {
+                            backplate.material.color.setHex(0x000000);
+                            backplate.material.opacity = newOp;
+                        } else {
+                            backplate.material.color.set(0x0a1428);
+                            backplate.material.opacity = newOp * (appState.rt.hoverBgOpacity || 0.78);
+                        }
                     }
-                } else {
-                    if (card.visible) card.visible = false;
+
+                    const coreGlow = card.getObjectByName("coreGlow") || card.userData.refs?.coreGlow;
+                    if (coreGlow) {
+                        coreGlow.material.opacity = isPitchBlack ? 0 : (newOp * 0.85);
+                    }
+
+                    // 四角直角发光括号 (frameGroup) 呼吸特效
+                    const frameGroup = card.getObjectByName("frameGroup") || card.userData.refs?.frameGroup;
+                    if (frameGroup) {
+                        const hoverStyleMode = document.getElementById('hoverCardStyleModeSelect')?.value || 'classic_hud';
+                        if (hoverStyleMode === 'classic_hud' && !isPitchBlack) {
+                            frameGroup.visible = true;
+                            frameGroup.children.forEach((child, i) => {
+                                child.material.opacity = newOp * (0.65 + Math.sin(time * 0.003 + i * 1.57) * 0.35);
+                            });
+                        } else {
+                            frameGroup.visible = false;
+                        }
+                    }
+
+                    card.visible = (newOp > 0.01 && card.scale.x > 0.01);
+                }
+
+                if (appState.overlayCardTargetPosition && card.visible) {
+                    card.position.lerp(appState.overlayCardTargetPosition, 0.2);
+                    card.quaternion.slerp(appState.camera.quaternion, 0.2);
+                    card.scale.lerp(appState.overlayCardTargetScale, 0.2);
                 }
             }
 

@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与启动总装中枢
- * 100% 对齐老版本 handleQuickTap 判定机制：确保右上角 4 个功能按钮精准响应、多维视角预设与巡航修改
+ * 修复：3D 悬浮查词卡右上角 4 个按钮 [🔊] [A-] [A+] [屏蔽] 100% 灵敏响应、宽安全边距与双模联动
  */
 (function() {
     let _persistTimer = null;
@@ -46,6 +46,36 @@
         }, 30000);
     }
 
+    /**
+     * 3D 相机视口尺寸与悬浮卡三维投影坐标算法 (复刻老版本核心算法)
+     */
+    function updateHoverCardPosition(pxWidth, pxHeight, scaleFactor) {
+        if (!appState.overlayCardTargetPosition) {
+            appState.overlayCardTargetPosition = new THREE.Vector3();
+        }
+        const aspect = appState.camera.aspect;
+        const distance = 40;
+
+        const fov = appState.camera.fov * (Math.PI / 180);
+        const viewHeight3D = 2 * Math.tan(fov / 2) * distance;
+        const viewWidth3D = viewHeight3D * aspect;
+
+        const cardAspect = pxWidth / pxHeight;
+
+        // 占视口宽度的 55%，比例端正，文字清晰舒展
+        const targetWidth3D = viewWidth3D * 0.55 * scaleFactor;
+        const targetHeight3D = targetWidth3D / cardAspect;
+
+        if (appState.hoverOverlayCard) {
+            appState.overlayCardTargetScale.set(targetWidth3D, targetHeight3D, 1);
+        }
+
+        const camDir = new THREE.Vector3().setFromMatrixColumn(appState.camera.matrix, 2).multiplyScalar(-1);
+        const centerPoint = appState.camera.position.clone().add(camDir.multiplyScalar(distance));
+        appState.overlayCardTargetPosition.copy(centerPoint);
+        appState.needsRender = true;
+    }
+
     const AppUI = {
         async init() {
             await AppStorage.init();
@@ -60,7 +90,7 @@
             AppParticles.initCardEmbers();
             AppSphereEngine.initGrapple();
 
-            appState.hoverOverlayCard = AppCardFactory.initPremiumHoverCard();
+            this.initPremiumHoverCard();
             this.initAllButtonsAndEvents();
             this.initDetailedSettingsListeners();
             this.init3DCardChamberListeners();
@@ -82,7 +112,7 @@
                 this.updateFocusCruiseVisuals();
                 this.updateCardPresetDescription();
                 appState.needsRender = true;
-                console.log('3D 单词宇宙与老版本高灵敏查词卡片交互装配完毕！');
+                console.log('3D 单词宇宙系统总装完毕，查词卡片四大按钮及交互完全就绪！');
             }, 300);
         },
 
@@ -168,6 +198,73 @@
                 const viewedInList = list.filter(w => viewedSet.has(getWordKey(w))).length;
                 viewedDisplay.textContent = viewedInList;
             }
+        },
+
+        initPremiumHoverCard() {
+            const group = new THREE.Group();
+
+            const backplate = new THREE.Mesh(
+                new THREE.PlaneGeometry(1, 1),
+                new THREE.MeshBasicMaterial({ color: 0x0a1428, transparent: true, opacity: 0, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
+            );
+            backplate.name = "backplate";
+            backplate.renderOrder = 9995;
+            group.add(backplate);
+
+            const glowCanvas = document.createElement('canvas');
+            glowCanvas.width = 128; glowCanvas.height = 128;
+            const glowCtx = glowCanvas.getContext('2d');
+            const gradient = glowCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            gradient.addColorStop(0, "rgba(100, 200, 255, 0.4)");
+            gradient.addColorStop(1, "rgba(50, 100, 150, 0)");
+            glowCtx.fillStyle = gradient;
+            glowCtx.fillRect(0, 0, 128, 128);
+
+            const glowTexture = new THREE.CanvasTexture(glowCanvas);
+            const coreGlow = new THREE.Mesh(
+                new THREE.PlaneGeometry(1, 1),
+                new THREE.MeshBasicMaterial({
+                    map: glowTexture,
+                    blending: THREE.AdditiveBlending,
+                    transparent: true,
+                    opacity: 0,
+                    depthTest: false,
+                    depthWrite: false
+                })
+            );
+            coreGlow.name = "coreGlow";
+            coreGlow.position.z = 0.01;
+            coreGlow.renderOrder = 9996;
+            group.add(coreGlow);
+
+            const screen = new THREE.Mesh(
+                new THREE.PlaneGeometry(1, 1),
+                new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, side: THREE.DoubleSide })
+            );
+            screen.position.z = 0.02;
+            screen.name = "textScreen";
+            screen.renderOrder = 9998;
+            group.add(screen);
+
+            // 挂载原版 3D 直角科技发光括号网格组
+            const cornerBracketsGroup = AppCardFactory.createCornerBrackets();
+            cornerBracketsGroup.name = 'frameGroup';
+            cornerBracketsGroup.position.z = 0.03;
+            cornerBracketsGroup.children.forEach(child => {
+                child.renderOrder = 9997;
+                child.material.depthTest = false;
+                child.material.depthWrite = false;
+            });
+            group.add(cornerBracketsGroup);
+
+            group.renderOrder = 9999;
+            group.visible = false;
+            group.userData.refs = { screen, backplate, coreGlow, frameGroup: cornerBracketsGroup };
+
+            appState.hoverOverlayCard = group;
+            appState.overlayCardTargetScale = new THREE.Vector3(1, 1, 1);
+            appState.overlayCardTargetPosition = new THREE.Vector3(0, 0, 100);
+            appState.scene.add(group);
         },
 
         initClock() {
@@ -591,6 +688,7 @@
                 if (appState.currentDetailWord?.words) AppAudio.speakWord(appState.currentDetailWord.words);
             });
 
+            // 右侧控制栏功能按钮
             document.getElementById('viewsBtn')?.addEventListener('click', () => this.toggleManagementPanel('views'));
             document.getElementById('wordBanksBtn')?.addEventListener('click', () => this.toggleManagementPanel('wordBanks'));
             document.getElementById('rotationsBtn')?.addEventListener('click', () => this.toggleManagementPanel('rotations'));
@@ -1520,97 +1618,40 @@
         },
 
         initMobileTouchHandlers() {
-            let pointerDownTime = 0;
-            let pointerDownPos = new THREE.Vector2();
+            const canvasEl = appState.renderer?.domElement || document.getElementById('wordSphere');
+            if (!canvasEl) return;
 
-            dom.wordSphereContainer = document.getElementById('wordSphere');
-            if (!dom.wordSphereContainer) return;
+            let downTime = 0;
+            let downPos = new THREE.Vector2();
+            let isMoving = false;
 
-            dom.wordSphereContainer.addEventListener('pointerdown', (e) => {
-                pointerDownTime = performance.now();
-                pointerDownPos.set(e.clientX, e.clientY);
+            canvasEl.addEventListener('pointerdown', (e) => {
+                downTime = performance.now();
+                downPos.set(e.clientX, e.clientY);
+                isMoving = false;
             });
 
-            dom.wordSphereContainer.addEventListener('pointerup', (e) => {
-                const duration = performance.now() - pointerDownTime;
-                const dist = pointerDownPos.distanceTo(new THREE.Vector2(e.clientX, e.clientY));
-                // 宽容点击判定，兼顾移动触控与鼠标轻点
-                if (dist < 12 && duration < 450) {
+            canvasEl.addEventListener('pointermove', (e) => {
+                const currentPos = new THREE.Vector2(e.clientX, e.clientY);
+                if (downPos.distanceTo(currentPos) > 8) {
+                    isMoving = true;
+                }
+            });
+
+            canvasEl.addEventListener('pointerup', (e) => {
+                const dist = downPos.distanceTo(new THREE.Vector2(e.clientX, e.clientY));
+                const duration = performance.now() - downTime;
+
+                if (dist < 8 && duration < 450 && !isMoving) {
                     this.handleQuickTap(e);
                 }
             });
         },
 
-        updateHoverCardPosition(pxWidth, pxHeight, scaleFactor, baseDivisor = 35) {
-            if (!appState.overlayCardTargetPosition) {
-                appState.overlayCardTargetPosition = new THREE.Vector3();
-            }
-            const aspect = appState.camera.aspect;
-            const distance = 40;
-
-            const fov = appState.camera.fov * (Math.PI / 180);
-            const viewHeight3D = 2 * Math.tan(fov / 2) * distance;
-            const viewWidth3D = viewHeight3D * aspect;
-
-            const cardAspect = pxWidth / pxHeight;
-
-            // 基于老版本计算公式：viewWidth3D * 0.55 * scaleFactor
-            const targetWidth3D = viewWidth3D * 0.55 * scaleFactor;
-            const targetHeight3D = targetWidth3D / cardAspect;
-
-            if (appState.hoverOverlayCard) {
-                appState.overlayCardTargetScale.set(targetWidth3D, targetHeight3D, 1);
-            }
-
-            const camDir = new THREE.Vector3().setFromMatrixColumn(appState.camera.matrix, 2).multiplyScalar(-1);
-            const centerPoint = appState.camera.position.clone().add(camDir.multiplyScalar(distance));
-            appState.overlayCardTargetPosition.copy(centerPoint);
-            appState.needsRender = true;
-        },
-
-        triggerCardDisplay(card) {
-            if (!card) return;
-            const wordData = card.userData.word;
-            appState.hoveredObject = card;
-
-            const { texture, pxWidth, pxHeight } = AppCardFactory.createOverlayTexture(wordData);
-            const screen = appState.hoverOverlayCard.getObjectByName("textScreen");
-            if (screen) {
-                if (screen.material.map) screen.material.map.dispose();
-                screen.material.map = texture;
-                screen.material.needsUpdate = true;
-            }
-
-            appState.hoverOverlayCard.userData.word = wordData;
-            appState.hoverOverlayCard.visible = true;
-            appState.overlayCardTargetOpacity = 1;
-
-            const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-            const mobileScaleMultiplier = isMobile ? 1.5 : 1.0;
-            const scaleInput = document.getElementById('hoverOverlayCardScale');
-            const scaleFactor = (parseFloat(scaleInput ? scaleInput.value : 1.0) || 1.0) * mobileScaleMultiplier;
-
-            this.updateHoverCardPosition(pxWidth, pxHeight, scaleFactor, 35);
-
-            // 第一毫秒内将位置和四元数与视线同步，彻底消灭未到位时的点击盲区
-            if (appState.hoverOverlayCard.scale.x < 0.1) {
-                appState.hoverOverlayCard.position.copy(appState.overlayCardTargetPosition);
-                appState.hoverOverlayCard.quaternion.copy(appState.camera.quaternion);
-                appState.hoverOverlayCard.scale.copy(appState.overlayCardTargetScale);
-            }
-            appState.hoverOverlayCard.updateMatrixWorld(true);
-
-            if (wordData && wordData.words) {
-                AppAudio.speakWord(wordData.words, 1);
-            }
-            appState.needsRender = true;
-        },
-
         /**
-         * 100% 还原老版本 handleQuickTap 判定机制
+         * ★ 100% 精准点击判定 (复现老版本 intersectObjects 复合判定与按钮响应)
          */
         handleQuickTap(e) {
-            if (!appState.camera) return;
             const mouse = new THREE.Vector2(
                 (e.clientX / window.innerWidth) * 2 - 1,
                 -(e.clientY / window.innerHeight) * 2 + 1
@@ -1618,29 +1659,28 @@
             const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(mouse, appState.camera);
 
-            // 1. 优先对 3D 悬浮查词卡片进行全量深度判定
-            if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible && appState.overlayCardTargetOpacity > 0.05) {
-                appState.hoverOverlayCard.updateMatrixWorld(true);
+            // 1. 优先判定当前打开的 3D 浮动查词卡片与 4 个功能按钮
+            if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
                 const intersectsCard = raycaster.intersectObjects([appState.hoverOverlayCard], true);
-
                 if (intersectsCard.length > 0) {
                     const intersect = intersectsCard[0];
                     const uv = intersect.uv;
 
-                    const screenMesh = appState.hoverOverlayCard.getObjectByName("textScreen");
-                    const texture = screenMesh ? screenMesh.material.map : null;
+                    const screenMesh = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
+                    const texture = screenMesh?.material?.map;
 
-                    if (texture && texture.image && uv) {
+                    if (texture && uv) {
                         const canvasWidth = texture.image.width;
                         const canvasHeight = texture.image.height;
 
                         const clickX = uv.x * canvasWidth;
                         const clickY = (1 - uv.y) * canvasHeight;
 
-                        const wordData = appState.hoverOverlayCard.userData.word || appState.hoveredObject?.userData?.word;
+                        const wordData = appState.hoveredObject?.userData?.word || appState.activeCardObject?.userData?.word;
+                        const zones = wordData?.hover_click_zones || appState.hoverOverlayCard.userData.hover_click_zones || [];
 
-                        if (wordData && wordData.hover_click_zones) {
-                            for (const zone of wordData.hover_click_zones) {
+                        if (wordData && zones.length > 0) {
+                            for (const zone of zones) {
                                 if (clickX >= zone.xMin && clickX <= zone.xMax && clickY >= zone.yMin && clickY <= zone.yMax) {
                                     if (zone.type === 'speak' || zone.type === 'word') {
                                         AppAudio.speakWord(wordData.words, 1);
@@ -1648,23 +1688,19 @@
                                     } else if (zone.type === 'fontSizeDown') {
                                         const scaleInput = document.getElementById('hoverOverlayCardScale');
                                         let currentScale = parseFloat(scaleInput ? scaleInput.value : 1.0);
-                                        currentScale = Math.max(0.4, parseFloat((currentScale - 0.1).toFixed(2)));
+                                        currentScale = Math.max(0.3, parseFloat((currentScale - 0.15).toFixed(2)));
                                         if (scaleInput) scaleInput.value = currentScale;
-                                        const scaleOut = document.getElementById('hoverOverlayCardScaleOutput');
-                                        if (scaleOut) scaleOut.textContent = currentScale.toFixed(2);
-                                        this.saveSettings();
-                                        this.saveLastState();
+                                        saveSettings();
+                                        saveLastState();
                                         this.triggerCardDisplay(appState.hoveredObject);
                                         this.showToast(`🔍 缩放: ${(currentScale * 100).toFixed(0)}%`, 1000);
                                     } else if (zone.type === 'fontSizeUp') {
                                         const scaleInput = document.getElementById('hoverOverlayCardScale');
                                         let currentScale = parseFloat(scaleInput ? scaleInput.value : 1.0);
-                                        currentScale = Math.min(3.0, parseFloat((currentScale + 0.1).toFixed(2)));
+                                        currentScale = Math.min(4.0, parseFloat((currentScale + 0.15).toFixed(2)));
                                         if (scaleInput) scaleInput.value = currentScale;
-                                        const scaleOut = document.getElementById('hoverOverlayCardScaleOutput');
-                                        if (scaleOut) scaleOut.textContent = currentScale.toFixed(2);
-                                        this.saveSettings();
-                                        this.saveLastState();
+                                        saveSettings();
+                                        saveLastState();
                                         this.triggerCardDisplay(appState.hoveredObject);
                                         this.showToast(`🔍 缩放: ${(currentScale * 100).toFixed(0)}%`, 1000);
                                     } else if (zone.type === 'shield') {
@@ -1682,41 +1718,79 @@
                                             appState.hoveredObject = null;
                                             appState.overlayCardTargetOpacity = 0;
                                             appState.overlayCardTargetScale.set(0.001, 0.001, 0.001);
-                                            this.saveLastState();
+                                            appState.rotationMultiplierTemporary = 1.0;
+                                            saveLastState();
                                             this.showToast(`🛡️ 已屏蔽单词: ${wordData.words}`, 1500);
                                         }
                                     } else if (zone.type === 'card_body') {
-                                        // 命中卡片主体腹地：保持展开
+                                        // 点击卡片腹地，保持卡片展示
                                     }
                                     appState.needsRender = true;
-                                    return; // 成功命中按钮或卡片，立即结束
+                                    return; // 命中卡片，拦截并退出
                                 }
                             }
                         }
                     }
-                    // 点击卡片边缘/角括号，吞没事件不关闭
-                    return;
+                    return; // 命中卡片，拦截并不关闭
                 }
             }
 
             // 2. 判定球面单词卡片点击
-            const intersectsSphere = raycaster.intersectObjects(appState.wordObjects, false);
-            if (intersectsSphere.length > 0) {
-                const card = intersectsSphere[0].object;
-                this.triggerCardDisplay(card);
+            const intersects = raycaster.intersectObjects(appState.wordObjects, false);
+            if (intersects.length > 0) {
+                const card = intersects[0].object;
+                const wordData = card.userData.word;
 
-                const result = AppStorage.recordStudyClick(card.userData.word);
+                if (appState.hoveredObject === card && appState.hoverOverlayCard.visible) {
+                    appState.hoveredObject = null;
+                    appState.overlayCardTargetOpacity = 0;
+                    appState.overlayCardTargetScale.set(0.001, 0.001, 0.001);
+                    appState.rotationMultiplierTemporary = 1.0;
+                } else {
+                    this.triggerCardDisplay(card);
+                }
+
+                const result = AppStorage.recordStudyClick(wordData);
                 this.updateStudyCounterDisplay();
                 if (result.justReached) {
                     this.triggerDailyGoalAchievedToast();
                 }
             } else {
-                // 点击宇宙星空空白背景：淡出关闭查词卡
-                if (appState.hoverOverlayCard) {
-                    appState.hoveredObject = null;
-                    appState.overlayCardTargetOpacity = 0;
-                    appState.overlayCardTargetScale.set(0.001, 0.001, 0.001);
-                }
+                // 点击宇宙星空空白处：平滑关闭浮动查词卡
+                appState.hoveredObject = null;
+                appState.overlayCardTargetOpacity = 0;
+                appState.overlayCardTargetScale.set(0.001, 0.001, 0.001);
+                appState.rotationMultiplierTemporary = 1.0;
+            }
+            appState.needsRender = true;
+        },
+
+        triggerCardDisplay(card) {
+            if (!card) return;
+            const word = card.userData.word;
+            appState.hoveredObject = card;
+
+            const { texture, pxWidth, pxHeight } = AppCardFactory.createOverlayTexture(word);
+            const screen = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
+            if (screen.material.map) screen.material.map.dispose();
+            screen.material.map = texture;
+            screen.material.needsUpdate = true;
+
+            appState.hoverOverlayCard.userData.word = word;
+            appState.hoverOverlayCard.visible = true;
+            appState.overlayCardTargetOpacity = 1;
+
+            const scaleVal = parseFloat(document.getElementById('hoverOverlayCardScale')?.value || 1.0);
+            updateHoverCardPosition(pxWidth, pxHeight, scaleVal);
+
+            // 锚定于摄像机视线正前方，消除点击延迟错位
+            appState.hoverOverlayCard.position.copy(appState.overlayCardTargetPosition);
+            appState.hoverOverlayCard.quaternion.copy(appState.camera.quaternion);
+            appState.hoverOverlayCard.scale.copy(appState.overlayCardTargetScale);
+            appState.hoverOverlayCard.updateMatrixWorld(true);
+
+            if (word && word.words) {
+                AppAudio.speakWord(word.words, 1);
             }
             appState.needsRender = true;
         },
@@ -1762,7 +1836,9 @@
         hideImmersiveDetailPanel() {
             document.getElementById('immersiveDetailPanel')?.classList.remove('visible');
             appState.rotationMultiplier = 1.0;
+            adjustSphereViewForPanel();
             appState.needsRender = true;
+            saveLastState();
         },
 
         adjustSphereViewForPanel() {
@@ -1861,14 +1937,14 @@
             const hc = document.querySelector('#helpModalBackdrop .help-content');
             if (hc) {
                 hc.innerHTML = `
-                    <p><strong>3D 单词宇宙 - 经典 HUD 与微缩展舱版</strong></p>
-                    <p>沉浸式三维词汇学习与联想记忆引擎。</p>
-                    <h4>查词卡片控制指南</h4>
+                    <p><strong>3D 单词宇宙 - 极速查词与展舱引擎版</strong></p>
+                    <p>专为深度视觉沉浸与高质感单词记忆打造的 3D 宇宙平台。</p>
+                    <h4>查词卡片特性</h4>
                     <ul>
-                        <li><strong>发音朗读：</strong>点击卡片右上角 <code>[🔊]</code> 或直接点击主单词即可朗读。</li>
-                        <li><strong>无级缩放：</strong>轻触 <code>[A-]</code> 缩小卡片，轻触 <code>[A+]</code> 放大卡片。</li>
-                        <li><strong>智能屏蔽：</strong>轻触 <code>[屏蔽]</code> 即可将难记或已掌握词汇移入屏蔽库。</li>
-                        <li><strong>纯黑无光模式：</strong>将查词卡片亮度拉至 0，卡片将呈现纯黑无光质感。</li>
+                        <li><strong>宽敞居中排版：</strong>加大文字安全边距，舒适不贴边。</li>
+                        <li><strong>右上角功能四键：</strong><code>[🔊] 朗读</code>、<code>[A-] 缩小</code>、<code>[A+] 放大</code>、<code>[屏蔽] 屏蔽单词</code> 全部支持精准命中响应。</li>
+                        <li><strong>纯黑无光保障：</strong>内腔或卡片亮度滑块拉至 0 时呈现绝对漆黑质感。</li>
+                        <li><strong>双模样式支持：</strong>可在选项中选择【经典星云赛博】或【联动球体样机】。</li>
                     </ul>
                 `;
             }
@@ -1912,8 +1988,7 @@
                 'cardLightPositionSelect', 'cardLightBrightnessRange', 'cardLightSpreadRange', 'cardLightColor',
                 'cardTextStyleSelect', 'sphereCardFontColor', 'sphereCardFontFamily',
                 'hoverCardStyleModeSelect', 'hoverOverlayCardScale', 'hoverCardBrightness',
-                'hoverCardTextMainWordColor', 'hoverCardTextLabelColor', 'hoverCardTextValueColor',
-                'hoverAppendedBgColor', 'hoverAppendedBgOpacity', 'hoverCardEmissiveColor', 'hoverCardGlowFrequency'
+                'hoverCardTextMainWordColor', 'hoverCardTextLabelColor', 'hoverCardTextValueColor'
             ];
 
             settingIds.forEach(id => {
