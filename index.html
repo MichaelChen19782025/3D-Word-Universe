@@ -1,578 +1,443 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0a1430">
-    <title>3D单词宇宙 (V8 极致性能版)</title>
-    
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230a1c3d' stroke='%2300f0ff' stroke-width='6'/><text x='50' y='58' font-size='32' text-anchor='middle' fill='%2368d0ff' font-family='sans-serif'>🪐</text></svg>">
-    <link rel="manifest" href="./manifest.json">
-    <link rel="stylesheet" href="./css/styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a1430">
+<title>3D单词宇宙 (V8 极致性能版)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230a1c3d' stroke='%2300f0ff' stroke-width='6'/><text x='50' y='58' font-size='32' text-anchor='middle' fill='%2368d0ff' font-family='sans-serif'>🪐</text></svg>">
+<link rel="manifest" href="./manifest.json">
+<link rel="stylesheet" href="./css/styles.css">
 
-    <!-- 核心三维引擎及控件 (CDN) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.min.js"></script>
+<!-- 核心三维引擎及控件 (CDN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.min.js"></script>
 
-    <!-- 后期合成及发光特效插件 -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lights/RectAreaLightUniformsLib.js"></script>
+<!-- 后期合成及发光特效插件 -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lights/RectAreaLightUniformsLib.js"></script>
 </head>
 <body>
-<!-- 背景动态星云 -->
 <div class="universe-background">
-    <div class="nebula nebula-1"></div>
-    <div class="nebula nebula-2"></div>
+<div class="nebula nebula-1"></div>
+<div class="nebula nebula-2"></div>
 </div>
-
-<!-- 3D 渲染主画布容器 -->
 <div id="mainContent" class="main-content">
-    <div id="wordSphere"></div>
+<div id="wordSphere"></div>
 </div>
-
-<!-- 左上角时钟 HUD -->
 <div id="clockHud" aria-label="当前时间">00:00</div>
-
-<!-- 右上角 HUD 组合栏 (测试单词计数 + 紧凑折叠式巡航设置) -->
 <div id="topRightHudBar">
-    <!-- 今日学习计数 HUD -->
-    <div id="studyCounterHud" title="点击查看今日学习结算">
-        <span class="study-counter-icon">📖</span>
-        <span id="studyCounterValue">0</span>
-        <span class="study-goal-sep">/</span>
-        <span class="study-counter-icon">🎯</span>
-        <span id="studyGoalValue" title="点击修改每日学习目标">50</span>
+<div id="studyCounterHud" title="点击查看今日学习结算">
+<span class="study-counter-icon">📖</span>
+<span id="studyCounterValue">0</span>
+<span class="study-goal-sep">/</span>
+<span class="study-counter-icon">🎯</span>
+<span id="studyGoalValue" title="点击修改每日学习目标">50</span>
+</div>
+<div id="focusCruiseHud" class="collapsed enabled" title="点击展开巡航参数设置">
+    <div id="focusCruiseTrigger" class="focus-cruise-trigger" title="点击展开/收起巡航设置">
+        <span id="focusCruiseTriggerIcon" class="trigger-icon">✨</span>
+        <span id="focusCruiseTriggerText" class="trigger-text">巡航</span>
     </div>
-
-    <!-- 局部焦点巡航 HUD (折叠于计数右侧，点击展开参数) -->
-    <div id="focusCruiseHud" class="collapsed enabled" title="点击展开巡航参数设置">
-        <div id="focusCruiseTrigger" class="focus-cruise-trigger" title="点击展开/收起巡航设置">
-            <span id="focusCruiseTriggerIcon" class="trigger-icon">✨</span>
-            <span id="focusCruiseTriggerText" class="trigger-text">巡航</span>
-        </div>
-        <div id="focusCruiseExpandPanel" class="focus-cruise-expand-panel">
-            <span id="focusCruiseStatusTag" class="hud-status-tag" title="点击一键开关">开</span>
-            <span id="focusCruiseIntervalPill" class="focus-pill" title="点击修改持续时长"><span id="focusCruiseIntervalVal">50</span>s</span>
-            <span id="focusCruiseRatioPill" class="focus-pill" title="点击修改抽取卡片数量占比(%)"><span id="focusCruiseRatioVal">8</span>%量</span>
-            <span id="focusCruiseScalePill" class="focus-pill" title="点击修改单卡放大倍数"><span id="focusCruiseScaleVal">1.5</span>x倍</span>
-        </div>
+    <div id="focusCruiseExpandPanel" class="focus-cruise-expand-panel">
+        <span id="focusCruiseStatusTag" class="hud-status-tag" title="点击一键开关">开</span>
+        <span id="focusCruiseIntervalPill" class="focus-pill" title="点击修改持续时长"><span id="focusCruiseIntervalVal">50</span>s</span>
+        <span id="focusCruiseRatioPill" class="focus-pill" title="点击修改抽取卡片数量占比(%)"><span id="focusCruiseRatioVal">8</span>%量</span>
+        <span id="focusCruiseScalePill" class="focus-pill" title="点击修改单卡放大倍数"><span id="focusCruiseScaleVal">1.5</span>x倍</span>
     </div>
 </div>
-
-<!-- 设置与控制中心抽屉面板 (宽度50%收拢，手机竖屏右侧50%完全展现3D宇宙) -->
+</div>
 <div id="controlsOverlay" class="controls-overlay">
-    <button id="closeControlsOverlayBtn" class="controls-overlay-close-btn" title="关闭设置面板">&times;</button>
-    <div class="panel-header">
-        <h1>3D单词宇宙</h1>
-        <p>控制与设置中心 (V8 提速优化版)</p>
-    </div>
-    <div class="panel-content">
-        <div class="control-section">
-            <h3>数据、模式与筛选</h3>
-            <button id="uploadBtn" class="action-btn">导入单词数据 (JSON)</button>
-            <button id="showPromptTemplateBtn" class="action-btn secondary-btn" style="margin-top: 8px;">获取 AI 数据生成提示词模板</button>
-            <button id="appendUploadBtn" class="action-btn secondary-btn" style="margin-top: 8px;">追加单词数据 (JSON)</button>
-            <button id="openPasteModalBtn" class="action-btn secondary-btn" style="margin-top: 8px;">通过复制粘贴导入数据</button>
-            <button id="clearShieldedBtn" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #7c3aed, #4f46e5);">清除屏蔽词库 (0)</button>
-            <button id="exportJSONBtn" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #059669, #10b981);">导出词库数据 (JSON)</button>
-            <button id="filterBtn" class="action-btn secondary-btn" style="margin-top: 8px;">筛选与学习模式</button>
-            <button id="exportSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导出系统设置</button>
-            <button id="importSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导入系统设置</button>
+<button id="closeControlsOverlayBtn" class="controls-overlay-close-btn" title="关闭设置面板">&times;</button>
+<div class="panel-header">
+<h1>3D单词宇宙</h1>
+<p>控制与设置中心 (V8 提速优化版)</p>
+</div>
+<div class="panel-content">
+<div class="control-section">
+<h3>数据、模式与筛选</h3>
+<button id="uploadBtn" class="action-btn">导入单词数据 (JSON)</button>
+<button id="showPromptTemplateBtn" class="action-btn secondary-btn" style="margin-top: 8px;">获取 AI 数据生成提示词模板</button>
+<button id="appendUploadBtn" class="action-btn secondary-btn" style="margin-top: 8px;">追加单词数据 (JSON)</button>
+<button id="openPasteModalBtn" class="action-btn secondary-btn" style="margin-top: 8px;">通过复制粘贴导入数据</button>
+<button id="clearShieldedBtn" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #7c3aed, #4f46e5);">清除屏蔽词库 (0)</button>
+<button id="exportJSONBtn" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #059669, #10b981);">导出词库数据 (JSON)</button>
+<button id="filterBtn" class="action-btn secondary-btn" style="margin-top: 8px;">筛选与学习模式</button>
+<button id="exportSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导出系统设置</button>
+<button id="importSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导入系统设置</button>
+</div>
+<!-- 3D立体卡片与内腔泛光引擎专区 -->
+    <div class="control-section" id="card3DChamberSettingsSection">
+        <h3>🎴 3D立体卡片与内腔泛光引擎</h3>
+        <div class="setting-item">
+            <label for="cardStylePresetSelect">风格预设样机</label>
+            <select id="cardStylePresetSelect" style="width: 140px;">
+                <option value="cyber_blue">赛博深舱透视 (图3/5)</option>
+                <option value="titanium_plaque">暗黑钛金按键 (图14-19)</option>
+                <option value="matrix_grid">全息科技光廊 (图16)</option>
+                <option value="frost_ice">极地玄冰暗室 (图20)</option>
+                <option value="magma_forge">熔岩地心殿堂 (图7)</option>
+                <option value="steampunk_brass">黄铜复古机械 (图21)</option>
+                <option value="luxury_leather">轻奢典雅皮质 (图11)</option>
+                <option value="minimal_studio">现代极简展厅 (图4/6)</option>
+            </select>
         </div>
-        <div class="control-section">
-            <h3>显示与旋转设置</h3>
+        <div id="cardPresetDescLabel" style="font-size: 0.73rem; color: #a2d8ff; margin: 4px 0 10px 0; line-height: 1.4; text-align: center;"></div>
+        
+        <div class="appearance-group">
+            <h4>🏛️ 3D 卡片内腔纵深</h4>
             <div class="setting-item">
-                <label for="rotationSpeed" title="整体旋转速度">球体旋转速度</label>
-                <input type="range" id="rotationSpeed" min="0" max="2" value="1.0" step="0.005">
-                <input type="number" id="rotationSpeedInput" step="0.001" value="0.135" style="display:none;">
-                <span id="rotationSpeedOutput" style="display:none;"></span>
+                <label for="cardChamberDepthRange" title="控制卡片内壁的倾斜凹陷纵深感 (0为平整，3为极深长廊)">内腔纵深深度</label>
+                <input type="range" id="cardChamberDepthRange" min="0.0" max="3.0" value="0.65" step="0.05">
             </div>
             <div class="setting-item">
-                <label for="rotationModelSelect">旋转模型</label>
-                <select id="rotationModelSelect">
-                    <option value="linear">线性</option>
-                    <option value="sine-ease">正弦缓动</option>
+                <label for="cardOpacityRange" title="卡片不透明度 (可降至0完全隐形)">卡片不透明度</label>
+                <input type="range" id="cardOpacityRange" min="0.0" max="1.0" value="0.96" step="0.02">
+            </div>
+        </div>
+
+        <div class="appearance-group">
+            <h4>💡 内腔 3D 泛光设计 (柔光不刺眼)</h4>
+            <div class="setting-item">
+                <label for="cardLightPositionSelect">内腔光照位置</label>
+                <select id="cardLightPositionSelect" style="width: 140px;">
+                    <option value="center">中央核芯泛光 (居中)</option>
+                    <option value="top">顶部灯箱柔光 (上投)</option>
+                    <option value="bottom">地台轮廓浮光 (下投)</option>
+                    <option value="front">入口漫反射光 (广角)</option>
                 </select>
             </div>
             <div class="setting-item">
-                <label for="cardRotationSpeed" title="卡片独立旋转的速度">卡片自转速度</label>
-                <input type="range" id="cardRotationSpeed" min="0" max="10" value="2" step="0.1">
+                <label for="cardLightBrightnessRange" title="最低0为完全纯黑闭光，上限扩大4倍至8.0">内腔灯光亮度</label>
+                <input type="range" id="cardLightBrightnessRange" min="0.0" max="8.0" value="0.85" step="0.05">
             </div>
             <div class="setting-item">
-                <label title="球体旋转的轴向">球体旋转轴</label>
-                <div class="rotation-controls">
-                    <label><input type="checkbox" id="rotateX" checked> X</label>
-                    <label><input type="checkbox" id="rotateY" checked> Y</label>
-                    <label><input type="checkbox" id="rotateZ"> Z</label>
-                </div>
-            </div>
-            <div class="setting-item checkbox-item">
-                <input type="checkbox" id="cardSelfRotation" checked>
-                <label for="cardSelfRotation" title="每个单词卡片独立旋转">启用卡片自转</label>
-            </div>
-
-            <!-- 局部焦点巡航控制面板 -->
-            <div class="appearance-group" style="padding-top: 10px; margin-top: 10px; border-top: 1px dashed rgba(255, 216, 117, 0.3);">
-                <div class="setting-item checkbox-item">
-                    <input type="checkbox" id="focusCruiseEnabled" checked>
-                    <label for="focusCruiseEnabled" style="color: #ffd875; font-weight: bold;">局部焦点巡航模式 (✨)</label>
-                    <span id="focusCruiseStatusBadge" class="status-badge on">已开启</span>
-                </div>
-                <div class="setting-item">
-                    <label for="focusCruiseIntervalRange">巡航轮换周期 (秒)</label>
-                    <input type="range" id="focusCruiseIntervalRange" min="5" max="300" value="50" step="5">
-                </div>
-                <div class="setting-item">
-                    <label for="focusCruiseRatioRange">放大卡片数量占比 (%)</label>
-                    <input type="range" id="focusCruiseRatioRange" min="1" max="40" value="8" step="1">
-                </div>
-                <div class="setting-item">
-                    <label for="focusCruiseScaleRange">单卡放大倍数 (倍)</label>
-                    <input type="range" id="focusCruiseScaleRange" min="1.1" max="3.0" value="1.5" step="0.1">
-                </div>
-            </div>
-
-            <div class="setting-item checkbox-item" style="margin-top: 12px;">
-                <input type="checkbox" id="grappleEnabled" checked>
-                <label for="grappleEnabled" title="双击球体外空白区域，瞬间加速旋转并捕捉正面卡片">双击空白触发瞬间加速（手动擒拿）</label>
+                <label for="cardLightSpreadRange" title="泛光扩散半径 (0.1至6.0)">灯光泛光范围</label>
+                <input type="range" id="cardLightSpreadRange" min="0.1" max="6.0" value="0.85" step="0.05">
             </div>
             <div class="setting-item">
-                <label for="batchSize">每批显示数量</label>
-                <input type="number" id="batchSize" value="500" min="1">
-            </div>
-            <div class="batch-controls">
-                <button id="prevBatchBtn" class="action-btn secondary-btn" disabled>上一批</button>
-                <span id="batchInfo">0 / 0</span>
-                <button id="nextBatchBtn" class="action-btn secondary-btn" disabled>下一批</button>
+                <label for="cardLightColor">内腔泛光色彩</label>
+                <input type="color" id="cardLightColor" value="#00f0ff">
             </div>
         </div>
-        <div class="control-section" id="coreSphereSettingsSection">
-            <h3>核心球体设置</h3>
-            <div class="setting-item"><label for="coreSphereRadius">半径 (%外球)</label><input type="range" id="coreSphereRadius" min="0" max="300" value="80" step="1"></div>
-            <div class="setting-item"><label for="coreSphereColor">基础颜色</label><input type="color" id="coreSphereColor" value="#80D0FF"></div>
-            <div class="setting-item"><label for="coreSphereEmissive">发光颜色</label><input type="color" id="coreSphereEmissive" value="#30A0FF"></div>
-            <div class="setting-item"><label for="coreSphereEmissiveIntensity">发光强度</label><input type="range" id="coreSphereEmissiveIntensity" min="0" max="2" value="0.5" step="0.05"></div>
-            <div class="setting-item"><label for="coreSphereOpacity">透明度</label><input type="range" id="coreSphereOpacity" min="0" max="1" value="0.5" step="0.01"></div>
-        </div>
-        <div class="control-section" id="visualEffectsSettingsSection">
-            <h3>视觉增强系统 (Vortex & Bloom)</h3>
-            <div class="setting-item checkbox-item">
-                <input type="checkbox" id="visualEffectsEnabled">
-                <label for="visualEffectsEnabled">启用视觉增强系统</label>
-            </div>
-            <div class="appearance-group">
-                <h4>宇宙涡旋 (Vortex)</h4>
-                <div class="setting-item">
-                    <label for="vortexRotationModelSelect">旋转模型</label>
-                    <select id="vortexRotationModelSelect">
-                        <option value="linear">线性</option>
-                        <option value="sine-ease">正弦缓动</option>
-                        <option value="pulse">脉冲</option>
-                        <option value="damped-oscillation">阻尼振荡</option>
-                    </select>
-                </div>
-                <div class="setting-item"><label for="vortexParticleCount">粒子数量</label><input type="number" id="vortexParticleCount" value="50000" min="100" max="200000" step="100"></div>
-                <div class="setting-item"><label for="vortexColor">粒子颜色</label><input type="color" id="vortexColor" value="#5588ff"></div>
-                <div class="setting-item"><label for="vortexSize">粒子大小</label><input type="range" id="vortexSize" min="0.01" max="5.0" value="1.5" step="0.01"></div>
-                <div class="setting-item">
-                    <label for="vortexSpeed">旋转速度</label>
-                    <input type="range" id="vortexSpeed" min="-0.5" max="0.7" value="0.02" step="0.00001">
-                </div>
-                <div class="setting-item"><label for="vortexTightness">旋臂弯曲度</label><input type="range" id="vortexTightness" min="0.1" max="5.0" value="1.5" step="0.1"></div>
-            </div>
-            <div class="appearance-group">
-                <h4>辉光效果 (Bloom)</h4>
-                <div class="setting-item"><label for="bloomThreshold">层阈值</label><input type="range" id="bloomThreshold" min="0" max="1" value="0.8" step="0.01"></div>
-                <div class="setting-item"><label for="bloomStrength">发光强度</label><input type="range" id="bloomStrength" min="0" max="3" value="0.5" step="0.01"></div>
-                <div class="setting-item"><label for="bloomRadius">发光半径</label><input type="range" id="bloomRadius" min="0" max="1" value="0.2" step="0.01"></div>
-            </div>
-        </div>
-        <div class="control-section" id="dynamicBgSettingsSection">
-            <h3>动态背景设置</h3>
-            <div class="setting-item"><label for="dynamicBgHueStart">渐变起始色相</label><input type="range" id="dynamicBgHueStart" min="0" max="360" value="230" step="1"></div>
-            <div class="setting-item"><label for="dynamicBgHueEnd">渐变结束色相</label><input type="range" id="dynamicBgHueEnd" min="0" max="360" value="270" step="1"></div>
-            <div class="setting-item"><label for="dynamicBgLightness">基础亮度 (%)</label><input type="range" id="dynamicBgLightness" min="0" max="50" value="10" step="1"></div>
-            <div class="setting-item"><label for="dynamicBgParticleCount">漂浮粒子数量</label><input type="number" id="dynamicBgParticleCount" value="300" min="0" max="1000" step="50"></div>
-            <div class="setting-item"><label for="dynamicBgParticleSpeed">粒子速度</label><input type="range" id="dynamicBgParticleSpeed" min="0" max="0.5" value="0.05" step="0.01"></div>
-        </div>
-        <div class="control-section" id="starfieldSettingsSection">
-            <h3>星空背景设置</h3>
-            <div class="setting-item checkbox-item"><input type="checkbox" id="starfieldEnabled" checked><label for="starfieldEnabled">启用星空</label></div>
-            <div class="setting-item"><label for="starCount">星星数量</label><input type="number" id="starCount" value="25000" min="0" max="100000" step="5000"></div>
-            <div class="setting-item"><label for="starColor">星星颜色</label><input type="color" id="starColor" value="#ffffff"></div>
-            <div class="setting-item"><label for="starSize">星星基础大小</label><input type="range" id="starSize" min="0.1" max="2.0" value="0.8" step="0.1"></div>
-            <div class="setting-item"><label for="starVelocityFactor">飞驰速度</label><input type="range" id="starVelocityFactor" min="0.0" max="0.5" value="0.1" step="0.01"></div>
-            <div class="setting-item"><label for="starDensityFalloff">中心密集度</label><input type="range" id="starDensityFalloff" min="10" max="500" value="100" step="10"></div>
-            <div class="setting-item"><label for="starMinAlpha">最小透明度</label><input type="range" id="starMinAlpha" min="0.0" max="0.5" value="0.1" step="0.01"></div>
-            <div class="setting-item"><label for="starMaxAlpha">最大透明度</label><input type="range" id="starMaxAlpha" min="0.5" max="1.0" value="1.0" step="0.01"></div>
-            <div class="setting-item"><label for="starTwinkleSpeed">闪烁速度</label><input type="range" id="starTwinkleSpeed" min="0.1" max="5.0" value="0.5" step="0.1"></div>
-        </div>
-        <div class="control-section" id="studioLightSettingsSection">
-            <h3>棚镜漫反射光源 (Studio Reflector)</h3>
-            <div class="setting-item checkbox-item"><input type="checkbox" id="studioLightEnabled"><label for="studioLightEnabled">启用平面漫反射补光</label></div>
-            <div class="setting-item checkbox-item"><input type="checkbox" id="studioLightDragActive"><label for="studioLightDragActive" style="color: var(--success-color);">启用触屏拖拽打光</label></div>
-            <div class="setting-item checkbox-item"><input type="checkbox" id="studioLightHelperVisible" checked><label for="studioLightHelperVisible">显示定位虚光环</label></div>
-            <div class="setting-item"><label for="studioLightColor">光源颜色</label><input type="color" id="studioLightColor" value="#ffffff"></div>
-            <div class="setting-item"><label for="studioLightIntensity">光源亮度 (漫反射)</label><input type="range" id="studioLightIntensity" min="0" max="10" value="3.5" step="0.1"></div>
-            <div class="setting-item"><label for="studioLightAngle">光斑大小 (羽化圆径)</label><input type="range" id="studioLightAngle" min="0.1" max="1.5" value="0.7" step="0.05"></div>
-        </div>
-        <div class="control-section" id="lightingSettingsSection">
-            <h3>柔光环境设置</h3>
-            <div class="appearance-group">
-                <h4>环境光 (半球光)</h4>
-                <div class="setting-item"><label for="hemiSkyColor">天空颜色</label><input type="color" id="hemiSkyColor" value="#add8e6"></div>
-                <div class="setting-item"><label for="hemiGroundColor">地面颜色</label><input type="color" id="hemiGroundColor" value="#404040"></div>
-                <div class="setting-item"><label for="hemiIntensity">强度</label><input type="range" id="hemiIntensity" min="0" max="5" value="2.0" step="0.1"></div>
-            </div>
-            <div class="appearance-group">
-                <h4>主区域光 (顶部)</h4>
-                <div class="setting-item"><label for="rect1Color">颜色</label><input type="color" id="rect1Color" value="#ffffff"></div>
-                <div class="setting-item"><label for="rect1Intensity">强度</label><input type="range" id="rect1Intensity" min="0" max="20" value="8.0" step="0.5"></div>
-            </div>
-            <div class="appearance-group">
-                <h4>辅助区域光 (侧面)</h4>
-                <div class="setting-item"><label for="rect2Color">颜色</label><input type="color" id="rect2Color" value="#ffe0b3"></div>
-                <div class="setting-item"><label for="rect2Intensity">强度</label><input type="range" id="rect2Intensity" min="0" max="15" value="5.0" step="0.5"></div>
-            </div>
-            <div class="setting-item"><label for="directionalLight2Color">辅助光源颜色</label><input type="color" id="directionalLight2Color" value="#ffc080"></div>
-            <div class="setting-item"><label for="directionalLight2Intensity">辅助光源强度</label><input type="range" id="directionalLight2Intensity" min="0" max="2" value="0.65" step="0.01"></div>
+
+        <div class="appearance-group">
+            <h4>🔤 3D 浮雕文字设计</h4>
             <div class="setting-item">
-                <label>辅助光源位置</label>
-                <div style="display: flex; gap: 6px;">
-                    <input type="number" id="directionalLight2PosX" value="-11" step="1" style="width: 48px;">
-                    <input type="number" id="directionalLight2PosY" value="-6" step="1" style="width: 48px;">
-                    <input type="number" id="directionalLight2PosZ" value="-14" step="1" style="width: 48px;">
-                </div>
+                <label for="cardTextStyleSelect">文字立体质感</label>
+                <select id="cardTextStyleSelect" style="width: 140px;">
+                    <option value="relief_metal">浮雕金属倒角 (立体凸起)</option>
+                    <option value="chiseled_bevel">沉金切角内凹 (精工铭刻)</option>
+                    <option value="neon_glow">全息霓虹发光 (能量辉光)</option>
+                    <option value="plain_bold">纯色高对比度 (清晰极简)</option>
+                </select>
             </div>
-            <div class="appearance-group">
-                <h4>自定义补光 (聚光灯)</h4>
-                <div class="setting-item" style="margin-bottom: 15px;">
-                    <button id="saveDefaultLightBtn" class="action-btn secondary-btn" style="flex-grow: 1; margin-right: 4px;">设为默认补光</button>
-                    <button id="loadDefaultLightBtn" class="action-btn secondary-btn" style="flex-grow: 1; margin-left: 4px;">加载默认补光</button>
-                </div>
-                <div class="setting-item checkbox-item"><input type="checkbox" id="customLightEnabled"><label for="customLightEnabled">启用自定义补光</label></div>
-                <div class="setting-item checkbox-item"><input type="checkbox" id="customLightHelperVisible"><label for="customLightHelperVisible">显示助手/轨道</label></div>
-                <div class="setting-item"><label for="customLightColor">颜色</label><input type="color" id="customLightColor" value="#ffffff"></div>
-                <div class="setting-item"><label for="customLightIntensity">亮度</label><input type="range" id="customLightIntensity" min="0" max="10000" value="20" step="1"></div>
-                <div class="setting-item"><label for="customLightDistance">距离</label><input type="range" id="customLightDistance" min="0" max="2000" value="500" step="10"></div>
-                <div class="setting-item"><label for="customLightAngle">角度</label><input type="range" id="customLightAngle" min="0" max="1.5" value="0.8" step="0.01"></div>
-                <div class="setting-item"><label for="customLightPenumbra">半影</label><input type="range" id="customLightPenumbra" min="0" max="1" value="0.2" step="0.01"></div>
-                <div class="appearance-group">
-                    <h4>轨道辅助系统</h4>
-                    <div class="setting-item">
-                        <label for="guidelineSelect">选择轨道</label>
-                        <select id="guidelineSelect">
-                            <option value="none">无 (自由移动)</option>
-                            <option value="xy">赤道轨道 (XY)</option>
-                            <option value="yz">子午线轨道 (YZ)</option>
-                            <option value="xz">侧面轨道 (XZ)</option>
-                            <option value="xy_45">45°轨道 (X-Y)</option>
-                            <option value="yz_45">45°轨道 (Y-Z)</option>
-                        </select>
-                    </div>
-                    <div class="setting-item"><label for="guidelineRadius">轨道半径</label><input type="range" id="guidelineRadius" min="50" max="1000" value="200" step="10"></div>
-                    <div class="setting-item"><label for="guidelinePosition">在轨道上定位</label><input type="range" id="guidelinePosition" min="0" max="360" value="0" step="1" disabled></div>
-                </div>
-                <div class="appearance-group">
-                    <h4>手动定位</h4>
-                    <div class="setting-item">
-                        <label>灯源位置 (X,Y,Z)</label>
-                        <div style="display: flex; gap: 4px;">
-                            <input type="number" id="customLightSourcePosX" value="0" step="5" style="width: 48px;">
-                            <input type="number" id="customLightSourcePosY" value="0" step="5" style="width: 48px;">
-                            <input type="number" id="customLightSourcePosZ" value="150" step="5" style="width: 48px;">
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <label>目标位置 (X,Y,Z)</label>
-                        <div style="display: flex; gap: 4px;">
-                            <input type="number" id="customLightTargetPosX" value="0" step="5" style="width: 48px;">
-                            <input type="number" id="customLightTargetPosY" value="0" step="5" style="width: 48px;">
-                            <input type="number" id="customLightTargetPosZ" value="0" step="5" style="width: 48px;">
-                        </div>
-                    </div>
-                </div>
+            <div class="setting-item">
+                <label for="sphereCardFontColor">文字主色调</label>
+                <input type="color" id="sphereCardFontColor" value="#ffffff">
+            </div>
+            <div class="setting-item">
+                <label for="sphereCardFontFamily">字形字体</label>
+                <select id="sphereCardFontFamily">
+                    <option value="'Microsoft YaHei', sans-serif">微软雅黑</option>
+                    <option value="'Segoe UI', sans-serif">Segoe UI</option>
+                    <option value="'SimSun', serif">宋体</option>
+                    <option value="'KaiTi', serif">楷体</option>
+                </select>
             </div>
         </div>
-        <div class="control-section">
-            <h3>发音设置</h3>
-            <div class="setting-item"><label for="voiceSelect">选择发音人</label><select id="voiceSelect" style="width: 100%;"></select></div>
-            <div class="setting-item"><label for="rateInput">语速 (0.1-10)</label><input type="number" id="rateInput" value="1.0" min="0.1" max="10" step="0.1"></div>
-            <div class="setting-item"><label for="timesInput">朗读次数</label><input type="number" id="timesInput" value="1" min="1" max="10" step="1"></div>
-            <div class="setting-item"><label for="volumeInput">音量 (0-1)</label><input type="number" id="volumeInput" value="1.0" min="0" max="1" step="0.1"></div>
-        </div>
-        <div class="control-section">
-            <h3>外观与字体设置</h3>
-            <div class="appearance-group">
-                <h4>🪐 球面单词卡片</h4>
-                <div class="setting-item"><label for="cardStyleSelect">游戏卡片风格</label><select id="cardStyleSelect" style="flex-grow: 1;"></select></div>
-                <div id="cardStyleDesc" style="font-size: 0.75rem; color: rgba(200, 220, 255, 0.75); text-align: center; margin-bottom: 10px;"></div>
-                <div class="setting-item"><label for="sphereCardBgOpacity">背景透明度</label><input type="range" id="sphereCardBgOpacity" min="0.0" max="1.0" value="0.8" step="0.05"></div>
-                <div class="setting-item"><label for="sphereCardFontSizeFactorOverall">概览字体缩放</label><input type="range" id="sphereCardFontSizeFactorOverall" min="1.0" max="3.0" value="2.33" step="0.01"></div>
-                <div class="setting-item"><label for="sphereCardFontSizeFactorCloseUp">近距字体缩放</label><input type="range" id="sphereCardFontSizeFactorCloseUp" min="0.5" max="1.5" value="1.0" step="0.01"></div>
-                <div class="setting-item"><label for="sphereCardFontColor">字体颜色</label><input type="color" id="sphereCardFontColor" value="#ffffff"></div>
-                <div class="setting-item">
-                    <label for="sphereCardFontFamily">字体</label>
-                    <select id="sphereCardFontFamily">
-                        <option value="'Microsoft YaHei', sans-serif">微软雅黑</option>
-                        <option value="'SimSun', serif">宋体</option>
-                        <option value="'KaiTi', serif">楷体</option>
-                        <option value="'Segoe UI', sans-serif">Segoe UI</option>
-                    </select>
-                </div>
-                <div class="setting-item"><label for="sphereCardEmissiveColor">文字呼吸光色</label><input type="color" id="sphereCardEmissiveColor" value="#00b8ff"></div>
-                <div class="setting-item"><label for="sphereCardEmissiveIntensityFactor">呼吸光强度因子</label><input type="range" id="sphereCardEmissiveIntensityFactor" min="0.1" max="2.0" value="1.0" step="0.1"></div>
-                <div class="setting-item">
-                    <label for="defaultBrightnessOnLoad">启动时默认亮度</label>
-                    <input type="range" id="defaultBrightnessOnLoad" min="0.1" max="5.0" value="0.7" step="0.05">
-                </div>
-                <div class="setting-item"><label for="sphereCardBaseColorMultiplier">卡片亮度因子</label><input type="range" id="sphereCardBaseColorMultiplier" min="0.1" max="5.0" value="1.0" step="0.05"></div>
-                <div class="setting-item"><label for="sphereCardSideColor">卡片侧边色</label><input type="color" id="sphereCardSideColor" value="#1f3568"></div>
-                <div class="appearance-group">
-                    <h4>单词风暴卡片样式</h4>
-                    <div class="setting-item checkbox-item"><input type="checkbox" id="stormWordCardStyleEnabled" checked><label for="stormWordCardStyleEnabled">启用风暴专有样式</label></div>
-                    <div id="stormStyleSubSettings">
-                        <div class="setting-item"><label for="stormWordCardBgColor">背景颜色</label><input type="color" id="stormWordCardBgColor" value="#FFCC20"></div>
-                        <div class="setting-item"><label for="stormWordCardBgOpacity">背景透明度</label><input type="range" id="stormWordCardBgOpacity" min="0.0" max="1.0" value="0.90" step="0.05"></div>
-                        <div class="setting-item"><label for="stormWordCardFontColor">字体颜色</label><input type="color" id="stormWordCardFontColor" value="#000000"></div>
-                        <div class="setting-item"><label for="stormWordCardSideColor">卡片侧边色</label><input type="color" id="stormWordCardSideColor" value="#cc9900"></div>
-                        <div class="setting-item"><label for="stormWordCardEmissiveColor">文字呼吸光色</label><input type="color" id="stormWordCardEmissiveColor" value="#ffea00"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="appearance-group" id="hoverAppendedInfoSettingsGroup">
-                <div class="setting-item"><label for="hoverCardBrightness">悬浮卡片亮度</label><input type="range" id="hoverCardBrightness" min="0.1" max="3.0" value="1.0" step="0.05"></div>
-                <h4>🃏 悬浮单词卡</h4>
-                <div class="setting-item">
-                    <label for="hoverOverlayCardScale">悬停卡片缩放比例</label>
-                    <input type="range" id="hoverOverlayCardScale" min="0.5" max="2.5" value="1.0" step="0.05">
-                </div>
-                <div class="setting-item"><label for="hoverCardEmissiveColor">呼吸光颜色</label><input type="color" id="hoverCardEmissiveColor" value="#FFFFFF"></div>
-                <div class="setting-item"><label for="hoverCardGlowFrequency">呼吸光频率</label><input type="range" id="hoverCardGlowFrequency" min="0.1" max="10" value="2.5" step="0.1"></div>
-                <div class="setting-item"><label for="hoverAppendedBgColor">背景颜色</label><input type="color" id="hoverAppendedBgColor" value="#0A1E46"></div>
-                <div class="setting-item"><label for="hoverAppendedBgOpacity">背景透明度</label><input type="range" id="hoverAppendedBgOpacity" min="0.0" max="1.0" value="0.75" step="0.01"></div>
-                <div class="setting-item"><label for="hoverAppendedFontColor">字体颜色</label><input type="color" id="hoverAppendedFontColor" value="#D0E8FF"></div>
-                <div class="setting-item"><label for="hoverAppendedFontSize">字体大小(px)</label><input type="number" id="hoverAppendedFontSize" value="12" min="8" max="24"></div>
-                <div class="appearance-group">
-                    <h4>🎨 悬浮卡文字颜色</h4>
-                    <div class="setting-item"><label for="hoverCardTextMainWordColor">主单词颜色</label><input type="color" id="hoverCardTextMainWordColor" value="#FFFFFF"></div>
-                    <div class="setting-item"><label for="hoverCardTextLabelColor">标签颜色</label><input type="color" id="hoverCardTextLabelColor" value="#8CFEFF"></div>
-                    <div class="setting-item"><label for="hoverCardTextValueColor">数值颜色</label><input type="color" id="hoverCardTextValueColor" value="#FFFFFF"></div>
-                    <div class="setting-item"><label for="hoverCardTextGlowColor">文字呼吸光颜色</label><input type="color" id="hoverCardTextGlowColor" value="#00FFFF"></div>
-                    <div class="setting-item"><label for="hoverCardTextGlowIntensity">文字呼吸光强度</label><input type="range" id="hoverCardTextGlowIntensity" min="0" max="2" value="0.5" step="0.05"></div>
-                </div>
-            </div>
-            <div class="appearance-group" id="detailPanelTextStylesGroup">
-                <h4>📋 单词详情弹窗样式</h4>
-            </div>
-        </div>
-        <div class="control-section">
-            <h3>学习统计</h3>
-            <div class="stats-grid">
-                <div class="stat-item"><div class="stat-value" id="totalWords">0</div><div class="stat-label">库中总词数</div></div>
-                <div class="stat-item"><div class="stat-value" id="filteredWords">0</div><div class="stat-label">当前列表词数</div></div>
-                <div class="stat-item"><div class="stat-value" id="currentBatchWords">0</div><div class="stat-label">当前批次</div></div>
-                <div class="stat-item"><div class="stat-value" id="viewedCount">0</div><div class="stat-label">已查看(本列表)</div></div>
-            </div>
-        </div>
-        <div class="control-section">
-            <h3>今日目标与初始化视角</h3>
-            <div class="setting-item"><label for="dailyTargetInput">今日复习目标(词)</label><input type="number" id="dailyTargetInput" value="50" min="1" max="500" style="width: 60px;"></div>
-            <div class="setting-item"><label>今日已有效复习</label><span id="dailyStudiedCountDisplay" style="color: var(--success-color); font-weight: bold; font-size: 1.1rem;">0</span></div>
-            <div class="setting-item"><label for="defaultStartupViewSelect">启动默认视角</label><select id="defaultStartupViewSelect" style="width: 130px;"></select></div>
-        </div>
-        <div class="control-section">
-            <h3>帮助与信息</h3>
-            <button id="helpBtn" class="action-btn secondary-btn">使用帮助</button>
-        </div>
-    </div>
-</div>
 
-<!-- 沉浸式单词详情侧栏面板 -->
-<div id="immersiveDetailPanel" class="immersive-detail-panel">
-    <div class="immersive-detail-header">
-        <h2>单词详情</h2>
-        <div class="header-search-container">
-            <input type="search" id="detailSearchInput" placeholder="全词库搜索...">
-            <button id="detailSearchBtn">🔍</button>
-        </div>
-        <div class="header-controls">
-            <div style="display: flex; gap: 3px; align-items: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 5px; padding: 2px;">
-                <button id="detailFontDownBtn" title="缩小字体" style="background: transparent; border: none; color: #a2d8ff; padding: 3px 6px; font-weight: bold; cursor: pointer;">A-</button>
-                <button id="detailFontUpBtn" title="放大字体" style="background: transparent; border: none; color: #a2d8ff; padding: 3px 6px; font-weight: bold; cursor: pointer;">A+</button>
+        <div class="appearance-group">
+            <h4>🃏 查词窗口样机模式 (双模兼容)</h4>
+            <div class="setting-item">
+                <label for="hoverCardStyleModeSelect">查词卡样机模式</label>
+                <select id="hoverCardStyleModeSelect" style="width: 140px;">
+                    <option value="classic_hud">经典星云赛博 (参考图样式)</option>
+                    <option value="sync_sphere">联动球体样机 (随选样机变动)</option>
+                </select>
             </div>
-            <button id="togglePanelSideBtn" title="切换左右位置">↔️</button>
-            <button id="closeDetailBtn" title="关闭 (Esc)">×</button>
-        </div>
-    </div>
-    <div class="immersive-detail-content">
-        <div class="main-word-section">
-            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                <button id="prevDetailBtn" title="上一个" class="detail-nav-btn">‹</button>
-                <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                    <h2 id="overlayWordName">...</h2>
-                    <button id="speakDetailWordBtn" title="朗读单词" style="background:none; border:none; font-size: 1.6rem; cursor:pointer; color: #a2d8ff;">🔊</button>
-                </div>
-                <button id="nextDetailBtn" title="下一个" class="detail-nav-btn">›</button>
+            <div class="setting-item">
+                <label for="hoverCardBrightness" title="最低0为绝对纯黑，上限扩大至12.0">查词卡光照亮度</label>
+                <input type="range" id="hoverCardBrightness" min="0.0" max="12.0" value="1.0" step="0.05">
             </div>
-            <div id="overlayPhoneticDisplay" class="phonetic"></div>
-            <div id="overlayMeaningDisplay" class="meaning"></div>
-        </div>
-        <div class="data-grid-section" id="overlayDataGrid"></div>
-        <button id="shieldSingleWordBtn" class="action-btn" style="background: linear-gradient(45deg, #ef4444, #dc2626); margin-top: 16px; box-shadow: none;">🛡️ 屏蔽该单词</button>
-        <div class="data-item-group" style="margin-top: 16px;">
-            <div class="group-label">朗读设置</div>
-            <div class="group-content" style="flex-direction: column; gap: 8px;">
-                <div class="setting-item" style="width:100%;"><label for="voiceSelectDetail">发音人</label><select id="voiceSelectDetail" style="width: auto; flex-grow:1;"></select></div>
-                <div class="setting-item" style="width:100%;"><label for="rateInputDetail">语速</label><input type="number" id="rateInputDetail" value="1.0" min="0.1" max="10" step="0.1"></div>
-                <div class="setting-item" style="width:100%;"><label for="timesInputDetail">次数</label><input type="number" id="timesInputDetail" value="1" min="1" max="10" step="1"></div>
-                <div class="setting-item" style="width:100%;"><label for="volumeInputDetail">音量</label><input type="number" id="volumeInputDetail" value="1.0" min="0" max="1" step="0.1"></div>
+            <div class="setting-item">
+                <label for="hoverOverlayCardScale">查词卡缩放比例</label>
+                <input type="range" id="hoverOverlayCardScale" min="0.2" max="10.0" value="1.0" step="0.05">
+            </div>
+            <div class="setting-item">
+                <label for="hoverCardTextMainWordColor">主单词颜色</label>
+                <input type="color" id="hoverCardTextMainWordColor" value="#FFFFFF">
+            </div>
+            <div class="setting-item">
+                <label for="hoverCardTextLabelColor">标签/音标颜色</label>
+                <input type="color" id="hoverCardTextLabelColor" value="#8CFEFF">
+            </div>
+            <div class="setting-item">
+                <label for="hoverCardTextValueColor">释义文字颜色</label>
+                <input type="color" id="hoverCardTextValueColor" value="#FFFFFF">
             </div>
         </div>
     </div>
-</div>
 
-<!-- 模式筛选弹窗 -->
-<div id="filterModalBackdrop" class="modal-backdrop">
-    <div class="filter-modal modal-content-box">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
-            <h2 style="margin: 0; font-size: 1.3rem; text-shadow: 0 0 13px var(--primary-glow-color);">模式与筛选</h2>
-            <button id="closeFilterModalTopBtn" style="background: transparent; border: none; color: #a2d8ff; font-size: 2rem; cursor: pointer; line-height: 1; padding: 0 6px;">&times;</button>
+    <div class="control-section">
+        <h3>显示与旋转设置</h3>
+        <div class="setting-item">
+            <label for="rotationSpeed" title="整体旋转速度 (扩大4倍至8.0)">球体旋转速度</label>
+            <input type="range" id="rotationSpeed" min="0" max="8.0" value="1.0" step="0.01">
+            <input type="number" id="rotationSpeedInput" step="0.001" value="0.135" style="display:none;">
         </div>
-        <p style="text-align:center; color: #ccc; margin-bottom: 12px; font-size: 0.85rem;">请选择学习模式并筛选单词范围</p>
-        <div class="filter-group" style="margin-bottom:12px; display: flex; align-items: center; justify-content: center; gap: 16px;">
-            <label>学习模式:</label>
-            <div class="mode-selection" style="display: flex; gap: 12px;">
-                <label><input type="radio" name="studyMode" value="review" checked> 复习模式</label>
-                <label><input type="radio" name="studyMode" value="practice"> 练习模式</label>
-            </div>
-        </div>
-        <div id="filterOptionsContainer" style="max-height: 40vh; overflow-y: auto; padding-right: 8px; margin-top:8px;"></div>
-        <div class="modal-actions">
-            <button id="applyFilterBtn" class="modal-btn">应用筛选</button>
-            <button id="closeFilterModalBtn" class="modal-btn secondary-btn">取消</button>
-        </div>
-    </div>
-</div>
-
-<!-- 粘贴数据容灾模态窗口 -->
-<div id="pasteDataModalBackdrop" class="modal-backdrop">
-    <div class="filter-modal modal-content-box">
-        <h2>粘贴文本导入数据</h2>
-        <p style="text-align:center; color: #ccc; margin-bottom: 10px;">直接粘贴 JSON 格式的单词数据数组</p>
-        <textarea id="pasteDataTextArea" style="width: 100%; height: 160px; background: rgba(10,20,50,0.8); border: 1px solid var(--border-color); color: #FFF; padding: 8px; border-radius: 8px; margin-bottom: 12px;" placeholder='[{"words":"example","chinese":"例子","phonetic":"/ɪgˈzɑːmpl/"}]'></textarea>
-        <div style="display: flex; gap: 16px; justify-content: center; margin-bottom: 12px;">
-            <label><input type="radio" name="pasteImportMode" value="replace" checked> 覆盖导入</label>
-            <label><input type="radio" name="pasteImportMode" value="append"> 追加导入</label>
-        </div>
-        <div class="modal-actions">
-            <button id="submitPasteDataBtn" class="modal-btn">解析并导入</button>
-            <button id="closePasteModalBtn" class="modal-btn secondary-btn">取消</button>
-        </div>
-    </div>
-</div>
-
-<!-- 练习模式 HUD -->
-<div id="practiceContainer" class="hidden">
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
-        <h3 style="color: var(--accent-color-1); margin: 0; font-size: 1.1rem;">词汇测试</h3>
-        <span id="practiceProgress" style="font-size: 0.85rem; color: #a2d8ff;">0 / 0</span>
-    </div>
-    <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between;">
-        <div style="display: flex; gap: 6px; align-items: center;">
-            <label for="practiceTypeSelect" style="font-size:0.85rem;">类型:</label>
-            <select id="practiceTypeSelect" style="background: rgba(14,28,60,0.8); color: white; border: 1px solid var(--border-color); border-radius: 5px; padding: 3px; font-size:0.82rem;">
-                <option value="multi-choice-en">英译中 (中选)</option>
-                <option value="multi-choice-cn">中译英 (英选)</option>
-                <option value="spelling">拼写练习</option>
+        <div class="setting-item">
+            <label for="rotationModelSelect">旋转模型</label>
+            <select id="rotationModelSelect">
+                <option value="linear">线性</option>
+                <option value="sine-ease">正弦缓动</option>
             </select>
         </div>
-        <div style="font-size: 0.85rem; color:#68FFC0;">正确: <span id="practiceScore">0</span></div>
+        <div class="setting-item">
+            <label for="cardRotationSpeed" title="卡片独立自转速度 (扩大4倍至40)">卡片自转速度</label>
+            <input type="range" id="cardRotationSpeed" min="0" max="40" value="2" step="0.2">
+        </div>
+        <div class="setting-item">
+            <label title="球体旋转的轴向">球体旋转轴</label>
+            <div class="rotation-controls">
+                <label><input type="checkbox" id="rotateX" checked> X</label>
+                <label><input type="checkbox" id="rotateY" checked> Y</label>
+                <label><input type="checkbox" id="rotateZ"> Z</label>
+            </div>
+        </div>
+        <div class="setting-item checkbox-item">
+            <input type="checkbox" id="cardSelfRotation" checked>
+            <label for="cardSelfRotation">启用卡片自转</label>
+        </div>
+
+        <div class="appearance-group" style="padding-top: 10px; margin-top: 10px; border-top: 1px dashed rgba(255, 216, 117, 0.3);">
+            <div class="setting-item checkbox-item">
+                <input type="checkbox" id="focusCruiseEnabled" checked>
+                <label for="focusCruiseEnabled" style="color: #ffd875; font-weight: bold;">局部焦点巡航模式 (✨)</label>
+                <span id="focusCruiseStatusBadge" class="status-badge on">已开启</span>
+            </div>
+            <div class="setting-item">
+                <label for="focusCruiseIntervalRange">巡航轮换周期 (秒)</label>
+                <input type="range" id="focusCruiseIntervalRange" min="2" max="1200" value="50" step="5">
+            </div>
+            <div class="setting-item">
+                <label for="focusCruiseRatioRange">放大卡片数量占比 (%)</label>
+                <input type="range" id="focusCruiseRatioRange" min="0.5" max="100" value="8" step="0.5">
+            </div>
+            <div class="setting-item">
+                <label for="focusCruiseScaleRange">单卡放大倍数 (倍)</label>
+                <input type="range" id="focusCruiseScaleRange" min="1.0" max="12.0" value="1.5" step="0.1">
+            </div>
+        </div>
+
+        <div class="setting-item checkbox-item" style="margin-top: 12px;">
+            <input type="checkbox" id="grappleEnabled" checked>
+            <label for="grappleEnabled">双击空白触发瞬间加速（手动擒拿）</label>
+        </div>
+        <div class="setting-item">
+            <label for="batchSize">每批显示数量</label>
+            <input type="number" id="batchSize" value="500" min="1" max="4000">
+        </div>
+        <div class="batch-controls">
+            <button id="prevBatchBtn" class="action-btn secondary-btn" disabled>上一批</button>
+            <span id="batchInfo">0 / 0</span>
+            <button id="nextBatchBtn" class="action-btn secondary-btn" disabled>下一批</button>
+        </div>
     </div>
-    <div id="practiceQuestionBox" style="text-align: center; margin: 8px 0;">
-        <div id="practiceQuestionText" style="font-size: 1.45rem; font-weight: bold; color: #ffffff;">...</div>
-        <div id="practiceQuestionPhonetic" style="font-size: 0.92rem; color: var(--detail-phonetic-color); margin-top: 4px; min-height:1.1rem;"></div>
+
+    <div class="control-section" id="coreSphereSettingsSection">
+        <h3>核心球体设置</h3>
+        <div class="setting-item"><label for="coreSphereRadius">半径 (%外球)</label><input type="range" id="coreSphereRadius" min="0" max="1200" value="80" step="2"></div>
+        <div class="setting-item"><label for="coreSphereColor">基础颜色</label><input type="color" id="coreSphereColor" value="#80D0FF"></div>
+        <div class="setting-item"><label for="coreSphereEmissive">发光颜色</label><input type="color" id="coreSphereEmissive" value="#30A0FF"></div>
+        <div class="setting-item"><label for="coreSphereEmissiveIntensity">发光强度</label><input type="range" id="coreSphereEmissiveIntensity" min="0" max="8.0" value="0.5" step="0.05"></div>
+        <div class="setting-item"><label for="coreSphereOpacity">透明度</label><input type="range" id="coreSphereOpacity" min="0" max="1" value="0.5" step="0.01"></div>
     </div>
-    <div id="practiceOptionsGrid" style="display: grid; grid-template-columns: 1fr; gap: 6px;"></div>
-    <div id="practiceSpellingBox" class="hidden" style="display: flex; flex-direction: column; gap: 8px;">
-        <input type="text" id="practiceSpellingInput" style="padding: 9px; background: rgba(10,20,50,0.8); border: 1px solid var(--border-color); color: white; border-radius: 6px; font-size: 1rem; text-align: center; outline: none;" placeholder="在此输入正确英文单词拼写" autocomplete="off" autocapitalize="off" autocorrect="off">
-        <button id="submitSpellingBtn" class="action-btn">验证拼写</button>
+
+    <div class="control-section" id="visualEffectsSettingsSection">
+        <h3>视觉增强系统 (Vortex & Bloom)</h3>
+        <div class="setting-item checkbox-item">
+            <input type="checkbox" id="visualEffectsEnabled">
+            <label for="visualEffectsEnabled">启用视觉增强系统</label>
+        </div>
+        <div class="appearance-group">
+            <h4>宇宙涡旋 (Vortex)</h4>
+            <div class="setting-item">
+                <label for="vortexRotationModelSelect">旋转模型</label>
+                <select id="vortexRotationModelSelect">
+                    <option value="linear">线性</option>
+                    <option value="sine-ease">正弦缓动</option>
+                    <option value="pulse">脉冲</option>
+                    <option value="damped-oscillation">阻尼振荡</option>
+                </select>
+            </div>
+            <div class="setting-item"><label for="vortexParticleCount">粒子数量</label><input type="number" id="vortexParticleCount" value="50000" min="100" max="800000" step="1000"></div>
+            <div class="setting-item"><label for="vortexColor">粒子颜色</label><input type="color" id="vortexColor" value="#5588ff"></div>
+            <div class="setting-item"><label for="vortexSize">粒子大小</label><input type="range" id="vortexSize" min="0.01" max="20.0" value="1.5" step="0.05"></div>
+            <div class="setting-item">
+                <label for="vortexSpeed">旋转速度</label>
+                <input type="range" id="vortexSpeed" min="-2.0" max="2.8" value="0.02" step="0.001">
+            </div>
+            <div class="setting-item"><label for="vortexTightness">旋臂弯曲度</label><input type="range" id="vortexTightness" min="0.1" max="20.0" value="1.5" step="0.1"></div>
+        </div>
+        <div class="appearance-group">
+            <h4>辉光效果 (Bloom)</h4>
+            <div class="setting-item"><label for="bloomThreshold">层阈值</label><input type="range" id="bloomThreshold" min="0" max="1" value="0.8" step="0.01"></div>
+            <div class="setting-item"><label for="bloomStrength">发光强度</label><input type="range" id="bloomStrength" min="0" max="12.0" value="0.5" step="0.05"></div>
+            <div class="setting-item"><label for="bloomRadius">发光半径</label><input type="range" id="bloomRadius" min="0" max="4.0" value="0.2" step="0.02"></div>
+        </div>
     </div>
-    <div id="practiceFeedback" style="text-align: center; font-weight: bold; min-height: 20px; font-size: 1rem; margin-top: 4px;"></div>
-    <div style="display: flex; gap: 8px; margin-top: 4px;">
-        <button id="nextPracticeQuestionBtn" class="action-btn secondary-btn" style="flex: 1;" disabled>下一题</button>
-        <button id="exitPracticeBtn" class="action-btn" style="flex: 1; background: linear-gradient(45deg, #737d85, #535b62); box-shadow:none;">退出测试</button>
+
+    <div class="control-section" id="dynamicBgSettingsSection">
+        <h3>动态背景设置</h3>
+        <div class="setting-item"><label for="dynamicBgHueStart">渐变起始色相</label><input type="range" id="dynamicBgHueStart" min="0" max="360" value="230" step="1"></div>
+        <div class="setting-item"><label for="dynamicBgHueEnd">渐变结束色相</label><input type="range" id="dynamicBgHueEnd" min="0" max="360" value="270" step="1"></div>
+        <div class="setting-item"><label for="dynamicBgLightness">基础亮度 (%)</label><input type="range" id="dynamicBgLightness" min="0" max="100" value="10" step="1"></div>
+        <div class="setting-item"><label for="dynamicBgParticleCount">漂浮粒子数量</label><input type="number" id="dynamicBgParticleCount" value="300" min="0" max="4000" step="50"></div>
+        <div class="setting-item"><label for="dynamicBgParticleSpeed">粒子速度</label><input type="range" id="dynamicBgParticleSpeed" min="0" max="2.0" value="0.05" step="0.01"></div>
+    </div>
+
+    <div class="control-section" id="starfieldSettingsSection">
+        <h3>星空背景设置</h3>
+        <div class="setting-item checkbox-item"><input type="checkbox" id="starfieldEnabled" checked><label for="starfieldEnabled">启用星空</label></div>
+        <div class="setting-item"><label for="starCount">星星数量</label><input type="number" id="starCount" value="25000" min="0" max="400000" step="5000"></div>
+        <div class="setting-item"><label for="starColor">星星颜色</label><input type="color" id="starColor" value="#ffffff"></div>
+        <div class="setting-item"><label for="starSize">星星基础大小</label><input type="range" id="starSize" min="0.1" max="8.0" value="0.8" step="0.1"></div>
+    </div>
+
+    <div class="control-section">
+        <h3>发音设置</h3>
+        <div class="setting-item"><label for="voiceSelect">选择发音人</label><select id="voiceSelect" style="width: 100%;"></select></div>
+        <div class="setting-item"><label for="rateInput">语速 (0.1-10)</label><input type="number" id="rateInput" value="1.0" min="0.1" max="10" step="0.1"></div>
+        <div class="setting-item"><label for="timesInput">朗读次数</label><input type="number" id="timesInput" value="1" min="1" max="10" step="1"></div>
+        <div class="setting-item"><label for="volumeInput">音量 (0-1)</label><input type="number" id="volumeInput" value="1.0" min="0" max="1" step="0.1"></div>
+    </div>
+
+    <div class="control-section">
+        <h3>学习统计</h3>
+        <div class="stats-grid">
+            <div class="stat-item"><div class="stat-value" id="totalWords">0</div><div class="stat-label">库中总词数</div></div>
+            <div class="stat-item"><div class="stat-value" id="filteredWords">0</div><div class="stat-label">当前列表词数</div></div>
+            <div class="stat-item"><div class="stat-value" id="currentBatchWords">0</div><div class="stat-label">当前批次</div></div>
+            <div class="stat-item"><div class="stat-value" id="viewedCount">0</div><div class="stat-label">已查看(本列表)</div></div>
+        </div>
+    </div>
+
+    <div class="control-section">
+        <h3>帮助与信息</h3>
+        <button id="helpBtn" class="action-btn secondary-btn">使用帮助</button>
     </div>
 </div>
-
-<!-- 批量屏蔽 HUD 栏 -->
+</div>
+<div id="immersiveDetailPanel" class="immersive-detail-panel">
+<div class="immersive-detail-header">
+<h2>单词详情</h2>
+<div class="header-search-container">
+<input type="search" id="detailSearchInput" placeholder="全词库搜索...">
+<button id="detailSearchBtn">🔍</button>
+</div>
+<div class="header-controls">
+<div style="display: flex; gap: 3px; align-items: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 5px; padding: 2px;">
+<button id="detailFontDownBtn" title="缩小字体" style="background: transparent; border: none; color: #a2d8ff; padding: 3px 6px; font-weight: bold; cursor: pointer;">A-</button>
+<button id="detailFontUpBtn" title="放大字体" style="background: transparent; border: none; color: #a2d8ff; padding: 3px 6px; font-weight: bold; cursor: pointer;">A+</button>
+</div>
+<button id="togglePanelSideBtn" title="切换左右位置">↔️</button>
+<button id="closeDetailBtn" title="关闭 (Esc)">×</button>
+</div>
+</div>
+<div class="immersive-detail-content">
+<div class="main-word-section">
+<div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+<button id="prevDetailBtn" title="上一个" class="detail-nav-btn">‹</button>
+<div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+<h2 id="overlayWordName">...</h2>
+<button id="speakDetailWordBtn" title="朗读单词" style="background:none; border:none; font-size: 1.6rem; cursor:pointer; color: #a2d8ff;">🔊</button>
+</div>
+<button id="nextDetailBtn" title="下一个" class="detail-nav-btn">›</button>
+</div>
+<div id="overlayPhoneticDisplay" class="phonetic"></div>
+<div id="overlayMeaningDisplay" class="meaning"></div>
+</div>
+<div class="data-grid-section" id="overlayDataGrid"></div>
+<button id="shieldSingleWordBtn" class="action-btn" style="background: linear-gradient(45deg, #ef4444, #dc2626); margin-top: 16px; box-shadow: none;">🛡️ 屏蔽该单词</button>
+</div>
+</div>
+<div id="filterModalBackdrop" class="modal-backdrop">
+<div class="filter-modal modal-content-box">
+<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
+<h2 style="margin: 0; font-size: 1.3rem;">模式与筛选</h2>
+<button id="closeFilterModalTopBtn" style="background: transparent; border: none; color: #a2d8ff; font-size: 2rem; cursor: pointer; line-height: 1; padding: 0 6px;">&times;</button>
+</div>
+<p style="text-align:center; color: #ccc; margin-bottom: 12px; font-size: 0.85rem;">请选择学习模式并筛选单词范围</p>
+<div class="filter-group" style="margin-bottom:12px; display: flex; align-items: center; justify-content: center; gap: 16px;">
+<label>学习模式:</label>
+<div class="mode-selection" style="display: flex; gap: 12px;">
+<label><input type="radio" name="studyMode" value="review" checked> 复习模式</label>
+<label><input type="radio" name="studyMode" value="practice"> 练习模式</label>
+</div>
+</div>
+<div id="filterOptionsContainer" style="max-height: 40vh; overflow-y: auto; padding-right: 8px; margin-top:8px;"></div>
+<div class="modal-actions">
+<button id="applyFilterBtn" class="modal-btn">应用筛选</button>
+<button id="closeFilterModalBtn" class="modal-btn secondary-btn">取消</button>
+</div>
+</div>
+</div>
+<div id="pasteDataModalBackdrop" class="modal-backdrop">
+<div class="filter-modal modal-content-box">
+<h2>粘贴文本导入数据</h2>
+<p style="text-align:center; color: #ccc; margin-bottom: 10px;">直接粘贴 JSON 格式的单词数据数组</p>
+<textarea id="pasteDataTextArea" style="width: 100%; height: 160px; background: rgba(10,20,50,0.8); border: 1px solid var(--border-color); color: #FFF; padding: 8px; border-radius: 8px; margin-bottom: 12px;" placeholder='[{"words":"example","chinese":"例子","phonetic":"/ɪgˈzɑːmpl/"}]'></textarea>
+<div style="display: flex; gap: 16px; justify-content: center; margin-bottom: 12px;">
+<label><input type="radio" name="pasteImportMode" value="replace" checked> 覆盖导入</label>
+<label><input type="radio" name="pasteImportMode" value="append"> 追加导入</label>
+</div>
+<div class="modal-actions">
+<button id="submitPasteDataBtn" class="modal-btn">解析并导入</button>
+<button id="closePasteModalBtn" class="modal-btn secondary-btn">取消</button>
+</div>
+</div>
+</div>
 <div id="batchShieldHUD" class="hidden" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(10, 20, 48, 0.95); border: 2px solid #ef4444; border-radius: 12px; padding: 12px 20px; z-index: 1000; display: flex; align-items: center; gap: 15px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); backdrop-filter: blur(10px);">
-    <span style="color: #fca5a5; font-weight: bold; font-size: 0.92rem;">🛡️ 批量屏蔽模式已开启（点击球面卡片多选）</span>
-    <span id="shieldCountLabel" style="color: #ffffff; font-size: 0.88rem;">已选择: 0 个单词</span>
-    <button id="confirmBatchShieldBtn" class="modal-btn" style="background: linear-gradient(45deg, #ef4444, #b91c1c); box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);">确认屏蔽</button>
-    <button id="cancelBatchShieldBtn" class="modal-btn secondary-btn">取消</button>
+<span style="color: #fca5a5; font-weight: bold; font-size: 0.92rem;">🛡️ 批量屏蔽模式已开启（点击球面卡片多选）</span>
+<span id="shieldCountLabel" style="color: #ffffff; font-size: 0.88rem;">已选择: 0 个单词</span>
+<button id="confirmBatchShieldBtn" class="modal-btn" style="background: linear-gradient(45deg, #ef4444, #b91c1c); box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);">确认屏蔽</button>
+<button id="cancelBatchShieldBtn" class="modal-btn secondary-btn">取消</button>
 </div>
-
-<!-- 帮助文档模态窗 -->
-<div id="helpModalBackdrop" class="modal-backdrop">
-    <div class="help-modal modal-content-box">
-        <h2>使用帮助 - 3D单词宇宙 (V8 极致性能版)</h2>
-        <div class="help-content"></div>
-        <div class="modal-actions"><button id="closeHelpModalBtn" class="modal-btn">关闭</button></div>
-    </div>
-</div>
-
-<!-- 搜索结果模态窗 -->
-<div id="searchResultsModalBackdrop" class="modal-backdrop">
-    <div class="modal-content-box search-results-modal">
-        <h2>搜索结果</h2>
-        <div id="searchResultsContent" class="search-results-content"></div>
-        <div class="modal-actions"><button id="closeSearchResultsModalBtn" class="modal-btn">关闭</button></div>
-    </div>
-</div>
-
-<!-- 学习结算模态窗口 -->
 <div id="studySettleModalBackdrop" class="modal-backdrop">
-    <div class="study-modal modal-content-box">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:8px; margin-bottom:14px;">
+<div class="study-modal modal-content-box">
+<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:8px; margin-bottom:14px;">
 <h2 style="margin:0; font-size: 1.35rem;">🎮 今日学习结算</h2>
 <button id="closeStudySettleBtn" style="background:transparent; border:none; color:#a2d8ff; font-size:2rem; cursor:pointer; line-height:1;">×</button>
 </div>
 <div class="study-modal-body" id="studySettleBody"></div>
 <div class="study-toolbar">
-<button id="exportTodayBtn" class="modal-btn secondary-btn">导出今日</button>
-<button id="exportAllBtn" class="modal-btn secondary-btn">导出全部</button>
-<button id="importStudyBtn" class="modal-btn secondary-btn">导入</button>
-<button id="openCompareBtn" class="modal-btn">每日对比分析</button>
-</div>
-</div>
-</div>
-<div id="studyCompareModalBackdrop" class="modal-backdrop">
-<div class="study-modal modal-content-box">
-<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:8px; margin-bottom:14px;">
-<h2 style="margin:0; font-size: 1.35rem;">📊 每日对比分析</h2>
-<button id="closeStudyCompareBtn" style="background:transparent; border:none; color:#a2d8ff; font-size:2rem; cursor:pointer; line-height:1;">&times;</button>
-</div>
-<div class="study-range-tabs">
-<button data-range="week" class="active">周</button>
-<button data-range="month">月</button>
-<button data-range="year">年</button>
-</div>
-<div class="study-modal-body" id="studyCompareBody"></div>
-<div class="study-toolbar">
 <button id="closeStudyCompareBtn2" class="modal-btn">关闭</button>
 </div>
 </div>
 </div>
-<input type="file" id="studyImportFile" accept=".json,application/json" style="display:none;">
+<div id="helpModalBackdrop" class="modal-backdrop">
+<div class="help-modal modal-content-box">
+<h2>使用帮助 - 3D单词宇宙 (V8 极致性能版)</h2>
+<div class="help-content"></div>
+<div class="modal-actions"><button id="closeHelpModalBtn" class="modal-btn">关闭</button></div>
+</div>
+</div>
+<div id="searchResultsModalBackdrop" class="modal-backdrop">
+<div class="modal-content-box search-results-modal">
+<h2>搜索结果</h2>
+<div id="searchResultsContent" class="search-results-content"></div>
+<div class="modal-actions"><button id="closeSearchResultsModalBtn" class="modal-btn">关闭</button></div>
+</div>
+</div>
 <div id="dailyGoalToast">🎉 恭喜！您已完成今日复习目标！</div>
 <div id="numberPromptModalBackdrop" class="modal-backdrop">
 <div class="prompt-modal-box">
@@ -591,7 +456,6 @@
 <button id="grappleContinueBtn" class="hidden">
 <span class="gcb-icon">⚡</span>
 <span class="gcb-text">捕获完成 · 继续旋转</span>
-<div class="gcb-shine"></div>
 </button>
 <div class="view-controls" id="viewControlsContainer">
 <button class="control-btn master-toggle-btn" id="masterMenuToggleBtn" title="展开/折叠控制菜单">🔮</button>
@@ -607,7 +471,7 @@
 <button class="control-btn" id="batchShieldToggleBtn" title="批量屏蔽模式 (🛡️)">🛡️</button>
 <button class="control-btn" id="wordBanksBtn" title="词库管理">📚</button>
 <button class="control-btn" id="rotationsBtn" title="自转速度预设">🌪️</button>
-<button class="control-btn" id="viewsBtn" title="视角预设">📸</button>
+<button class="control-btn" id="viewsBtn" title="视角预设与导入导出">📸</button>
 <button class="control-btn" id="hoverPosBtn" title="悬浮卡片位置">📍</button>
 <button class="control-btn" id="layoutTopRowBtn" title="置顶横向排列 (10%顶距)">⬆️</button>
 <button class="control-btn" id="layoutCenterRowBtn" title="居中横向排列">↔️</button>
@@ -621,22 +485,15 @@
 </div>
 </div>
 <div id="managementPanel" class="hidden"></div>
+<input type="file" id="viewsImportFile" accept=".json,application/json" style="display:none;">
 <script src="./js/config.js"></script>
 <script src="./js/storage.js"></script>
 <script src="./js/audio-tts.js"></script>
+<script src="./js/card-styles.js"></script>
 <script src="./js/card-factory.js"></script>
 <script src="./js/sphere-engine.js"></script>
 <script src="./js/fx-particles.js"></script>
 <script src="./js/scene-manager.js"></script>
 <script src="./js/ui-controller.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-window.addEventListener('load', () => {
-navigator.serviceWorker.register('./sw.js')
-.then(reg => console.log('PWA ServiceWorker 注册就绪:', reg.scope))
-.catch(err => console.warn('PWA ServiceWorker 注册异常:', err));
-});
-}
-</script>
 </body>
 </html>
