@@ -127,6 +127,16 @@ body {
 .setting-item.checkbox-item { justify-content: flex-start; gap: 10px; }
 .setting-item.checkbox-item input[type="checkbox"] { transform: scale(1.3); }
 
+.status-badge {
+    padding: 3px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: bold; margin-left: 8px;
+}
+.status-badge.on {
+    background: rgba(104, 255, 192, 0.2); color: #68FFC0; border: 1px solid rgba(104, 255, 192, 0.5);
+}
+.status-badge.off {
+    background: rgba(140, 160, 190, 0.18); color: #9ab0c8; border: 1px solid rgba(140, 160, 190, 0.35);
+}
+
 .appearance-group { padding-top: 15px; border-top: 1px solid rgba(130, 200, 255, 0.18); margin-top: 15px; }
 .appearance-group:first-child { padding-top: 0; border-top: none; margin-top: 0; }
 .appearance-group h4 { color: #a2d8ff; margin-bottom: 10px; font-size: 1.1rem; text-align: center; }
@@ -207,6 +217,33 @@ body {
 .modal-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,242,254, 0.7); }
 .modal-btn.secondary-btn { background: linear-gradient(45deg, #68737e, #4f565d); }
 
+/* 独立触控友好的数值调节弹窗 */
+.prompt-modal-box {
+    background: linear-gradient(145deg, rgba(16, 32, 70, 0.98), rgba(8, 18, 44, 0.98));
+    border: 1px solid var(--accent-color-2);
+    box-shadow: 0 10px 45px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 240, 255, 0.25);
+    border-radius: 18px; padding: 24px; width: min(400px, 90vw); text-align: center;
+}
+.prompt-modal-box h3 {
+    color: #ffd875; margin-bottom: 18px; font-size: 1.25rem; text-shadow: 0 0 10px rgba(255, 216, 117, 0.5);
+}
+.prompt-stepper-row {
+    display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 22px;
+}
+.prompt-step-btn {
+    width: 44px; height: 44px; border-radius: 10px; font-size: 1.4rem; font-weight: bold;
+    background: rgba(30, 52, 98, 0.8); border: 1px solid rgba(130, 200, 255, 0.5);
+    color: white; cursor: pointer; transition: all 0.2s;
+}
+.prompt-step-btn:hover {
+    background: var(--accent-color-1); border-color: transparent; transform: scale(1.08);
+}
+.prompt-num-input {
+    width: 100px; height: 44px; font-size: 1.3rem; font-weight: bold; text-align: center;
+    background: rgba(10, 20, 50, 0.9); border: 1px solid var(--border-color);
+    border-radius: 10px; color: #68FFC0;
+}
+
 .controls-overlay-close-btn {
     position: absolute; top: 15px; right: 20px;
     background: transparent; border: none; color: #a2d8ff;
@@ -241,6 +278,23 @@ body {
     border-color: var(--accent-color-2) !important;
     box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
 }
+
+/* 侧边按钮：局部巡航开关的高亮与关闭样式（一目了然） */
+.control-btn.active-toggle {
+    opacity: 0.95 !important;
+    background: linear-gradient(135deg, rgba(255, 216, 117, 0.45), rgba(48, 34, 10, 0.9)) !important;
+    border: 2px solid #ffd875 !important;
+    box-shadow: 0 0 18px rgba(255, 216, 117, 0.75), inset 0 0 10px rgba(255, 216, 117, 0.3) !important;
+    transform: scale(1.06);
+}
+.control-btn.inactive-toggle {
+    opacity: 0.32 !important;
+    filter: grayscale(1);
+    border: 1px dashed rgba(160, 180, 205, 0.3) !important;
+    background: rgba(10, 20, 48, 0.4) !important;
+    box-shadow: none !important;
+}
+
 .control-btn:hover, .control-btn.focused, .control-btn:active {
     background: color-mix(in srgb, var(--panel-bg) 85%, transparent) !important;
     border-color: var(--accent-color-2) !important; opacity: 0.98; transform: scale(1.1);
@@ -296,42 +350,55 @@ body {
 #studyGoalValue { cursor: pointer; border-bottom: 1px dashed rgba(255, 215, 120, 0.6); padding: 0 2px; transition: color 0.2s; }
 #studyGoalValue:hover { color: #ffd77a; text-shadow: 0 0 12px rgba(255, 200, 80, 0.9); }
 
-/* 局部焦点巡航 HUD 胶囊 (复习数字正下方) */
+/* 局部焦点巡航 HUD 胶囊 */
 #focusCruiseHud {
     position: fixed; top: 68px; right: 20px;
     z-index: 46;
     display: flex; align-items: center; gap: 6px;
     font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-    font-size: 0.95rem; font-weight: 700;
-    color: #ffd875;
-    text-shadow: 0 0 8px rgba(255, 216, 117, 0.6);
-    opacity: 0.88;
-    cursor: pointer;
+    font-size: 0.92rem; font-weight: 700;
     user-select: none;
-    padding: 4px 14px;
-    border-radius: 10px;
-    background: rgba(10, 20, 48, 0.38);
-    backdrop-filter: blur(4px);
-    border: 1px solid rgba(255, 216, 117, 0.35);
+    padding: 4px 10px;
+    border-radius: 12px;
+    backdrop-filter: blur(5px);
     transition: all 0.25s;
 }
-#focusCruiseHud:hover {
-    opacity: 1; border-color: #ffd875; box-shadow: 0 0 14px rgba(255, 216, 117, 0.45);
+#focusCruiseHud.enabled {
+    color: #ffd875;
+    border: 1px solid rgba(255, 216, 117, 0.55);
+    background: rgba(14, 28, 60, 0.82);
+    box-shadow: 0 0 15px rgba(255, 216, 117, 0.35);
+    opacity: 0.95;
 }
 #focusCruiseHud.disabled {
-    opacity: 0.42;
-    color: #a4b5c7;
-    text-shadow: none;
-    border-color: rgba(164, 181, 199, 0.25);
-    background: rgba(10, 20, 48, 0.22);
+    color: #8fa0b5;
+    border: 1px dashed rgba(140, 160, 190, 0.3);
+    background: rgba(10, 20, 48, 0.35);
+    box-shadow: none;
+    opacity: 0.45;
+    filter: grayscale(0.8);
 }
-#focusCruiseIntervalVal {
+.hud-status-tag {
+    cursor: pointer; padding: 2px 6px; border-radius: 6px; transition: background 0.2s;
+}
+.hud-status-tag:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+.focus-pill {
     cursor: pointer;
-    border-bottom: 1px dashed rgba(255, 216, 117, 0.7);
-    padding: 0 2px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 8px;
+    padding: 2px 7px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.88rem;
+    transition: all 0.2s;
 }
-#focusCruiseIntervalVal:hover {
+.focus-pill:hover {
+    background: rgba(255, 216, 117, 0.25);
+    border-color: #ffd875;
     color: #ffffff;
+    transform: translateY(-1px);
 }
 
 .study-modal { max-width: 880px; }
