@@ -1,12 +1,10 @@
 /**
  * 3D单词宇宙 - 卡片工坊 (Card Factory)
- * 彻底修复 UVGenerator 映射（文字 100% 清晰现身）与图 3 经典太空幽蓝发光质感
+ * 完美还原附件参考图样式：宽安全边距、右上角4个功能按钮 [🔊] [A-] [A+] [屏蔽]、发光四角括号
  */
 (function() {
     let _sharedTestCanvas = null;
     let _sharedTestCtx = null;
-    const _cardGeoCache = new Map();
-    const _overlayCanvasCache = new Map();
 
     function getSharedTestContext() {
         if (!_sharedTestCanvas) {
@@ -44,20 +42,61 @@
     }
 
     const AppCardFactory = {
+        /**
+         * 0ms 就地极速更新网格材质属性 (不触发 Canvas 重建)
+         */
+        updateCardsMaterialsFast(options = {}) {
+            if (!appState.wordObjects || appState.wordObjects.length === 0) return;
+            const targetOpacity = options.opacity !== undefined ? options.opacity : parseFloat(document.getElementById('cardOpacityRange')?.value || '0.96');
+            const targetLightColor = options.lightColor || document.getElementById('cardLightColor')?.value || '#00f0ff';
+            const rawLightBrightness = options.lightBrightness !== undefined ? options.lightBrightness : parseFloat(document.getElementById('cardLightBrightnessRange')?.value || '0.85');
+            const sideEmissiveIntensity = Math.max(0, rawLightBrightness * 0.35);
+
+            const sideColor = new THREE.Color(targetLightColor);
+
+            for (let i = 0; i < appState.wordObjects.length; i++) {
+                const card = appState.wordObjects[i];
+                if (Array.isArray(card.material)) {
+                    if (card.material[0]) {
+                        card.material[0].opacity = targetOpacity;
+                        card.material[0].visible = (targetOpacity > 0.001);
+                    }
+                    if (card.material[1]) {
+                        card.material[1].opacity = targetOpacity * 0.45;
+                        card.material[1].emissive.copy(sideColor);
+                        card.material[1].emissiveIntensity = sideEmissiveIntensity;
+                        card.material[1].visible = (targetOpacity > 0.001);
+                    }
+                } else if (card.material) {
+                    card.material.opacity = targetOpacity;
+                    card.material.visible = (targetOpacity > 0.001);
+                }
+            }
+            appState.needsRender = true;
+        },
+
         createCardTexture(word) {
             const baseFontSize = APP_CONFIG.DEFAULT_SPHERE_CARD_FONT_SIZE;
             const dpr = window.devicePixelRatio || 1;
-            let textureResolutionScale = IS_MOBILE_DEVICE ? Math.min(dpr, 2.0) : 1.0;
+            let textureResolutionScale = IS_MOBILE_DEVICE ? Math.min(dpr, 1.8) : 1.25;
 
             let fontFactor = appState.currentSphereCardFontSizeFactor || 1.0;
             const rawFontSize = Math.round(baseFontSize * fontFactor * textureResolutionScale);
             const fontFamily = document.getElementById('sphereCardFontFamily')?.value || "'Microsoft YaHei', sans-serif";
 
+            const currentPresetId = document.getElementById('cardStylePresetSelect')?.value || 'cyber_blue';
+            const preset = window.CardStyleManager ? window.CardStyleManager.getPreset(currentPresetId) : {};
+
+            const customLightColor = document.getElementById('cardLightColor')?.value || preset.defaultLightColor || '#00f0ff';
+            const customLightPos = document.getElementById('cardLightPositionSelect')?.value || preset.defaultLightPosition || 'center';
+            const customLightBrightness = parseFloat(document.getElementById('cardLightBrightnessRange')?.value ?? (preset.defaultLightBrightness ?? 0.85));
+            const customLightSpread = parseFloat(document.getElementById('cardLightSpreadRange')?.value ?? (preset.defaultLightSpread ?? 0.85));
+            const customDepth = parseFloat(document.getElementById('cardChamberDepthRange')?.value ?? 0.65);
+            const customTextStyle = document.getElementById('cardTextStyleSelect')?.value || preset.textStyle || 'relief_metal';
+            const customFontColor = document.getElementById('sphereCardFontColor')?.value || preset.textColor || '#ffffff';
+
             const stormStyleCb = document.getElementById('stormWordCardStyleEnabled');
             const isStormStyled = word.isStormWord && stormStyleCb && stormStyleCb.checked;
-            const fontColor = isStormStyled ?
-                (document.getElementById('stormWordCardFontColor')?.value || '#000000') :
-                (document.getElementById('sphereCardFontColor')?.value || '#ffffff');
 
             const displayWordRaw = appState.showEnglish ? (word.words || 'N/A') : ((word.chinese || '').split(/,|，/)[0] || 'N/A');
 
@@ -92,16 +131,16 @@
             if (mainContentLines.length === 0 && displayWordRaw.length > 0) mainContentLines.push(displayWordRaw);
 
             const mainTextWidth = Math.max(...mainContentLines.map(line => testContext.measureText(line).width), 0);
-            let padding = rawFontSize * 0.95;
-            let lineHeight = rawFontSize * 1.3;
-            let canvasWidth = Math.max(200 * textureResolutionScale, mainTextWidth + padding * 3.2);
+            let padding = rawFontSize * 1.35; // 增加边距，防止贴边
+            let lineHeight = rawFontSize * 1.35;
+            let canvasWidth = Math.max(240 * textureResolutionScale, mainTextWidth + padding * 3.6);
             const mainTextHeight = mainContentLines.length * lineHeight;
-            let canvasHeight = Math.max(92 * textureResolutionScale, mainTextHeight + padding * 2);
+            let canvasHeight = Math.max(115 * textureResolutionScale, mainTextHeight + padding * 2.4);
 
             const MAX_TEXTURE_SIZE = IS_MOBILE_DEVICE ? 512 : 1024;
             const downScale = Math.min(1, MAX_TEXTURE_SIZE / Math.max(canvasWidth, canvasHeight));
-            canvasWidth = Math.round(canvasWidth * downScale) || 200;
-            canvasHeight = Math.round(canvasHeight * downScale) || 92;
+            canvasWidth = Math.round(canvasWidth * downScale) || 240;
+            canvasHeight = Math.round(canvasHeight * downScale) || 115;
 
             const scaledFontSize = Math.round(rawFontSize * downScale);
             const scaledLineHeight = lineHeight * downScale;
@@ -112,107 +151,67 @@
             const context = canvas.getContext('2d');
             context.font = `bold ${scaledFontSize}px ${fontFamily}`;
 
-            function drawRoundedRect(ctx, x, y, width, height, radius) {
-                ctx.beginPath();
-                ctx.moveTo(x + radius, y);
-                ctx.lineTo(x + width - radius, y);
-                ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-                ctx.lineTo(x + width, y + height - radius);
-                ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-                ctx.lineTo(x + radius, y + height);
-                ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-                ctx.lineTo(x, y + radius);
-                ctx.quadraticCurveTo(x, y, x + radius, y);
-                ctx.closePath();
-            }
-
-            context.clearRect(0, 0, canvasWidth, canvasHeight);
-
-            // 1. 图 3 经典太空幽蓝渐变背景底色
-            const cardGradient = context.createLinearGradient(0, 0, 0, canvasHeight);
-            if (isStormStyled) {
-                cardGradient.addColorStop(0, "rgba(255, 140, 0, 0.90)");
-                cardGradient.addColorStop(1, "rgba(200, 30, 80, 0.95)");
+            if (window.CardStyleManager) {
+                const chamberCfg = {
+                    ...preset,
+                    depthFactor: customDepth,
+                    lightColor: isStormStyled ? '#ffea00' : customLightColor,
+                    lightPosition: customLightPos,
+                    lightBrightness: customLightBrightness,
+                    lightSpread: customLightSpread
+                };
+                window.CardStyleManager.drawPerspectiveChamber(context, canvasWidth, canvasHeight, chamberCfg);
             } else {
-                cardGradient.addColorStop(0, "rgba(6, 18, 42, 0.86)");
-                cardGradient.addColorStop(1, "rgba(14, 34, 68, 0.92)");
+                context.fillStyle = '#06122a';
+                context.fillRect(0, 0, canvasWidth, canvasHeight);
             }
-            context.fillStyle = cardGradient;
-            context.fillRect(0, 0, canvasWidth, canvasHeight);
-
-            // 2. 玻璃拟态内层微光
-            context.fillStyle = "rgba(255, 255, 255, 0.04)";
-            drawRoundedRect(context, 4, 4, canvasWidth - 8, canvasHeight - 8, 12 * textureResolutionScale * downScale);
-            context.fill();
-
-            // 3. 核心字体绘制：高对比白色 + 细黑描边与深投影
-            context.fillStyle = fontColor;
-            context.textAlign = 'center';
-            context.textBaseline = 'middle';
-            context.shadowColor = "rgba(2, 6, 16, 0.95)";
-            context.shadowBlur = 6 * textureResolutionScale * downScale;
-
-            context.strokeStyle = "rgba(10, 22, 45, 0.98)";
-            context.lineWidth = scaledFontSize * 0.16;
-            context.lineJoin = 'round';
 
             const textY = canvasHeight / 2 - ((mainContentLines.length - 1) * scaledLineHeight / 2);
             mainContentLines.forEach((line, index) => {
-                context.strokeText(line, canvasWidth / 2, textY + (index * scaledLineHeight));
-                context.fillText(line, canvasWidth / 2, textY + (index * scaledLineHeight));
+                const curY = textY + (index * scaledLineHeight);
+                if (window.CardStyleManager) {
+                    window.CardStyleManager.draw3DText(context, line, canvasWidth / 2, curY, {
+                        fontSize: scaledFontSize,
+                        textColor: isStormStyled ? '#000000' : customFontColor,
+                        textStyle: isStormStyled ? 'relief_metal' : customTextStyle,
+                        textDepthColor: isStormStyled ? '#3d2500' : (preset.textDepthColor || '#070a12'),
+                        textHighlightColor: isStormStyled ? '#ffffff' : (preset.textHighlightColor || '#b5f5ff'),
+                        lightPosition: customLightPos,
+                        lightColor: customLightColor,
+                        lightBrightness: customLightBrightness
+                    });
+                } else {
+                    context.fillStyle = customFontColor;
+                    context.textAlign = 'center';
+                    context.textBaseline = 'middle';
+                    context.fillText(line, canvasWidth / 2, curY);
+                }
             });
-
-            // 4. 球心背光光晕
-            const backlightGrad = context.createRadialGradient(canvasWidth/2, canvasHeight/2, 5, canvasWidth/2, canvasHeight/2, canvasWidth * 0.4);
-            backlightGrad.addColorStop(0, "rgba(0, 240, 255, 0.12)");
-            backlightGrad.addColorStop(1, "rgba(0, 0, 0, 0.0)");
-            context.fillStyle = backlightGrad;
-            drawRoundedRect(context, 4, 4, canvasWidth - 8, canvasHeight - 8, 12 * textureResolutionScale * downScale);
-            context.fill();
-
-            // 5. 荧光青蓝外发光辉光边框
-            context.save();
-            context.shadowColor = isStormStyled ? "rgba(255, 140, 0, 0.45)" : "rgba(0, 220, 255, 0.38)";
-            context.shadowBlur = 10 * textureResolutionScale * downScale;
-
-            const borderGradient = context.createLinearGradient(0, 0, canvasWidth, 0);
-            if (isStormStyled) {
-                borderGradient.addColorStop(0, "rgba(255, 140, 0, 0.35)");
-                borderGradient.addColorStop(1, "rgba(255, 255, 255, 0.4)");
-            } else {
-                borderGradient.addColorStop(0, "rgba(0, 220, 255, 0.35)");
-                borderGradient.addColorStop(1, "rgba(0, 110, 255, 0.35)");
-            }
-            context.strokeStyle = borderGradient;
-            context.lineWidth = Math.max(1.6, 1.6 * textureResolutionScale * downScale);
-
-            drawRoundedRect(context, 4, 4, canvasWidth - 8, canvasHeight - 8, 12 * textureResolutionScale * downScale);
-            context.stroke();
-            context.restore();
 
             return {
                 texture: finalizeCanvasTexture(canvas, 8),
                 pxWidth: canvasWidth,
                 pxHeight: canvasHeight,
-                resolutionScale: textureResolutionScale
+                resolutionScale: textureResolutionScale,
+                lightBrightness: customLightBrightness,
+                lightColor: customLightColor
             };
         },
 
-        // 💡 核心修复：补全 UVGenerator，彻底解决文字丢失与拉伸小点的问题
         createIceCard(word) {
             const texData = this.createCardTexture(word);
-            const pxH = texData.pxHeight || 92;
-            const pxW = texData.pxWidth || 200;
+            const pxH = texData.pxHeight || 115;
+            const pxW = texData.pxWidth || 240;
             const aspect = pxH > 0 ? pxW / pxH : 2.0;
 
-            const sphereRadius = appState.sphereRadius || 100;
-            const width = sphereRadius * 0.12;
+            const sphereRadius = appState.sphereRadius || 85;
+            const width = sphereRadius * 0.125;
             const height = width / aspect;
-            const depth = width * 0.04;
+            const depth = width * 0.045;
 
             const shape = new THREE.Shape();
             const x = -width / 2, y = -height / 2;
-            const radius = width * 0.08;
+            const radius = width * 0.085;
             const w = width, h = height;
 
             shape.moveTo(x + radius, y);
@@ -237,7 +236,6 @@
                 bevelOffset: -bevelSize,
                 bevelSegments: 4,
                 curveSegments: 16,
-                // ⭐️ 核心关键：必须自定义 UVGenerator，将 (x, y) 顶点坐标精确归一化为 (0~1) 贴图坐标！
                 UVGenerator: {
                     generateTopUV: function (geometry, vertices, indexA, indexB, indexC) {
                         const ax = vertices[indexA * 3], ay = vertices[indexA * 3 + 1];
@@ -268,23 +266,30 @@
                 geometry = new THREE.BoxGeometry(width, height, depth);
             }
 
+            const cardOpacity = parseFloat(document.getElementById('cardOpacityRange')?.value || '0.96');
+
             const frontMat = new THREE.MeshStandardMaterial({
                 map: texData.texture,
                 roughness: 0.85,
-                metalness: 0.1,
+                metalness: 0.15,
                 transparent: true,
-                opacity: 0.95,
+                opacity: cardOpacity,
+                visible: (cardOpacity > 0.001),
                 side: THREE.FrontSide
             });
 
+            const sideEmissiveColor = new THREE.Color(texData.lightColor || 0x00bfff);
+            const sideEmissiveIntensity = Math.max(0, texData.lightBrightness * 0.35);
+
             const sideMat = new THREE.MeshStandardMaterial({
-                color: 0x07204c,
+                color: 0x0a162b,
                 roughness: 0.85,
-                metalness: 0.1,
+                metalness: 0.25,
                 transparent: true,
-                opacity: 0.35,
-                emissive: new THREE.Color(0x00bfff),
-                emissiveIntensity: 0.35,
+                opacity: cardOpacity * 0.45,
+                visible: (cardOpacity > 0.001),
+                emissive: sideEmissiveColor,
+                emissiveIntensity: sideEmissiveIntensity,
                 side: THREE.DoubleSide
             });
 
@@ -306,24 +311,26 @@
             return card;
         },
 
-        // 💡 图 3 悬浮详情卡大贴图绘制
+        /**
+         * ★ 100% 还原参考图片的查词卡片 (宽安全边距、右上角4个功能按钮 [🔊] [A-] [A+] [屏蔽]、四角发光括号)
+         */
         createOverlayTexture(word) {
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             const fontFamily = "'Segoe UI', 'Roboto', 'Microsoft YaHei', sans-serif";
 
-            const mainWordColor = document.getElementById('hoverCardTextMainWordColor')?.value || '#FFFFFF';
-            const valueColor = document.getElementById('hoverCardTextValueColor')?.value || '#8CFEFF';
-            const labelColor = document.getElementById('hoverCardTextLabelColor')?.value || '#8CFEFF';
-            const textGlowColor = document.getElementById('hoverCardTextGlowColor')?.value || '#00FFFF';
-            const textGlowIntensity = parseFloat(document.getElementById('hoverCardTextGlowIntensity')?.value || '0.5');
+            const hoverStyleMode = document.getElementById('hoverCardStyleModeSelect')?.value || 'classic_hud';
+            const rawBrightness = parseFloat(document.getElementById('hoverCardBrightness')?.value || '1.0');
+            const isPitchBlack = (rawBrightness <= 0.001);
 
             const dpr = window.devicePixelRatio || 1;
             const scale = IS_MOBILE_DEVICE ? Math.min(dpr, 1.8) : 1.0;
-            const canvasWidth = Math.round(1200 * scale);
-            const baseSize = 1200 * 0.038 * scale;
-            const paddingX = 60 * scale;
-            const paddingY = 45 * scale;
+            const canvasWidth = Math.round(1320 * scale);
+            const baseSize = 1320 * 0.036 * scale;
+
+            // 显著加大左右与上下内边距，文字远离边缘
+            const paddingX = Math.round(85 * scale);
+            const paddingY = Math.round(62 * scale);
             const wrapWidth = canvasWidth - paddingX * 2;
 
             const englishWord = (word.words || 'N/A').trim();
@@ -349,59 +356,110 @@
                 return lines;
             }
 
-            const fontMain = `bold ${Math.round(baseSize * 1.55)}px ${fontFamily}`;
-            const fontPhonetic = `${Math.round(baseSize * 0.95)}px ${fontFamily}`;
-            const fontMeaning = `bold ${Math.round(baseSize * 1.25)}px ${fontFamily}`;
-            const fontTitle = `bold ${Math.round(baseSize * 1.05)}px ${fontFamily}`;
-            const fontMethod = `${Math.round(baseSize * 1.10)}px ${fontFamily}`;
-            const fontButton = `bold ${Math.round(baseSize * 0.72)}px ${fontFamily}`;
+            const fontMain = `bold ${Math.round(baseSize * 1.65)}px ${fontFamily}`;
+            const fontPhonetic = `${Math.round(baseSize * 1.02)}px ${fontFamily}`;
+            const fontMeaning = `bold ${Math.round(baseSize * 1.30)}px ${fontFamily}`;
+            const fontTitle = `bold ${Math.round(baseSize * 1.15)}px ${fontFamily}`;
+            const fontMethod = `bold ${Math.round(baseSize * 1.20)}px ${fontFamily}`;
+            const fontButton = `bold ${Math.round(baseSize * 0.76)}px ${fontFamily}`;
 
             const meaningLines = wrapText(chineseMeaning, fontMeaning, wrapWidth);
             const methodLines = wrapText(memoryMethod, fontMethod, wrapWidth);
 
-            let currentY = paddingY + baseSize * 1.8 + meaningLines.length * (baseSize * 1.5) + baseSize * 2.3 + methodLines.length * (baseSize * 1.3) + paddingY;
-            const canvasHeight = Math.round(currentY);
+            let calculatedH = paddingY + baseSize * 2.0 + meaningLines.length * (baseSize * 1.6) + baseSize * 2.2 + methodLines.length * (baseSize * 1.45) + paddingY;
+            const canvasHeight = Math.round(calculatedH);
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
 
-            // 保持背景透明，依靠 3D backplate 提供暗色玻璃质感
-            context.clearRect(0, 0, canvasWidth, canvasHeight);
-            context.shadowColor = textGlowColor;
-            context.shadowBlur = textGlowIntensity * 20 * scale;
+            // 1. 绘制背景底板
+            if (isPitchBlack) {
+                context.fillStyle = '#000000';
+                context.fillRect(0, 0, canvasWidth, canvasHeight);
+            } else if (hoverStyleMode === 'sync_sphere' && window.CardStyleManager) {
+                // 联动球体样机风格
+                const currentPresetId = document.getElementById('cardStylePresetSelect')?.value || 'cyber_blue';
+                const preset = window.CardStyleManager.getPreset(currentPresetId);
+                const customLightColor = document.getElementById('cardLightColor')?.value || preset.defaultLightColor || '#00f0ff';
+                window.CardStyleManager.drawPerspectiveChamber(context, canvasWidth, canvasHeight, {
+                    ...preset,
+                    depthFactor: 0.75,
+                    lightColor: customLightColor,
+                    lightPosition: 'top',
+                    lightBrightness: rawBrightness * 0.75,
+                    lightSpread: 0.95
+                });
+            } else {
+                // 经典星云赛博卡片 (100% 对齐用户图片：深蓝太空渐变 + 柔和内光 + 晶莹发光边框)
+                context.clearRect(0, 0, canvasWidth, canvasHeight);
+
+                const bgGrad = context.createLinearGradient(0, 0, 0, canvasHeight);
+                bgGrad.addColorStop(0, "rgba(8, 22, 54, 0.94)");
+                bgGrad.addColorStop(0.5, "rgba(12, 28, 68, 0.96)");
+                bgGrad.addColorStop(1, "rgba(6, 16, 42, 0.98)");
+                context.fillStyle = bgGrad;
+
+                window.CardStyleManager.drawRoundedRectPath(context, 16 * scale, 16 * scale, canvasWidth - 32 * scale, canvasHeight - 32 * scale, 24 * scale);
+                context.fill();
+
+                // 柔和幽蓝环境泛光
+                const innerGlow = context.createRadialGradient(canvasWidth * 0.4, canvasHeight * 0.45, 10, canvasWidth * 0.4, canvasHeight * 0.45, canvasWidth * 0.55);
+                innerGlow.addColorStop(0, `rgba(0, 220, 255, ${(0.15 * Math.min(2.0, rawBrightness)).toFixed(3)})`);
+                innerGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+                context.fillStyle = innerGlow;
+                window.CardStyleManager.drawRoundedRectPath(context, 16 * scale, 16 * scale, canvasWidth - 32 * scale, canvasHeight - 32 * scale, 24 * scale);
+                context.fill();
+
+                // 晶莹发光边框
+                context.save();
+                context.strokeStyle = "rgba(0, 240, 255, 0.45)";
+                context.lineWidth = Math.max(1.5, 2.0 * scale);
+                context.shadowColor = "#00f0ff";
+                context.shadowBlur = 15 * scale;
+                window.CardStyleManager.drawRoundedRectPath(context, 16 * scale, 16 * scale, canvasWidth - 32 * scale, canvasHeight - 32 * scale, 24 * scale);
+                context.stroke();
+                context.restore();
+
+                // 四角发光角括号 ┌ ┐ └ ┘
+                window.CardStyleManager.drawCyberCornerBrackets(context, 8 * scale, 8 * scale, canvasWidth - 16 * scale, canvasHeight - 16 * scale, 55 * scale, '#00f0ff');
+            }
+
             context.textBaseline = 'top';
 
-            // 1. 主单词 (如 tall)
+            // 2. 左上角：主单词与音标
             context.textAlign = "left";
             context.font = fontMain;
-            context.fillStyle = mainWordColor;
+            context.fillStyle = "#ffffff";
+            context.save();
+            context.shadowColor = "rgba(0, 240, 255, 0.85)";
+            context.shadowBlur = 16 * scale;
             context.fillText(englishWord, paddingX, paddingY);
+            context.restore();
 
             testCtx.font = fontMain;
             const wordWidth = testCtx.measureText(englishWord).width;
 
-            // 2. 音标 (如 /tɔ:l/)
             context.font = fontPhonetic;
-            context.fillStyle = labelColor;
-            context.fillText(phoneticSymbol, paddingX + wordWidth + 25 * scale, paddingY + (baseSize * 0.35));
+            context.fillStyle = "#A0FFEE";
+            context.fillText(phoneticSymbol, paddingX + wordWidth + 24 * scale, paddingY + (baseSize * 0.45));
 
-            // 3. 右上角精致胶囊按钮 (A-, A+, 屏蔽)
-            const btnHeight = baseSize * 0.9;
-            const spacing = 10 * scale;
-            const btnY = paddingY + (baseSize * 1.55 - btnHeight) / 2;
-            const btnWidthA = baseSize * 1.1;
-            const btnWidthShield = baseSize * 1.6;
+            // 3. 右上角：4 个功能胶囊按钮 [🔊] [A-] [A+] [屏蔽]
+            const btnHeight = baseSize * 1.05;
+            const spacing = 12 * scale;
+            const btnY = paddingY;
+
+            const btnWidthShield = baseSize * 1.95;
+            const btnWidthA = baseSize * 1.25;
+            const btnWidthSpeak = baseSize * 1.35;
 
             const btnShieldX = canvasWidth - paddingX - btnWidthShield;
             const btnPlusX = btnShieldX - spacing - btnWidthA;
             const btnMinusX = btnPlusX - spacing - btnWidthA;
+            const btnSpeakX = btnMinusX - spacing - btnWidthSpeak;
 
             word.hover_click_zones = [];
 
-            function drawPillButton(label, x, y, w, h) {
+            function drawPillButton(label, x, y, w, h, isShield = false) {
                 context.save();
-                context.fillStyle = "rgba(0, 240, 255, 0.08)";
-                context.strokeStyle = "rgba(0, 240, 255, 0.38)";
-                context.lineWidth = Math.max(1.0, 1.2 * scale);
                 context.beginPath();
                 const r = h / 2;
                 context.moveTo(x + r, y);
@@ -414,79 +472,118 @@
                 context.lineTo(x, y + r);
                 context.quadraticCurveTo(x, y, x + r, y);
                 context.closePath();
+
+                // 渐变底色
+                const bg = context.createLinearGradient(x, y, x, y + h);
+                if (isShield) {
+                    bg.addColorStop(0, "rgba(239, 68, 68, 0.35)");
+                    bg.addColorStop(1, "rgba(185, 28, 28, 0.65)");
+                } else {
+                    bg.addColorStop(0, "rgba(0, 200, 255, 0.28)");
+                    bg.addColorStop(1, "rgba(8, 48, 100, 0.65)");
+                }
+                context.fillStyle = bg;
                 context.fill();
+
+                // 边缘描边
+                context.strokeStyle = isShield ? "rgba(255, 120, 120, 0.85)" : "rgba(0, 240, 255, 0.75)";
+                context.lineWidth = Math.max(1.2, 1.6 * scale);
+                context.shadowColor = isShield ? "#ef4444" : "#00f0ff";
+                context.shadowBlur = 8 * scale;
                 context.stroke();
 
+                // 按钮文字/图标
                 context.font = fontButton;
-                context.fillStyle = "rgba(162, 216, 255, 0.92)";
+                context.fillStyle = "#ffffff";
                 context.textAlign = "center";
                 context.textBaseline = "middle";
+                context.shadowColor = "rgba(0, 0, 0, 0.8)";
+                context.shadowBlur = 4;
                 context.fillText(label, x + w / 2, y + h / 2);
                 context.restore();
             }
 
-            drawPillButton("A-", btnMinusX, btnY, btnWidthA, btnHeight);
+            // 绘制 4 个独立按钮
+            drawPillButton("🔊", btnSpeakX, btnY, btnWidthSpeak, btnHeight, false);
+            word.hover_click_zones.push({
+                type: 'speak',
+                xMin: btnSpeakX - 4, xMax: btnSpeakX + btnWidthSpeak + 4,
+                yMin: btnY - 4, yMax: btnY + btnHeight + 4
+            });
+
+            drawPillButton("A-", btnMinusX, btnY, btnWidthA, btnHeight, false);
             word.hover_click_zones.push({
                 type: 'fontSizeDown',
-                xMin: btnMinusX, xMax: btnMinusX + btnWidthA,
-                yMin: btnY, yMax: btnY + btnHeight
+                xMin: btnMinusX - 4, xMax: btnMinusX + btnWidthA + 4,
+                yMin: btnY - 4, yMax: btnY + btnHeight + 4
             });
 
-            drawPillButton("A+", btnPlusX, btnY, btnWidthA, btnHeight);
+            drawPillButton("A+", btnPlusX, btnY, btnWidthA, btnHeight, false);
             word.hover_click_zones.push({
                 type: 'fontSizeUp',
-                xMin: btnPlusX, xMax: btnPlusX + btnWidthA,
-                yMin: btnY, yMax: btnY + btnHeight
+                xMin: btnPlusX - 4, xMax: btnPlusX + btnWidthA + 4,
+                yMin: btnY - 4, yMax: btnY + btnHeight + 4
             });
 
-            drawPillButton("屏蔽", btnShieldX, btnY, btnWidthShield, btnHeight);
+            drawPillButton("屏蔽", btnShieldX, btnY, btnWidthShield, btnHeight, true);
             word.hover_click_zones.push({
                 type: 'shield',
-                xMin: btnShieldX, xMax: btnShieldX + btnWidthShield,
-                yMin: btnY, yMax: btnY + btnHeight
+                xMin: btnShieldX - 4, xMax: btnShieldX + btnWidthShield + 4,
+                yMin: btnY - 4, yMax: btnY + btnHeight + 4
             });
 
+            // 主单词点击区域也能朗读
             word.hover_click_zones.push({
-                type: 'word',
-                xMin: paddingX, xMax: btnMinusX - spacing,
-                yMin: paddingY - 5 * scale, yMax: paddingY + baseSize * 1.6
+                type: 'speak',
+                xMin: paddingX - 10, xMax: btnSpeakX - spacing,
+                yMin: paddingY - 10, yMax: paddingY + baseSize * 1.8
             });
 
-            // 4. 释义 (如 高的)
-            let writeY = paddingY + baseSize * 1.8;
+            // 4. 第二行：中文释义 (如 蚂蚁)
+            let writeY = paddingY + baseSize * 2.0;
             context.font = fontMeaning;
-            context.fillStyle = valueColor;
+            context.fillStyle = "#ffffff";
+            context.save();
+            context.shadowColor = "rgba(0, 240, 255, 0.7)";
+            context.shadowBlur = 12 * scale;
             meaningLines.forEach(line => {
                 context.fillText(line, paddingX, writeY);
-                writeY += baseSize * 1.5;
+                writeY += baseSize * 1.55;
             });
+            context.restore();
 
-            // 5. 分割线
-            writeY += baseSize * 0.4;
-            context.strokeStyle = "rgba(104, 240, 255, 0.25)";
-            context.lineWidth = Math.max(1, Math.round(1 * scale));
-            context.beginPath();
-            context.moveTo(paddingX, writeY);
-            context.lineTo(canvasWidth - paddingX, writeY);
-            context.stroke();
-
-            // 6. 记忆法标题 (黄色醒目)
-            writeY += baseSize * 0.6;
+            // 5. 记忆方法标题：💡 记忆方法 / Memory Association (金黄发光，100% 还原图片)
+            writeY += baseSize * 0.45;
             context.font = fontTitle;
-            context.fillStyle = "#FFD700";
+            context.fillStyle = "#FFE600";
+            context.save();
+            context.shadowColor = "rgba(255, 230, 0, 0.85)";
+            context.shadowBlur = 14 * scale;
             context.fillText("💡 记忆方法 / Memory Association", paddingX, writeY);
+            context.restore();
 
-            // 7. 记忆法内容
-            writeY += baseSize * 1.3;
+            // 6. 记忆方法内容：(如 一牛头~，明亮青蓝，100% 还原图片)
+            writeY += baseSize * 1.45;
             context.font = fontMethod;
-            context.fillStyle = "rgba(255, 255, 192, 0.95)";
+            context.fillStyle = "#8EFAFF";
+            context.save();
+            context.shadowColor = "rgba(0, 240, 255, 0.55)";
+            context.shadowBlur = 8 * scale;
             methodLines.forEach(line => {
                 context.fillText(line, paddingX, writeY);
-                writeY += baseSize * 1.3;
+                writeY += baseSize * 1.45;
+            });
+            context.restore();
+
+            // 允许点击卡片主体防止误关
+            word.hover_click_zones.push({
+                type: 'card_body',
+                xMin: 0, xMax: canvasWidth,
+                yMin: 0, yMax: canvasHeight
             });
 
             return {
-                texture: finalizeCanvasTexture(canvas, 4),
+                texture: finalizeCanvasTexture(canvas, 8),
                 pxWidth: canvasWidth,
                 pxHeight: canvasHeight
             };

@@ -1,5 +1,5 @@
 /**
- * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量
+ * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量 (4x 超宽参数架构版)
  */
 const IS_MOBILE_DEVICE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
 
@@ -22,6 +22,20 @@ const APP_CONFIG = {
     SPHERE_CARD_FONT_SIZE_CLOSEUP_FACTOR: 1.0,
     CAMERA_DISTANCE_THRESHOLD_OVERALL: 200,
     CAMERA_DISTANCE_THRESHOLD_CLOSEUP: 100,
+
+    // 3D 展舱与卡片默认参数
+    DEFAULT_CARD_STYLE_PRESET: 'cyber_blue',
+    DEFAULT_CARD_CHAMBER_DEPTH: 0.65,
+    DEFAULT_CARD_LIGHT_POSITION: 'center',
+    DEFAULT_CARD_LIGHT_BRIGHTNESS: 0.85,
+    DEFAULT_CARD_LIGHT_COLOR: '#00f0ff',
+    DEFAULT_CARD_LIGHT_SPREAD: 0.85,
+    DEFAULT_CARD_TEXT_STYLE: 'relief_metal',
+    DEFAULT_CARD_OPACITY: 0.96,
+
+    // 查词卡片默认模式：经典星云赛博 (还原参考截图)
+    DEFAULT_HOVER_CARD_STYLE_MODE: 'classic_hud',
+    DEFAULT_HOVER_CARD_BRIGHTNESS: 1.0,
 
     DEFAULT_SPHERE_CARD_FONT_COLOR: '#ffffff',
     DEFAULT_SPHERE_CARD_FONT_FAMILY: "'Microsoft YaHei', sans-serif",
@@ -49,36 +63,14 @@ const APP_CONFIG = {
     CAMERA_ZOOM_STEP: 3,
     KEY_ROTATION_ACCEL_FACTOR: 1.40,
     KEY_ROTATION_DECEL_FACTOR: 0.80,
-    ROTATION_SPEED_SLIDER_MAX_REPRESENTATION: 2.0,
-
-    ROTATION_COMBINATIONS: [
-        { x: true,  y: true,  z: false },
-        { x: false, y: true,  z: false },
-        { x: true,  y: false, z: false },
-        { x: false, y: false, z: true  },
-        { x: true,  y: false, z: true  },
-        { x: false, y: true,  z: true  },
-        { x: true,  y: true,  z: true  },
-        { x: false, y: false, z: false }
-    ],
-
-    CARD_STYLES: [
-        {
-            id: 'deepspace', name: '深空青蓝', desc: '原版经典·科技晶莹幽蓝',
-            bgTop: 'rgba(6, 18, 42, 0.86)', bgMid: 'rgba(10, 26, 56, 0.90)', bgBot: 'rgba(14, 34, 68, 0.92)',
-            accent: 'rgba(0, 240, 255, 0.85)', accentSoft: 'rgba(0, 220, 255, 0.35)', glow: 'rgba(0, 240, 255, 0.12)',
-            borderA: 'rgba(0, 220, 255, 0.45)', borderB: 'rgba(0, 110, 255, 0.35)',
-            textTop: '#ffffff', textBot: '#d8f2ff',
-            sideColor: 0x07204c, sideEmissive: 0x00bfff, pattern: 'cyber'
-        }
-    ],
+    ROTATION_SPEED_SLIDER_MAX_REPRESENTATION: 8.0,
 
     PIXELS_TO_WORLD_UNITS: 25,
     VIEWED_WORDS_STORAGE_KEY: '3DWordUniverseViewedWordsV8',
     LAST_STATE_STORAGE_KEY: '3DWordUniverseLastStateV8',
     SETTINGS_STORAGE_KEY: '3DWordUniverseSettingsV8',
     CUSTOM_VIEWS_STORAGE_KEY: '3DWordUniverseCustomViewsV8',
-    MAX_CUSTOM_ITEMS: 12,
+    MAX_CUSTOM_ITEMS: 32,
     CUSTOM_WORDBANKS_STORAGE_KEY: '3DWordUniverseCustomWordBanksV8',
     CUSTOM_ROTATIONS_STORAGE_KEY: '3DWordUniverseCustomRotationsV8',
     CUSTOM_HOVER_POSITIONS_STORAGE_KEY: '3DWordUniverseCustomHoverPositionsV8',
@@ -94,44 +86,10 @@ const APP_CONFIG = {
     DYNAMIC_BG_DEFAULT_PARTICLE_COUNT: IS_MOBILE_DEVICE ? 40 : 300,
     DYNAMIC_BG_DEFAULT_PARTICLE_SPEED: 0.05,
 
-    DEFAULT_DIRECTIONAL_LIGHT_2_COLOR: '#ffc080',
-    DEFAULT_DIRECTIONAL_LIGHT_2_INTENSITY: 0.65,
-    DEFAULT_DIRECTIONAL_LIGHT_2_POSITION_X: -11,
-    DEFAULT_DIRECTIONAL_LIGHT_2_POSITION_Y: -6,
-    DEFAULT_DIRECTIONAL_LIGHT_2_POSITION_Z: -14,
-
     DEFAULT_STARFIELD_ENABLED: true,
     DEFAULT_STAR_COUNT: IS_MOBILE_DEVICE ? 2000 : 25000,
     DEFAULT_STAR_COLOR: '#ffffff',
     DEFAULT_STAR_SIZE: 0.8,
-    DEFAULT_STAR_VELOCITY_FACTOR: 0.1,
-    DEFAULT_STAR_DENSITY_FALLOFF: 100,
-    DEFAULT_STAR_MIN_ALPHA: 0.1,
-    DEFAULT_STAR_MAX_ALPHA: 1.0,
-    DEFAULT_STAR_TWINKLE_SPEED: 0.5,
-
-    DEFAULT_BRIGHTNESS_ON_LOAD: 0.5,
-    DEFAULT_CUSTOM_LIGHT_ENABLED: false,
-    DEFAULT_CUSTOM_LIGHT_HELPER_VISIBLE: false,
-    DEFAULT_CUSTOM_LIGHT_COLOR: '#ffffff',
-    DEFAULT_CUSTOM_LIGHT_INTENSITY: 20,
-    DEFAULT_CUSTOM_LIGHT_DISTANCE: 500,
-    DEFAULT_CUSTOM_LIGHT_ANGLE: 0.8,
-    DEFAULT_CUSTOM_LIGHT_PENUMBRA: 0.2,
-    DEFAULT_CUSTOM_LIGHT_SOURCE_POS: { x: 0, y: 0, z: 200 },
-    DEFAULT_CUSTOM_LIGHT_TARGET_POS: { x: 0, y: 0, z: 0 },
-    DEFAULT_GUIDELINE_RADIUS: 200,
-    DEFAULT_HOVER_CARD_BRIGHTNESS: 1.0,
-
-    DEFAULT_VISUAL_EFFECTS_ENABLED: false,
-    DEFAULT_VORTEX_PARTICLE_COUNT: IS_MOBILE_DEVICE ? 2000 : 50000,
-    DEFAULT_VORTEX_COLOR: '#5588ff',
-    DEFAULT_VORTEX_SIZE: 1.5,
-    DEFAULT_VORTEX_SPEED: 0.02,
-    DEFAULT_VORTEX_TIGHTNESS: 1.5,
-    DEFAULT_BLOOM_THRESHOLD: 0.8,
-    DEFAULT_BLOOM_STRENGTH: 0.5,
-    DEFAULT_BLOOM_RADIUS: 0.2,
 
     HEMISPHERE_LAYOUT_THRESHOLD: 20,
     GRAPPLE_MAX_SPEED: 260,
@@ -195,7 +153,6 @@ const appState = {
         cardEmissiveIntensity: 1.0
     },
 
-    // 局部巡航状态中枢（数量占比、单卡倍数与正面候选队列联动）
     focusCruise: {
         enabled: true,
         interval: 50,
@@ -206,7 +163,7 @@ const appState = {
         lastSwitchTime: 0
     },
     
-    currentCardStyleId: 'deepspace',
+    currentCardStyleId: 'cyber_blue',
     batchShieldMode: false, selectedShieldWords: new Set(), shieldedWords: new Set(),
     isInitializing: true,
     
@@ -250,10 +207,4 @@ function getDateKey(d) {
 function timeHHMM(d) {
     const dd = d || new Date();
     return String(dd.getHours()).padStart(2, '0') + ':' + String(dd.getMinutes()).padStart(2, '0');
-}
-
-function studyEscapeHtml(s) {
-    return String(s == null ? '' : s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
