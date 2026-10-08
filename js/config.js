@@ -136,7 +136,6 @@ const APP_CONFIG = {
     HEMISPHERE_LAYOUT_THRESHOLD: 20,
     GRAPPLE_MAX_SPEED: 260,
 
-    // 局部焦点巡航默认配置
     DEFAULT_FOCUS_CRUISE_ENABLED: true,
     DEFAULT_FOCUS_CRUISE_INTERVAL: 50,
     DEFAULT_FOCUS_CRUISE_RATIO_PERCENT: 8,
@@ -196,13 +195,13 @@ const appState = {
         cardEmissiveIntensity: 1.0
     },
 
-    // 局部巡航状态中枢（数量占比与放大倍率双可调）
+    // 局部巡航状态中枢（数量占比、单卡倍数与正面候选队列联动）
     focusCruise: {
         enabled: true,
         interval: 50,
         ratioPercent: 8,
         scaleFactor: 1.5,
-        remainingPool: [],
+        visitedIndices: new Set(),
         currentSpotlightIndices: new Set(),
         lastSwitchTime: 0
     },

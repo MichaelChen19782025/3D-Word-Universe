@@ -126,7 +126,7 @@
             AppSphereEngine.createWordSphere(appState.currentBatchWords);
 
             if (appState.focusCruise) {
-                appState.focusCruise.remainingPool = [];
+                appState.focusCruise.visitedIndices = new Set();
                 appState.focusCruise.currentSpotlightIndices.clear();
                 appState.focusCruise.lastSwitchTime = performance.now();
             }
@@ -547,7 +547,6 @@
             const scalePill = document.getElementById('focusCruiseScalePill');
             if (!hud) return;
 
-            // 点击折叠触发标签，展开/收起参数面板
             trigger?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const isExpanded = hud.classList.contains('expanded');
@@ -555,7 +554,6 @@
                 hud.classList.toggle('collapsed', isExpanded);
             });
 
-            // 点击面板外部区域自动收起折叠
             document.addEventListener('pointerdown', (e) => {
                 if (!hud.contains(e.target) && !document.getElementById('numberPromptModalBackdrop')?.classList.contains('visible')) {
                     hud.classList.remove('expanded');
@@ -563,7 +561,6 @@
                 }
             });
 
-            // 展开面板内部的状态开关切换
             statusTag?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 appState.focusCruise.enabled = !appState.focusCruise.enabled;
@@ -602,7 +599,7 @@
                     min: 1, max: 40, step: 1,
                     onConfirm: (ratio) => {
                         appState.focusCruise.ratioPercent = ratio;
-                        appState.focusCruise.remainingPool = [];
+                        appState.focusCruise.visitedIndices = new Set();
                         appState.focusCruise.currentSpotlightIndices.clear();
                         appState.focusCruise.lastSwitchTime = performance.now();
                         this.updateFocusCruiseVisuals();
@@ -749,7 +746,7 @@
 
             bindSync('focusCruiseRatioRange', 'focusCruiseRatioInput', (ratio) => {
                 appState.focusCruise.ratioPercent = parseInt(ratio, 10);
-                appState.focusCruise.remainingPool = [];
+                appState.focusCruise.visitedIndices = new Set();
                 appState.focusCruise.currentSpotlightIndices.clear();
                 appState.focusCruise.lastSwitchTime = performance.now();
                 this.updateFocusCruiseVisuals();

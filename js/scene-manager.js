@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - Three.js 核心场景管理与渲染管线
- * 局部焦点巡航：可调百分比抽取放大，运动中单词绝不擅自突变
+ * 局部焦点巡航算法：严格限定只在面向镜头正面 (t < 0.42) 区域随机抽取放大，转入背面平滑消除放大
  */
 (function() {
     const AppScene = {
@@ -407,33 +407,67 @@
             }
 
             const cardMult = appState.cardScaleMultiplier || 1.0;
+            appState.camera.getWorldPosition(AppMath.vecCamWorld);
+            const radius = appState.sphereRadius || 85;
+            const camDist = AppMath.vecCamWorld.length();
+            const maxDist = camDist + radius;
+            const minDist = camDist - radius;
+            const distRange = 2 * radius;
 
-            // ==================== 局部焦点巡航算法 ====================
-            // 保持绝大多数卡片尺寸不变，按周期循环抽取 ratioPercent% 放大至 scaleFactor 倍
+            // ==================== 局部焦点巡航算法：严格限定只在面向镜头正面 (t < 0.42) 随机抽取 ====================
             if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0) {
                 const fc = appState.focusCruise;
                 if (time - fc.lastSwitchTime >= fc.interval * 1000) {
                     fc.lastSwitchTime = time;
-                    if (!fc.remainingPool || fc.remainingPool.length === 0) {
-                        fc.remainingPool = Array.from({ length: appState.wordObjects.length }, (_, i) => i);
-                        for (let i = fc.remainingPool.length - 1; i > 0; i--) {
-                            const j = Math.floor(Math.random() * (i + 1));
-                            [fc.remainingPool[i], fc.remainingPool[j]] = [fc.remainingPool[j], fc.remainingPool[i]];
+
+                    // 1. 严格筛选：仅收集当前在正面、面向镜头的卡片 (t < 0.42)
+                    const frontCandidateIndices = [];
+                    for (let i = 0; i < appState.wordObjects.length; i++) {
+                        const card = appState.wordObjects[i];
+                        card.getWorldPosition(AppMath.vecCardWorld);
+                        const dist = AppMath.vecCardWorld.distanceTo(AppMath.vecCamWorld);
+                        const t = (dist - minDist) / distRange;
+                        if (t < 0.42) {
+                            frontCandidateIndices.push(i);
                         }
                     }
-                    const ratio = Math.max(0.01, Math.min(0.5, (fc.ratioPercent || 8) / 100));
-                    const batchCount = Math.max(1, Math.round(appState.wordObjects.length * ratio));
-                    const newIndices = fc.remainingPool.splice(0, batchCount);
-                    fc.currentSpotlightIndices = new Set(newIndices);
+
+                    if (frontCandidateIndices.length > 0) {
+                        if (!fc.visitedIndices) fc.visitedIndices = new Set();
+
+                        // 优先从正面且本轮尚未被放大展示过的候选池中抽取
+                        let available = frontCandidateIndices.filter(idx => !fc.visitedIndices.has(idx));
+                        if (available.length === 0) {
+                            // 正面生词已轮巡完毕，自动重置开启新一轮全景遍历
+                            fc.visitedIndices.clear();
+                            available = frontCandidateIndices;
+                        }
+
+                        // 随机乱序洗牌
+                        for (let i = available.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [available[i], available[j]] = [available[j], available[i]];
+                        }
+
+                        // 按设定的 ratioPercent 比例抽取数量
+                        const ratio = Math.max(0.01, Math.min(0.5, (fc.ratioPercent || 8) / 100));
+                        const batchCount = Math.max(1, Math.min(available.length, Math.round(appState.wordObjects.length * ratio)));
+
+                        const selected = available.slice(0, batchCount);
+                        selected.forEach(idx => fc.visitedIndices.add(idx));
+                        fc.currentSpotlightIndices = new Set(selected);
+                    } else {
+                        fc.currentSpotlightIndices = new Set();
+                    }
                     mustRender = true;
                 }
             }
 
-            // 传送带流滚动模式（完全移除动态换词逻辑，保证单词绝不自动乱变）
+            // 传送带流滚动模式
             if (appState.isFlowMode && appState.wordObjects && appState.wordObjects.length > 0) {
                 const fovRad = (appState.camera.fov * Math.PI) / 180;
-                const dist = appState.camera.position.length() || 165;
-                const visH = 2 * Math.tan(fovRad / 2) * dist * 0.82;
+                const distCam = appState.camera.position.length() || 165;
+                const visH = 2 * Math.tan(fovRad / 2) * distCam * 0.82;
                 const visW = visH * appState.camera.aspect;
 
                 const screenH = window.innerHeight || 800;
@@ -551,7 +585,6 @@
                 AppSphereEngine.updateGrappleEffects();
             }
 
-            appState.camera.getWorldPosition(AppMath.vecCamWorld);
             const shouldCardsRotate = appState.rt.cardSelfRotation !== undefined ? appState.rt.cardSelfRotation : true;
             const cardMasterSpeed = (appState.rt.cardRotationSpeed !== undefined ? appState.rt.cardRotationSpeed : 2) * 0.00115;
 
@@ -561,12 +594,6 @@
 
             // 球面卡片布局与焦点巡航放大
             if (!appState.isFlowMode) {
-                const radius = appState.sphereRadius || 85;
-                const camDist = AppMath.vecCamWorld.length();
-                const maxDist = camDist + radius;
-                const minDist = camDist - radius;
-                const distRange = 2 * radius;
-
                 const basePulse = 0.20 + Math.sin(time * 0.0012) * 0.15;
                 const glassBreath = 0.95 + Math.sin(time * 0.0012) * 0.05;
 
@@ -579,8 +606,17 @@
                     const normalizedY = card.position.y / radius;
                     const latScale = 1.0 - 0.45 * (normalizedY * normalizedY);
 
-                    const isSpotlight = appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx);
-                    const spotlightScale = isSpotlight ? (appState.focusCruise.scaleFactor || 1.5) : 1.0;
+                    // 局部巡航放大系数判断（严格限定：只在正面朝向区域生效，并在转入背面时平滑过渡消隐）
+                    let spotlightScale = 1.0;
+                    let isSpotlight = false;
+                    if (appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx)) {
+                        if (t < 0.5) {
+                            isSpotlight = true;
+                            // 边缘过渡消隐：t 在 0.42 到 0.5 之间平滑缩回标准尺寸，背面绝不呈现大卡片
+                            const frontFade = THREE.MathUtils.clamp((0.5 - t) / 0.08, 0, 1);
+                            spotlightScale = 1.0 + ((appState.focusCruise.scaleFactor || 1.5) - 1.0) * frontFade;
+                        }
+                    }
 
                     const finalScale = latScale * depthScale * cardMult * spotlightScale;
                     card.scale.set(finalScale, finalScale, finalScale);
