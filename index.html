@@ -50,10 +50,11 @@
     <span id="studyGoalValue" title="点击修改每日学习目标">50</span>
 </div>
 
-<!-- 右上角局部焦点巡航 HUD (位于复习数字正下方) -->
-<div id="focusCruiseHud" title="点击开关局部焦点巡航，点击秒数修改轮换周期">
-    <span>✨ 巡航:</span>
-    <span id="focusCruiseIntervalVal">50</span><span>s</span>
+<!-- 右上角局部焦点巡航 HUD 胶囊 (位于复习数字正下方) -->
+<div id="focusCruiseHud" class="enabled" title="点击开关局部焦点巡航，或点击具体数字修改参数">
+    <span id="focusCruiseStatusTag" class="hud-status-tag" title="点击一键开关">✨ 巡航:开</span>
+    <span id="focusCruiseIntervalPill" class="focus-pill" title="点击修改持续时长"><span id="focusCruiseIntervalVal">50</span>s</span>
+    <span id="focusCruiseRatioPill" class="focus-pill" title="点击修改放大卡片比例"><span id="focusCruiseRatioVal">8</span>%</span>
 </div>
 
 <!-- 设置与控制中心抽屉面板 -->
@@ -109,15 +110,31 @@
                 <input type="checkbox" id="cardSelfRotation" checked>
                 <label for="cardSelfRotation" title="每个单词卡片独立旋转">启用卡片自转</label>
             </div>
-            <div class="setting-item checkbox-item">
-                <input type="checkbox" id="focusCruiseEnabled" checked>
-                <label for="focusCruiseEnabled" title="局部焦点巡航：保持92%以上卡片不变，仅抽取少量卡片放大1.5倍">启用局部焦点巡航 (✨)</label>
+
+            <!-- 局部焦点巡航控制面板 -->
+            <div class="appearance-group" style="padding-top: 10px; margin-top: 10px; border-top: 1px dashed rgba(255, 216, 117, 0.3);">
+                <div class="setting-item checkbox-item">
+                    <input type="checkbox" id="focusCruiseEnabled" checked>
+                    <label for="focusCruiseEnabled" style="color: #ffd875; font-weight: bold;">局部焦点巡航模式 (✨)</label>
+                    <span id="focusCruiseStatusBadge" class="status-badge on">已开启</span>
+                </div>
+                <div class="setting-item">
+                    <label for="focusCruiseIntervalRange">轮换周期 (秒)</label>
+                    <div style="display: flex; flex-grow: 1; align-items: center; gap: 8px;">
+                        <input type="range" id="focusCruiseIntervalRange" min="5" max="300" value="50" step="5" style="flex-grow: 1;">
+                        <input type="number" id="focusCruiseIntervalInput" value="50" min="5" max="300" step="5" style="width: 70px; text-align: center;">
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <label for="focusCruiseRatioRange">放大卡片比例 (%)</label>
+                    <div style="display: flex; flex-grow: 1; align-items: center; gap: 8px;">
+                        <input type="range" id="focusCruiseRatioRange" min="1" max="40" value="8" step="1" style="flex-grow: 1;">
+                        <input type="number" id="focusCruiseRatioInput" value="8" min="1" max="40" step="1" style="width: 70px; text-align: center;">
+                    </div>
+                </div>
             </div>
-            <div class="setting-item">
-                <label for="focusCruiseIntervalInput">巡航轮换周期(秒)</label>
-                <input type="number" id="focusCruiseIntervalInput" value="50" min="5" max="600" step="5" style="width: 80px; text-align: center;">
-            </div>
-            <div class="setting-item checkbox-item">
+
+            <div class="setting-item checkbox-item" style="margin-top: 12px;">
                 <input type="checkbox" id="grappleEnabled" checked>
                 <label for="grappleEnabled" title="双击球体外空白区域，瞬间加速旋转并捕捉正面卡片">双击空白触发瞬间加速（手动擒拿）</label>
             </div>
@@ -563,6 +580,22 @@
 <!-- 今日目标达成 Toast 提醒 -->
 <div id="dailyGoalToast">🎉 恭喜！您已完成今日复习目标！</div>
 
+<!-- 局部参数调节步进弹窗 (防止 window.prompt 被移动端/PWA静默拦截) -->
+<div id="numberPromptModalBackdrop" class="modal-backdrop">
+    <div class="prompt-modal-box">
+        <h3 id="promptModalTitle">调节参数</h3>
+        <div class="prompt-stepper-row">
+            <button type="button" id="promptModalMinus" class="prompt-step-btn">−</button>
+            <input type="number" id="promptModalInput" class="prompt-num-input">
+            <button type="button" id="promptModalPlus" class="prompt-step-btn">+</button>
+        </div>
+        <div style="display: flex; justify-content: center; gap: 12px;">
+            <button type="button" id="promptModalConfirm" class="modal-btn">确定</button>
+            <button type="button" id="promptModalCancel" class="modal-btn secondary-btn">取消</button>
+        </div>
+    </div>
+</div>
+
 <!-- 擒拿继续按钮 -->
 <button id="grappleContinueBtn" class="hidden">
     <span class="gcb-icon">⚡</span>
@@ -579,7 +612,7 @@
         <button class="control-btn" id="randomShuffleBtn" title="随机切换卡片单词 (🎲)">🎲</button>
         <button class="control-btn" id="zoomInBtn" title="放大卡片 (➕)">➕</button>
         <button class="control-btn" id="zoomOutBtn" title="缩小卡片 (➖)">➖</button>
-        <button class="control-btn" id="focusCruiseToggleBtn" title="局部焦点巡航模式 (✨)">✨</button>
+        <button class="control-btn active-toggle" id="focusCruiseToggleBtn" title="局部焦点巡航模式 (✨)">✨</button>
         <button class="control-btn" id="batchShieldToggleBtn" title="批量屏蔽模式 (🛡️)">🛡️</button>
         <button class="control-btn" id="wordBanksBtn" title="词库管理">📚</button>
         <button class="control-btn" id="rotationsBtn" title="自转速度预设">🌪️</button>
