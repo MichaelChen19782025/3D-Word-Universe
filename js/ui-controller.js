@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与启动总装中枢
- * 修复学习日志达标提示、侧边放大缩小卡片按钮与局部巡航放大模式
+ * 修复时长点击修改、放大百分比调节与焦点巡航按钮视觉开关反馈
  */
 (function() {
     let fontScale = 1.0;
@@ -81,6 +81,7 @@
             setTimeout(() => {
                 appState.isInitializing = false;
                 this.refreshRuntimeCache();
+                this.updateFocusCruiseVisuals();
                 appState.needsRender = true;
                 console.log('3D 单词宇宙系统以全功能实时响应状态启动完毕！');
             }, 300);
@@ -123,7 +124,6 @@
 
             AppSphereEngine.createWordSphere(appState.currentBatchWords);
 
-            // 重置焦点巡航轮换池
             if (appState.focusCruise) {
                 appState.focusCruise.remainingPool = [];
                 appState.focusCruise.currentSpotlightIndices.clear();
@@ -297,53 +297,160 @@
             setInterval(update, 1000);
         },
 
-        initFocusCruiseHud() {
-            const hud = document.getElementById('focusCruiseHud');
-            const intervalVal = document.getElementById('focusCruiseIntervalVal');
-            if (!hud || !intervalVal) return;
+        showNumberPromptModal(options) {
+            const backdrop = document.getElementById('numberPromptModalBackdrop');
+            const titleEl = document.getElementById('promptModalTitle');
+            const inputEl = document.getElementById('promptModalInput');
+            const stepMinusBtn = document.getElementById('promptModalMinus');
+            const stepPlusBtn = document.getElementById('promptModalPlus');
+            const confirmBtn = document.getElementById('promptModalConfirm');
+            const cancelBtn = document.getElementById('promptModalCancel');
+            if (!backdrop || !inputEl) return;
 
-            const updateHudUI = () => {
-                hud.classList.toggle('disabled', !appState.focusCruise.enabled);
-                intervalVal.textContent = String(appState.focusCruise.interval);
-                const cb = document.getElementById('focusCruiseEnabled');
-                if (cb) cb.checked = appState.focusCruise.enabled;
-                const intInput = document.getElementById('focusCruiseIntervalInput');
-                if (intInput) intInput.value = String(appState.focusCruise.interval);
+            const { title, value, min = 1, max = 600, step = 5, onConfirm } = options;
+            titleEl.textContent = title;
+            inputEl.value = value;
+            inputEl.min = min;
+            inputEl.max = max;
+            inputEl.step = step;
+
+            const updateVal = (delta) => {
+                let cur = parseFloat(inputEl.value) || 0;
+                cur = Math.max(min, Math.min(max, cur + delta));
+                inputEl.value = cur;
             };
 
-            hud.addEventListener('click', (e) => {
-                if (e.target === intervalVal) return;
-                appState.focusCruise.enabled = !appState.focusCruise.enabled;
-                if (appState.focusCruise.enabled) {
-                    appState.focusCruise.lastSwitchTime = performance.now();
-                } else {
-                    appState.focusCruise.currentSpotlightIndices.clear();
+            stepMinusBtn.onclick = () => updateVal(-step);
+            stepPlusBtn.onclick = () => updateVal(step);
+
+            const close = () => {
+                backdrop.classList.remove('visible');
+                stepMinusBtn.onclick = null;
+                stepPlusBtn.onclick = null;
+                confirmBtn.onclick = null;
+                cancelBtn.onclick = null;
+            };
+
+            cancelBtn.onclick = close;
+            confirmBtn.onclick = () => {
+                const val = parseFloat(inputEl.value);
+                if (!isNaN(val) && val >= min && val <= max) {
+                    if (onConfirm) onConfirm(val);
                 }
-                updateHudUI();
+                close();
+            };
+
+            backdrop.classList.add('visible');
+            setTimeout(() => inputEl.focus(), 100);
+        },
+
+        updateFocusCruiseVisuals() {
+            const enabled = appState.focusCruise.enabled;
+            const interval = appState.focusCruise.interval;
+            const ratioPercent = appState.focusCruise.ratioPercent || 8;
+
+            const toggleBtn = document.getElementById('focusCruiseToggleBtn');
+            if (toggleBtn) {
+                toggleBtn.classList.toggle('active-toggle', enabled);
+                toggleBtn.classList.toggle('inactive-toggle', !enabled);
+                toggleBtn.textContent = enabled ? '✨' : '💤';
+                toggleBtn.title = enabled ? `局部焦点巡航 [已开启: ${interval}s·${ratioPercent}%] - 点击关闭` : '局部焦点巡航 [已关闭] - 点击开启';
+            }
+
+            const hud = document.getElementById('focusCruiseHud');
+            const statusTag = document.getElementById('focusCruiseStatusTag');
+            const intervalVal = document.getElementById('focusCruiseIntervalVal');
+            const ratioVal = document.getElementById('focusCruiseRatioVal');
+
+            if (hud) {
+                hud.classList.toggle('enabled', enabled);
+                hud.classList.toggle('disabled', !enabled);
+            }
+            if (statusTag) {
+                statusTag.textContent = enabled ? '✨ 巡航:开' : '⚪ 巡航:关';
+            }
+            if (intervalVal) {
+                intervalVal.textContent = String(interval);
+            }
+            if (ratioVal) {
+                ratioVal.textContent = String(ratioPercent);
+            }
+
+            const cb = document.getElementById('focusCruiseEnabled');
+            const badge = document.getElementById('focusCruiseStatusBadge');
+            const intInput = document.getElementById('focusCruiseIntervalInput');
+            const intRange = document.getElementById('focusCruiseIntervalRange');
+            const ratInput = document.getElementById('focusCruiseRatioInput');
+            const ratRange = document.getElementById('focusCruiseRatioRange');
+
+            if (cb) cb.checked = enabled;
+            if (badge) {
+                badge.textContent = enabled ? '已开启' : '已关闭';
+                badge.className = `status-badge ${enabled ? 'on' : 'off'}`;
+            }
+            if (intInput) intInput.value = String(interval);
+            if (intRange) intRange.value = String(interval);
+            if (ratInput) ratInput.value = String(ratioPercent);
+            if (ratRange) ratRange.value = String(ratioPercent);
+        },
+
+        initFocusCruiseHud() {
+            const hud = document.getElementById('focusCruiseHud');
+            const statusTag = document.getElementById('focusCruiseStatusTag');
+            const intervalPill = document.getElementById('focusCruiseIntervalPill');
+            const ratioPill = document.getElementById('focusCruiseRatioPill');
+            if (!hud) return;
+
+            statusTag?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                appState.focusCruise.enabled = !appState.focusCruise.enabled;
+                if (!appState.focusCruise.enabled) {
+                    appState.focusCruise.currentSpotlightIndices.clear();
+                } else {
+                    appState.focusCruise.lastSwitchTime = performance.now();
+                }
+                this.updateFocusCruiseVisuals();
                 appState.needsRender = true;
-                this.showToast(appState.focusCruise.enabled ? `✨ 局部巡航模式已开启 (${appState.focusCruise.interval}s/轮)` : '⏹️ 局部巡航模式已关闭');
+                this.showToast(appState.focusCruise.enabled ? `✨ 局部巡航模式已开启` : '⏹️ 局部巡航模式已关闭');
                 schedulePersist();
             });
 
-            intervalVal.addEventListener('click', (e) => {
+            intervalPill?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const current = appState.focusCruise.interval;
-                const input = prompt('请输入局部巡航轮换周期(秒):', String(current));
-                if (input !== null) {
-                    const sec = parseInt(input, 10);
-                    if (!isNaN(sec) && sec >= 5 && sec <= 600) {
+                this.showNumberPromptModal({
+                    title: '⏱️ 修改焦点巡航轮换周期 (秒)',
+                    value: appState.focusCruise.interval,
+                    min: 5, max: 300, step: 5,
+                    onConfirm: (sec) => {
                         appState.focusCruise.interval = sec;
                         appState.focusCruise.lastSwitchTime = performance.now();
-                        updateHudUI();
-                        this.showToast(`⏱️ 巡航周期已修改为: ${sec} 秒`);
+                        this.updateFocusCruiseVisuals();
+                        this.showToast(`⏱️ 巡航轮换周期已修改为: ${sec} 秒`);
                         schedulePersist();
-                    } else {
-                        alert('请输入 5 到 600 之间的秒数');
                     }
-                }
+                });
             });
 
-            updateHudUI();
+            ratioPill?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showNumberPromptModal({
+                    title: '🔍 修改放大卡片比例 (1% - 40%)',
+                    value: appState.focusCruise.ratioPercent || 8,
+                    min: 1, max: 40, step: 1,
+                    onConfirm: (ratio) => {
+                        appState.focusCruise.ratioPercent = ratio;
+                        appState.focusCruise.remainingPool = [];
+                        appState.focusCruise.currentSpotlightIndices.clear();
+                        appState.focusCruise.lastSwitchTime = performance.now();
+                        this.updateFocusCruiseVisuals();
+                        this.showToast(`🔍 放大卡片比例已修改为: ${ratio}%`);
+                        appState.needsRender = true;
+                        schedulePersist();
+                    }
+                });
+            });
+
+            this.updateFocusCruiseVisuals();
         },
 
         showToast(text, duration = 2000) {
@@ -402,7 +509,6 @@
                 });
             };
 
-            // 1. 旋转速度双向绑定
             bindSync('rotationSpeed', 'rotationSpeedInput', (v) => {
                 appState.actualDisplayRotationSpeed = safeParseFloat(v, 1.0) * appState.currentRotationSpeedBase;
                 appState.needsRender = true;
@@ -413,7 +519,6 @@
                 schedulePersist();
             });
 
-            // 卡片自转速度与开关
             document.getElementById('cardRotationSpeed')?.addEventListener('input', (e) => {
                 appState.rt.cardRotationSpeed = safeParseFloat(e.target.value, 2) * 0.00115;
                 appState.needsRender = true;
@@ -425,7 +530,6 @@
                 schedulePersist();
             });
 
-            // 旋转轴控制 (X/Y/Z)
             ['rotateX', 'rotateY', 'rotateZ'].forEach(axisId => {
                 document.getElementById(axisId)?.addEventListener('change', () => {
                     this.refreshRuntimeCache();
@@ -434,13 +538,11 @@
                 });
             });
 
-            // 擒拿加速开关
             document.getElementById('grappleEnabled')?.addEventListener('change', (e) => {
                 appState.rt.grappleEnabled = e.target.checked;
                 schedulePersist();
             });
 
-            // 每批显示数量
             document.getElementById('batchSize')?.addEventListener('change', (e) => {
                 const newSize = safeParseInt(e.target.value, 500);
                 if (newSize > 0) {
@@ -451,29 +553,30 @@
                 }
             });
 
-            // 局部焦点巡航设置监听
             document.getElementById('focusCruiseEnabled')?.addEventListener('change', (e) => {
                 appState.focusCruise.enabled = e.target.checked;
                 if (!e.target.checked) appState.focusCruise.currentSpotlightIndices.clear();
                 else appState.focusCruise.lastSwitchTime = performance.now();
-                const hud = document.getElementById('focusCruiseHud');
-                if (hud) hud.classList.toggle('disabled', !e.target.checked);
+                this.updateFocusCruiseVisuals();
                 appState.needsRender = true;
                 schedulePersist();
             });
 
-            document.getElementById('focusCruiseIntervalInput')?.addEventListener('change', (e) => {
-                const sec = parseInt(e.target.value, 10);
-                if (!isNaN(sec) && sec >= 5 && sec <= 600) {
-                    appState.focusCruise.interval = sec;
-                    appState.focusCruise.lastSwitchTime = performance.now();
-                    const valEl = document.getElementById('focusCruiseIntervalVal');
-                    if (valEl) valEl.textContent = String(sec);
-                    schedulePersist();
-                }
+            bindSync('focusCruiseIntervalRange', 'focusCruiseIntervalInput', (sec) => {
+                appState.focusCruise.interval = parseInt(sec, 10);
+                appState.focusCruise.lastSwitchTime = performance.now();
+                this.updateFocusCruiseVisuals();
             });
 
-            // 2. 核心球体设置实时响应
+            bindSync('focusCruiseRatioRange', 'focusCruiseRatioInput', (ratio) => {
+                appState.focusCruise.ratioPercent = parseInt(ratio, 10);
+                appState.focusCruise.remainingPool = [];
+                appState.focusCruise.currentSpotlightIndices.clear();
+                appState.focusCruise.lastSwitchTime = performance.now();
+                this.updateFocusCruiseVisuals();
+                appState.needsRender = true;
+            });
+
             ['coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -486,7 +589,6 @@
                 el.addEventListener('change', updateFn);
             });
 
-            // 3. 视觉增强系统 (Vortex & Bloom)
             document.getElementById('visualEffectsEnabled')?.addEventListener('change', (e) => {
                 appState.rt.visualFxEnabled = e.target.checked;
                 AppParticles.updateVisualEffects();
@@ -541,7 +643,6 @@
                 el.addEventListener('change', updateFn);
             });
 
-            // 4. 动态背景设置
             ['dynamicBgHueStart', 'dynamicBgHueEnd', 'dynamicBgLightness'].forEach(id => {
                 document.getElementById(id)?.addEventListener('input', () => {
                     AppParticles.updateDynamicBackgroundCSS();
@@ -562,7 +663,6 @@
                 schedulePersist();
             });
 
-            // 5. 星空背景设置
             ['starfieldEnabled', 'starCount', 'starColor', 'starSize', 'starVelocityFactor', 'starDensityFalloff', 'starMinAlpha', 'starMaxAlpha', 'starTwinkleSpeed'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -575,7 +675,6 @@
                 el.addEventListener('change', updateFn);
             });
 
-            // 6. 灯光与补光系统设置
             ['hemiSkyColor', 'hemiGroundColor', 'hemiIntensity'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -606,7 +705,6 @@
                 });
             });
 
-            // 7. 棚镜漫反射光源
             ['studioLightEnabled', 'studioLightDragActive', 'studioLightHelperVisible'].forEach(id => {
                 document.getElementById(id)?.addEventListener('change', () => {
                     if (id === 'studioLightDragActive') {
@@ -624,7 +722,6 @@
                 });
             });
 
-            // 8. 自定义聚光灯与轨道
             ['customLightEnabled', 'customLightHelperVisible'].forEach(id => {
                 document.getElementById(id)?.addEventListener('change', () => {
                     AppScene.updateCustomLightSettings();
@@ -654,7 +751,6 @@
                 schedulePersist();
             });
 
-            // 9. 卡片外观重绘响应
             const redrawProps = [
                 'sphereCardFontColor', 'sphereCardFontFamily', 'sphereCardBgOpacity', 'sphereCardEmissiveColor',
                 'sphereCardEmissiveIntensityFactor', 'sphereCardSideColor', 'sphereCardFontSizeFactorOverall',
@@ -683,7 +779,6 @@
                 schedulePersist();
             });
 
-            // 10. 悬浮大卡片样式调节
             ['hoverOverlayCardScale', 'hoverCardBrightness', 'hoverCardEmissiveColor', 'hoverCardGlowFrequency',
              'hoverAppendedBgColor', 'hoverAppendedBgOpacity', 'hoverAppendedFontColor', 'hoverAppendedFontSize',
              'hoverCardTextMainWordColor', 'hoverCardTextLabelColor', 'hoverCardTextValueColor',
@@ -833,7 +928,6 @@
                 this.showToast('🎲 已手动随机更换球面卡片');
             });
 
-            // 侧栏放大缩小按钮事件响应
             document.getElementById('zoomInBtn')?.addEventListener('click', () => {
                 AppScene.zoomSphere(0.85);
             });
@@ -841,7 +935,6 @@
                 AppScene.zoomSphere(1.15);
             });
 
-            // 侧栏局部焦点巡航模式开关
             document.getElementById('focusCruiseToggleBtn')?.addEventListener('click', () => {
                 appState.focusCruise.enabled = !appState.focusCruise.enabled;
                 if (!appState.focusCruise.enabled) {
@@ -849,12 +942,9 @@
                 } else {
                     appState.focusCruise.lastSwitchTime = performance.now();
                 }
-                const hud = document.getElementById('focusCruiseHud');
-                if (hud) hud.classList.toggle('disabled', !appState.focusCruise.enabled);
-                const cb = document.getElementById('focusCruiseEnabled');
-                if (cb) cb.checked = appState.focusCruise.enabled;
+                this.updateFocusCruiseVisuals();
                 appState.needsRender = true;
-                this.showToast(appState.focusCruise.enabled ? `✨ 局部巡航模式已开启 (${appState.focusCruise.interval}s/轮)` : '⏹️ 局部巡航模式已关闭');
+                this.showToast(appState.focusCruise.enabled ? `✨ 局部巡航已开启 (${appState.focusCruise.interval}s·${appState.focusCruise.ratioPercent || 8}%)` : '💤 局部巡航已关闭');
                 schedulePersist();
             });
 
@@ -1336,15 +1426,15 @@
             document.getElementById('studyGoalValue')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const cur = AppStorage.getStudyGoal();
-                const input = prompt('请输入每日复习目标单词数:', String(cur));
-                if (input !== null) {
-                    const n = parseInt(input, 10);
-                    if (!isNaN(n) && n > 0) {
+                this.showNumberPromptModal({
+                    title: '🎯 修改每日学习目标 (单词数)',
+                    value: cur, min: 5, max: 500, step: 5,
+                    onConfirm: (n) => {
                         AppStorage.setStudyGoal(n);
                         document.getElementById('studyGoalValue').textContent = String(n);
                         this.showToast(`🎯 今日学习目标已更新为: ${n} 个单词`);
                     }
-                }
+                });
             });
         },
 
@@ -1486,7 +1576,6 @@
                 const card = cardHits[0].object;
                 this.triggerCardDisplay(card);
 
-                // 核心复习计数与达标庆祝通知联动
                 const result = AppStorage.recordStudyClick(card.userData.word);
                 this.updateStudyCounterDisplay();
                 if (result.justReached) {
@@ -1534,7 +1623,6 @@
             if (!word) return;
             appState.currentDetailWord = word;
 
-            // 详情展开同样计入有效复习，并同步检测目标达成
             const result = AppStorage.recordStudyClick(word);
             this.updateStudyCounterDisplay();
             if (result.justReached) {
@@ -1626,7 +1714,7 @@
                         <li><strong>双击空白：</strong>触发瞬间加速（手动擒拿）。</li>
                         <li><strong>点击卡片：</strong>显示 3D 发音弹窗与详细释义。</li>
                         <li><strong>放大/缩小卡片：</strong>使用侧栏 <code>➕ / ➖</code> 自由缩放卡片大小。</li>
-                        <li><strong>局部焦点巡航：</strong>保持绝大多数卡片尺寸不变，仅抽取少量卡片单独放大 1.5 倍方便识读。</li>
+                        <li><strong>局部焦点巡航：</strong>绝大部分卡片保持原样大小，极少数卡片智能放大 1.5 倍，周期与比例均可无级自定义。</li>
                     </ul>
                 `;
             }
@@ -1694,10 +1782,7 @@
                 if (s.focusCruise !== undefined && typeof s.focusCruise === 'object') {
                     appState.focusCruise.enabled = !!s.focusCruise.enabled;
                     appState.focusCruise.interval = s.focusCruise.interval || 50;
-                    const hud = document.getElementById('focusCruiseHud');
-                    const valEl = document.getElementById('focusCruiseIntervalVal');
-                    if (hud) hud.classList.toggle('disabled', !appState.focusCruise.enabled);
-                    if (valEl) valEl.textContent = String(appState.focusCruise.interval);
+                    appState.focusCruise.ratioPercent = s.focusCruise.ratioPercent || 8;
                 }
                 if (s.cameraPosition && appState.camera) {
                     appState.camera.position.fromArray(s.cameraPosition);
@@ -1711,16 +1796,43 @@
 
         saveSettings() {
             if (appState.isInitializing) return;
-            const settings = {
-                cardStyleId: appState.currentCardStyleId,
-                batchSize: appState.batchSize,
-                showEnglish: appState.showEnglish,
-                cardScaleMultiplier: appState.cardScaleMultiplier,
-                focusCruise: {
-                    enabled: appState.focusCruise.enabled,
-                    interval: appState.focusCruise.interval
+            const settings = {};
+            const settingIds = [
+                'rotationSpeed', 'rotationSpeedInput', 'rotationModelSelect', 'cardRotationSpeed',
+                'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'grappleEnabled', 'batchSize',
+                'focusCruiseEnabled', 'focusCruiseIntervalInput', 'focusCruiseIntervalRange',
+                'focusCruiseRatioInput', 'focusCruiseRatioRange',
+                'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
+                'visualEffectsEnabled', 'vortexRotationModelSelect', 'vortexParticleCount', 'vortexColor', 'vortexSize',
+                'vortexSpeed', 'vortexSpeedInput', 'vortexTightness', 'bloomThreshold', 'bloomStrength', 'bloomRadius',
+                'dynamicBgHueStart', 'dynamicBgHueEnd', 'dynamicBgLightness', 'dynamicBgParticleCount', 'dynamicBgParticleSpeed',
+                'starfieldEnabled', 'starCount', 'starColor', 'starSize', 'starVelocityFactor', 'starDensityFalloff',
+                'starMinAlpha', 'starMaxAlpha', 'starTwinkleSpeed', 'cardStyleSelect', 'sphereCardBgOpacity',
+                'sphereCardFontSizeFactorOverall', 'sphereCardFontSizeFactorCloseUp', 'sphereCardFontColor',
+                'sphereCardFontFamily', 'sphereCardEmissiveColor', 'sphereCardEmissiveIntensityFactor',
+                'defaultBrightnessOnLoad', 'sphereCardBaseColorMultiplier', 'sphereCardSideColor',
+                'stormWordCardStyleEnabled', 'stormWordCardBgColor', 'stormWordCardBgOpacity', 'stormWordCardFontColor',
+                'stormWordCardSideColor', 'stormWordCardEmissiveColor', 'hoverCardBrightness', 'hoverOverlayCardScale',
+                'hoverCardEmissiveColor', 'hoverCardGlowFrequency', 'hoverAppendedBgColor', 'hoverAppendedBgOpacity',
+                'hoverAppendedFontColor', 'hoverAppendedFontSize', 'hoverCardTextMainWordColor', 'hoverCardTextLabelColor',
+                'hoverCardTextValueColor', 'hoverCardTextGlowColor', 'hoverCardTextGlowIntensity'
+            ];
+
+            settingIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    settings[id] = (el.type === 'checkbox') ? el.checked : el.value;
                 }
+            });
+
+            settings.showEnglish = appState.showEnglish;
+            settings.cardScaleMultiplier = appState.cardScaleMultiplier;
+            settings.focusCruise = {
+                enabled: appState.focusCruise.enabled,
+                interval: appState.focusCruise.interval,
+                ratioPercent: appState.focusCruise.ratioPercent || 8
             };
+
             localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
         },
 
@@ -1730,9 +1842,21 @@
             const settings = safeJSONParse(raw, null);
             if (!settings) return;
 
+            for (const key in settings) {
+                const el = document.getElementById(key);
+                if (el) {
+                    if (el.type === 'checkbox') {
+                        el.checked = !!settings[key];
+                    } else {
+                        el.value = settings[key];
+                    }
+                }
+            }
+
             if (settings.focusCruise) {
                 appState.focusCruise.enabled = settings.focusCruise.enabled !== undefined ? settings.focusCruise.enabled : true;
                 appState.focusCruise.interval = settings.focusCruise.interval || 50;
+                appState.focusCruise.ratioPercent = settings.focusCruise.ratioPercent || 8;
             }
 
             if (settings.cardScaleMultiplier) {
@@ -1762,7 +1886,8 @@
                 cardScaleMultiplier: appState.cardScaleMultiplier,
                 focusCruise: {
                     enabled: appState.focusCruise.enabled,
-                    interval: appState.focusCruise.interval
+                    interval: appState.focusCruise.interval,
+                    ratioPercent: appState.focusCruise.ratioPercent || 8
                 }
             };
             localStorage.setItem(APP_CONFIG.LAST_STATE_STORAGE_KEY, JSON.stringify(state));

@@ -3,7 +3,6 @@
  */
 const IS_MOBILE_DEVICE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
 
-// 核心共享数学对象池
 const AppMath = {
     vecCamWorld: new THREE.Vector3(),
     vecCardWorld: new THREE.Vector3(),
@@ -137,11 +136,11 @@ const APP_CONFIG = {
     HEMISPHERE_LAYOUT_THRESHOLD: 20,
     GRAPPLE_MAX_SPEED: 260,
 
-    // 局部焦点巡航常量 (90-95%大小不变，5-10%放大1.5倍)
+    // 局部巡航默认常量
     DEFAULT_FOCUS_CRUISE_ENABLED: true,
     DEFAULT_FOCUS_CRUISE_INTERVAL: 50,
-    DEFAULT_FOCUS_CRUISE_SCALE: 1.5,
-    DEFAULT_FOCUS_CRUISE_RATIO: 0.08
+    DEFAULT_FOCUS_CRUISE_RATIO_PERCENT: 8,
+    DEFAULT_FOCUS_CRUISE_SCALE: 1.5
 };
 
 const appState = {
@@ -197,12 +196,12 @@ const appState = {
         cardEmissiveIntensity: 1.0
     },
 
-    // 局部巡航放大状态中枢
+    // 局部巡航状态中枢（百分比与周期全部可调）
     focusCruise: {
         enabled: true,
         interval: 50,
+        ratioPercent: 8,
         scaleFactor: 1.5,
-        spotlightRatio: 0.08,
         remainingPool: [],
         currentSpotlightIndices: new Set(),
         lastSwitchTime: 0

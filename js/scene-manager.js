@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - Three.js 核心场景管理与渲染管线
- * 集成局部焦点巡航放大算法，保持 92%+ 卡片稳定，彻底关闭运动中自动换词逻辑
+ * 局部焦点巡航：可调百分比抽取放大，运动中单词绝不擅自突变
  */
 (function() {
     const AppScene = {
@@ -29,9 +29,7 @@
             const renderScene = new THREE.RenderPass(appState.scene, appState.camera);
             appState.bloomPass = new THREE.UnrealBloomPass(
                 new THREE.Vector2(window.innerWidth, window.innerHeight),
-                0.5, // strength
-                0.2, // radius
-                0.8  // threshold
+                0.5, 0.2, 0.8
             );
             appState.bloomPass.renderToScreen = true;
 
@@ -410,8 +408,8 @@
 
             const cardMult = appState.cardScaleMultiplier || 1.0;
 
-            // ==================== 局部焦点巡航放大算法 ====================
-            // 保持 92%+ 卡片保持原样尺寸，按周期循环抽取 8% 放大至 1.5 倍
+            // ==================== 局部焦点巡航算法 ====================
+            // 保持绝大多数卡片尺寸不变，按周期循环抽取 ratioPercent% 放大至 1.5 倍
             if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0) {
                 const fc = appState.focusCruise;
                 if (time - fc.lastSwitchTime >= fc.interval * 1000) {
@@ -423,14 +421,15 @@
                             [fc.remainingPool[i], fc.remainingPool[j]] = [fc.remainingPool[j], fc.remainingPool[i]];
                         }
                     }
-                    const batchCount = Math.max(1, Math.round(appState.wordObjects.length * fc.spotlightRatio));
+                    const ratio = Math.max(0.01, Math.min(0.5, (fc.ratioPercent || 8) / 100));
+                    const batchCount = Math.max(1, Math.round(appState.wordObjects.length * ratio));
                     const newIndices = fc.remainingPool.splice(0, batchCount);
                     fc.currentSpotlightIndices = new Set(newIndices);
                     mustRender = true;
                 }
             }
 
-            // 传送带流滚动模式：彻底移除自动换词逻辑，保证单词绝不擅自突变
+            // 传送带流滚动模式（完全移除动态换词逻辑，保证单词绝不自动乱变）
             if (appState.isFlowMode && appState.wordObjects && appState.wordObjects.length > 0) {
                 const fovRad = (appState.camera.fov * Math.PI) / 180;
                 const dist = appState.camera.position.length() || 165;
@@ -470,13 +469,11 @@
                         card.position.x += flowSpeed;
                         if (card.position.x > halfSpan) {
                             card.position.x -= span;
-                            // 保持单词不变，不调用 updateCardWordData
                         }
                     } else {
                         card.position.y += flowSpeed;
                         if (card.position.y > halfSpan) {
                             card.position.y -= span;
-                            // 保持单词不变，不调用 updateCardWordData
                         }
                     }
                 });
@@ -486,7 +483,6 @@
             if (!mustRender) return;
             appState.needsRender = false;
 
-            // 宇宙涡旋动态旋转
             if (appState.vortexParticles && appState.vortexParticles.visible) {
                 const baseSpeed = appState.rt.vortexSpeed !== undefined ? appState.rt.vortexSpeed : 0.02;
                 let dynamicSpeed = baseSpeed;
@@ -504,7 +500,6 @@
                 appState.coreSphere.rotation.y += 0.0008;
             }
 
-            // 悬浮大卡片动画与透明度过渡
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
                 const lerpFactor = 0.1;
@@ -536,7 +531,6 @@
                 }
             }
 
-            // 球体自转与擒拿加速
             const grappleFactor = (window.AppSphereEngine && typeof AppSphereEngine.tickGrapple === 'function') ? AppSphereEngine.tickGrapple(time) : 1.0;
             const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.0058 * appState.rotationMultiplier * appState.rotationMultiplierTemporary;
 
@@ -565,7 +559,7 @@
                 appState.wordSphereGroup.updateMatrixWorld(true);
             }
 
-            // 经典球体缩放与透视呼吸
+            // 球面卡片布局与焦点巡航放大
             if (!appState.isFlowMode) {
                 const radius = appState.sphereRadius || 85;
                 const camDist = AppMath.vecCamWorld.length();
@@ -585,7 +579,6 @@
                     const normalizedY = card.position.y / radius;
                     const latScale = 1.0 - 0.45 * (normalizedY * normalizedY);
 
-                    // 局部巡航放大系数判断
                     const isSpotlight = appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx);
                     const spotlightScale = isSpotlight ? appState.focusCruise.scaleFactor : 1.0;
 
@@ -622,7 +615,6 @@
                 appState.activeCardObject.userData.hoverSideMaterial.emissiveIntensity = 0.78 + Math.sin(time * 0.0043) * 0.68;
             }
 
-            // 视觉增强系统渲染输出
             const isBloomActive = !!(document.getElementById('visualEffectsEnabled')?.checked || appState.rt.visualFxEnabled);
             if (isBloomActive && appState.composer) {
                 appState.composer.render();
