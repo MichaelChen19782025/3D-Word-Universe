@@ -603,6 +603,19 @@
             document.getElementById('exportSettingsBtn')?.addEventListener('click', () => this.exportSettings());
             document.getElementById('importSettingsBtn')?.addEventListener('click', () => this.importSettings());
 
+            document.getElementById('clearShieldedBtn')?.addEventListener('click', () => {
+                if (appState.shieldedWords.size === 0) {
+                    alert('当前屏蔽词库为空！');
+                    return;
+                }
+                if (confirm(`确定要清空所有已屏蔽的 ${appState.shieldedWords.size} 个单词并恢复到列表中吗？`)) {
+                    appState.shieldedWords.clear();
+                    AppStorage.saveShieldedWords(appState.shieldedWords);
+                    this.loadWordDataAndBoot();
+                    this.showToast('🛡️ 已清空屏蔽词库，所有单词已恢复');
+                }
+            });
+
             const pasteModal = document.getElementById('pasteDataModalBackdrop');
             document.getElementById('openPasteModalBtn')?.addEventListener('click', () => {
                 if (pasteModal) pasteModal.classList.add('visible');
@@ -634,8 +647,8 @@
                 const batchSizeInput = document.getElementById('batchSize');
                 if (batchSizeInput) batchSizeInput.value = appState.batchSize;
                 this.displayCurrentBatch();
-                scheduleSphereRebuild(10);
-                schedulePersist();
+                this.saveSettings();
+                this.saveLastState();
             });
 
             document.getElementById('randomShuffleBtn')?.addEventListener('click', () => {
@@ -663,7 +676,7 @@
                 this.updateFocusCruiseVisuals();
                 appState.needsRender = true;
                 this.showToast(appState.focusCruise.enabled ? `✨ 局部巡航已开启` : '💤 局部巡航已关闭');
-                schedulePersist();
+                this.saveSettings();
             });
 
             document.getElementById('prevBatchBtn')?.addEventListener('click', () => {
@@ -679,6 +692,7 @@
                 }
             });
 
+            // 单词沉浸式详情面板操作
             document.getElementById('closeDetailBtn')?.addEventListener('click', () => this.hideImmersiveDetailPanel());
             document.getElementById('togglePanelSideBtn')?.addEventListener('click', () => {
                 document.getElementById('immersiveDetailPanel')?.classList.toggle('left-aligned');
@@ -686,6 +700,51 @@
             });
             document.getElementById('speakDetailWordBtn')?.addEventListener('click', () => {
                 if (appState.currentDetailWord?.words) AppAudio.speakWord(appState.currentDetailWord.words);
+            });
+            document.getElementById('prevDetailBtn')?.addEventListener('click', () => {
+                if (!appState.currentBatchWords || appState.currentBatchWords.length === 0 || !appState.currentDetailWord) return;
+                const idx = appState.currentBatchWords.findIndex(w => getWordKey(w) === getWordKey(appState.currentDetailWord));
+                if (idx > 0) {
+                    this.showImmersiveDetailPanel(appState.currentBatchWords[idx - 1]);
+                } else if (idx === 0) {
+                    this.showImmersiveDetailPanel(appState.currentBatchWords[appState.currentBatchWords.length - 1]);
+                }
+            });
+            document.getElementById('nextDetailBtn')?.addEventListener('click', () => {
+                if (!appState.currentBatchWords || appState.currentBatchWords.length === 0 || !appState.currentDetailWord) return;
+                const idx = appState.currentBatchWords.findIndex(w => getWordKey(w) === getWordKey(appState.currentDetailWord));
+                if (idx >= 0 && idx < appState.currentBatchWords.length - 1) {
+                    this.showImmersiveDetailPanel(appState.currentBatchWords[idx + 1]);
+                } else if (idx === appState.currentBatchWords.length - 1) {
+                    this.showImmersiveDetailPanel(appState.currentBatchWords[0]);
+                }
+            });
+            document.getElementById('detailFontDownBtn')?.addEventListener('click', () => {
+                let scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--detail-panel-font-scale')) || 1.0;
+                scale = Math.max(0.6, scale - 0.1);
+                document.documentElement.style.setProperty('--detail-panel-font-scale', scale.toFixed(2));
+            });
+            document.getElementById('detailFontUpBtn')?.addEventListener('click', () => {
+                let scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--detail-panel-font-scale')) || 1.0;
+                scale = Math.min(2.0, scale + 0.1);
+                document.documentElement.style.setProperty('--detail-panel-font-scale', scale.toFixed(2));
+            });
+            document.getElementById('shieldSingleWordBtn')?.addEventListener('click', () => {
+                if (!appState.currentDetailWord) return;
+                const word = appState.currentDetailWord;
+                if (confirm(`确定要屏蔽单词 "${word.words}" 吗？`)) {
+                    const key = getWordKey(word);
+                    appState.shieldedWords.add(key);
+                    AppStorage.saveShieldedWords(appState.shieldedWords);
+                    appState.allWords = appState.allWords.filter(w => getWordKey(w) !== key);
+                    appState.filteredWords = appState.filteredWords.filter(w => getWordKey(w) !== key);
+                    appState.currentBatchWords = appState.currentBatchWords.filter(w => getWordKey(w) !== key);
+                    this.displayCurrentBatch();
+                    this.updateClearShieldedBtnLabel();
+                    this.updateStats();
+                    this.hideImmersiveDetailPanel();
+                    this.showToast(`🛡️ 已屏蔽单词: ${word.words}`);
+                }
             });
 
             // 右侧控制栏功能按钮
@@ -698,11 +757,18 @@
             this.bindSystemViewButton(document.getElementById('viewSurfaceBtn'), 'surface');
             this.bindSystemViewButton(document.getElementById('viewOverallBtn'), 'overall');
 
-            document.getElementById('layoutTopRowBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('top_row'));
-            document.getElementById('layoutCenterRowBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('center_row'));
-            document.getElementById('layoutBottomRowBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('bottom_row'));
-            document.getElementById('layoutLeftColBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('left_col'));
-            document.getElementById('layoutRightColBtn')?.addEventListener('click', () => AppOrbit.arrangeCardsInLayout('right_col'));
+            // 流式排列布局安全调用（优先 AppOrbit，无则回退 AppSphereEngine）
+            const arrangeLayout = (mode) => {
+                const engine = window.AppOrbit || window.AppSphereEngine;
+                if (engine && typeof engine.arrangeCardsInLayout === 'function') {
+                    engine.arrangeCardsInLayout(mode);
+                }
+            };
+            document.getElementById('layoutTopRowBtn')?.addEventListener('click', () => arrangeLayout('top_row'));
+            document.getElementById('layoutCenterRowBtn')?.addEventListener('click', () => arrangeLayout('center_row'));
+            document.getElementById('layoutBottomRowBtn')?.addEventListener('click', () => arrangeLayout('bottom_row'));
+            document.getElementById('layoutLeftColBtn')?.addEventListener('click', () => arrangeLayout('left_col'));
+            document.getElementById('layoutRightColBtn')?.addEventListener('click', () => arrangeLayout('right_col'));
 
             document.getElementById('batchShieldToggleBtn')?.addEventListener('click', () => {
                 if (appState.batchShieldMode) {
@@ -710,7 +776,8 @@
                 } else {
                     appState.batchShieldMode = true;
                     appState.selectedShieldWords = new Set();
-                    document.getElementById('shieldCountLabel').textContent = `已选择: 0 个单词`;
+                    const label = document.getElementById('shieldCountLabel');
+                    if (label) label.textContent = `已选择: 0 个单词`;
                     document.getElementById('batchShieldHUD')?.classList.remove('hidden');
                 }
             });
@@ -1690,8 +1757,8 @@
                                         let currentScale = parseFloat(scaleInput ? scaleInput.value : 1.0);
                                         currentScale = Math.max(0.3, parseFloat((currentScale - 0.15).toFixed(2)));
                                         if (scaleInput) scaleInput.value = currentScale;
-                                        saveSettings();
-                                        saveLastState();
+                                        this.saveSettings();
+                                        this.saveLastState();
                                         this.triggerCardDisplay(appState.hoveredObject);
                                         this.showToast(`🔍 缩放: ${(currentScale * 100).toFixed(0)}%`, 1000);
                                     } else if (zone.type === 'fontSizeUp') {
@@ -1699,8 +1766,8 @@
                                         let currentScale = parseFloat(scaleInput ? scaleInput.value : 1.0);
                                         currentScale = Math.min(4.0, parseFloat((currentScale + 0.15).toFixed(2)));
                                         if (scaleInput) scaleInput.value = currentScale;
-                                        saveSettings();
-                                        saveLastState();
+                                        this.saveSettings();
+                                        this.saveLastState();
                                         this.triggerCardDisplay(appState.hoveredObject);
                                         this.showToast(`🔍 缩放: ${(currentScale * 100).toFixed(0)}%`, 1000);
                                     } else if (zone.type === 'shield') {
@@ -1719,19 +1786,19 @@
                                             appState.overlayCardTargetOpacity = 0;
                                             appState.overlayCardTargetScale.set(0.001, 0.001, 0.001);
                                             appState.rotationMultiplierTemporary = 1.0;
-                                            saveLastState();
+                                            this.saveLastState();
                                             this.showToast(`🛡️ 已屏蔽单词: ${wordData.words}`, 1500);
                                         }
                                     } else if (zone.type === 'card_body') {
-                                        // 点击卡片腹地，保持卡片展示
+                                        // 点击卡片背景主体保护，阻止误关闭
                                     }
                                     appState.needsRender = true;
-                                    return; // 命中卡片，拦截并退出
+                                    return;
                                 }
                             }
                         }
                     }
-                    return; // 命中卡片，拦截并不关闭
+                    return;
                 }
             }
 
@@ -1836,9 +1903,9 @@
         hideImmersiveDetailPanel() {
             document.getElementById('immersiveDetailPanel')?.classList.remove('visible');
             appState.rotationMultiplier = 1.0;
-            adjustSphereViewForPanel();
+            this.adjustSphereViewForPanel();
             appState.needsRender = true;
-            saveLastState();
+            this.saveLastState();
         },
 
         adjustSphereViewForPanel() {
