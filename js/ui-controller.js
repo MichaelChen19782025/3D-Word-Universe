@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与启动总装中枢
- * 修复时长点击修改、放大百分比调节与焦点巡航按钮视觉开关反馈
+ * 集成全滑块自动化微调步进控制器 (▼/▲ + 直接输入)、选项半屏自适应与无障碍调节
  */
 (function() {
     let fontScale = 1.0;
@@ -64,6 +64,7 @@
             this.initPremiumHoverCard();
             this.initAllButtonsAndEvents();
             this.initDetailedSettingsListeners();
+            this.enhanceSlidersWithSteppers(); // 核心：为整个面板所有滑动条自动挂载 ▼/▲ 微调按键与直接输入框
             this.initMobileTouchHandlers();
             this.initClock();
             this.initFocusCruiseHud();
@@ -297,6 +298,113 @@
             setInterval(update, 1000);
         },
 
+        // ==================== 全滑块自动化微调步进控制器 (▼/▲ + 直接输入) ====================
+        enhanceSlidersWithSteppers() {
+            const sliders = document.querySelectorAll('#controlsOverlay input[type="range"]');
+            sliders.forEach(slider => {
+                if (slider.closest('.slider-stepper-wrap')) return;
+
+                const parent = slider.parentElement;
+                const wrap = document.createElement('div');
+                wrap.className = 'slider-stepper-wrap';
+
+                // 检查是否已有同源数字输入框
+                let existingInput = parent.querySelector(`input[type="number"]#${slider.id}Input`) ||
+                                    parent.querySelector(`input[type="number"][id*="${slider.id.replace('Range','')}"]`);
+
+                if (!existingInput && slider.nextElementSibling && slider.nextElementSibling.tagName === 'INPUT' && slider.nextElementSibling.type === 'number') {
+                    existingInput = slider.nextElementSibling;
+                }
+
+                // 下微调按钮 (▼)
+                const downBtn = document.createElement('button');
+                downBtn.type = 'button';
+                downBtn.className = 'stepper-btn down-btn';
+                downBtn.textContent = '▼';
+                downBtn.title = '微调减少数值 (长按连续微调)';
+
+                // 上微调按钮 (▲)
+                const upBtn = document.createElement('button');
+                upBtn.type = 'button';
+                upBtn.className = 'stepper-btn up-btn';
+                upBtn.textContent = '▲';
+                upBtn.title = '微调增加数值 (长按连续微调)';
+
+                // 数值直接输入框
+                let numInput = existingInput;
+                if (!numInput) {
+                    numInput = document.createElement('input');
+                    numInput.type = 'number';
+                    numInput.className = 'stepper-num-input';
+                    numInput.id = slider.id + '_autoNumInput';
+                    numInput.step = slider.step || '1';
+                    numInput.min = slider.min !== '' ? slider.min : '0';
+                    numInput.max = slider.max !== '' ? slider.max : '100';
+                    numInput.value = slider.value;
+                } else {
+                    numInput.classList.add('stepper-num-input');
+                }
+
+                slider.parentNode.insertBefore(wrap, slider);
+                wrap.appendChild(downBtn);
+                wrap.appendChild(slider);
+                wrap.appendChild(upBtn);
+                wrap.appendChild(numInput);
+
+                const stepValue = (delta) => {
+                    const step = parseFloat(slider.step) || 1;
+                    const min = slider.min !== '' ? parseFloat(slider.min) : -Infinity;
+                    const max = slider.max !== '' ? parseFloat(slider.max) : Infinity;
+                    let cur = parseFloat(slider.value) || 0;
+                    let next = cur + delta * step;
+                    next = Math.max(min, Math.min(max, next));
+
+                    const stepDecimals = (slider.step && slider.step.includes('.')) ? slider.step.split('.')[1].length : 0;
+                    slider.value = next.toFixed(stepDecimals);
+                    numInput.value = slider.value;
+
+                    slider.dispatchEvent(new Event('input', { bubbles: true }));
+                    slider.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+
+                let stepTimer = null;
+                let repeatTimer = null;
+                const startStepping = (dir) => {
+                    stepValue(dir);
+                    stepTimer = setTimeout(() => {
+                        repeatTimer = setInterval(() => stepValue(dir), 60);
+                    }, 350);
+                };
+                const stopStepping = () => {
+                    if (stepTimer) clearTimeout(stepTimer);
+                    if (repeatTimer) clearInterval(repeatTimer);
+                    stepTimer = null;
+                    repeatTimer = null;
+                };
+
+                downBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); startStepping(-1); });
+                upBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); startStepping(1); });
+                window.addEventListener('pointerup', stopStepping);
+                window.addEventListener('pointercancel', stopStepping);
+
+                numInput.addEventListener('input', () => {
+                    slider.value = numInput.value;
+                    slider.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+                numInput.addEventListener('change', () => {
+                    slider.value = numInput.value;
+                    slider.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+
+                slider.addEventListener('input', () => {
+                    numInput.value = slider.value;
+                });
+                slider.addEventListener('change', () => {
+                    numInput.value = slider.value;
+                });
+            });
+        },
+
         showNumberPromptModal(options) {
             const backdrop = document.getElementById('numberPromptModalBackdrop');
             const titleEl = document.getElementById('promptModalTitle');
@@ -307,7 +415,7 @@
             const cancelBtn = document.getElementById('promptModalCancel');
             if (!backdrop || !inputEl) return;
 
-            const { title, value, min = 1, max = 600, step = 5, onConfirm } = options;
+            const { title, value, min = 1, max = 600, step = 1, onConfirm } = options;
             titleEl.textContent = title;
             inputEl.value = value;
             inputEl.min = min;
@@ -317,7 +425,7 @@
             const updateVal = (delta) => {
                 let cur = parseFloat(inputEl.value) || 0;
                 cur = Math.max(min, Math.min(max, cur + delta));
-                inputEl.value = cur;
+                inputEl.value = (step < 1) ? cur.toFixed(1) : Math.round(cur);
             };
 
             stepMinusBtn.onclick = () => updateVal(-step);
@@ -344,23 +452,49 @@
             setTimeout(() => inputEl.focus(), 100);
         },
 
+        changeViewAwareSpeed(multiplier) {
+            appState.currentRotationSpeedBase *= multiplier;
+            appState.currentRotationSpeedBase = Math.max(0.00001, Math.min(20.0, appState.currentRotationSpeedBase));
+            appState.autoRotate = true;
+            const toggle = document.getElementById('rotateToggle');
+            if (toggle) toggle.textContent = '🔁';
+
+            const rotSlider = document.getElementById('rotationSpeed');
+            if (rotSlider && safeParseFloat(rotSlider.value, 1.0) <= 0) {
+                rotSlider.value = 1.0;
+            }
+            const sliderVal = Math.max(0.001, safeParseFloat(rotSlider ? rotSlider.value : 1.0, 1.0));
+            appState.actualDisplayRotationSpeed = sliderVal * appState.currentRotationSpeedBase;
+
+            const rotInput = document.getElementById('rotationSpeedInput');
+            if (rotInput) rotInput.value = appState.actualDisplayRotationSpeed.toFixed(4);
+            const rotOutput = document.getElementById('rotationSpeedOutput');
+            if (rotOutput) rotOutput.textContent = appState.actualDisplayRotationSpeed.toFixed(4);
+
+            this.showToast(multiplier > 1.0 ? `🚀 旋转加速: ${appState.actualDisplayRotationSpeed.toFixed(3)}` : `🐢 旋转减速: ${appState.actualDisplayRotationSpeed.toFixed(3)}`);
+            appState.needsRender = true;
+            schedulePersist();
+        },
+
         updateFocusCruiseVisuals() {
             const enabled = appState.focusCruise.enabled;
             const interval = appState.focusCruise.interval;
             const ratioPercent = appState.focusCruise.ratioPercent || 8;
+            const scaleFactor = appState.focusCruise.scaleFactor || 1.5;
 
             const toggleBtn = document.getElementById('focusCruiseToggleBtn');
             if (toggleBtn) {
                 toggleBtn.classList.toggle('active-toggle', enabled);
                 toggleBtn.classList.toggle('inactive-toggle', !enabled);
                 toggleBtn.textContent = enabled ? '✨' : '💤';
-                toggleBtn.title = enabled ? `局部焦点巡航 [已开启: ${interval}s·${ratioPercent}%] - 点击关闭` : '局部焦点巡航 [已关闭] - 点击开启';
+                toggleBtn.title = enabled ? `局部焦点巡航 [已开启: ${interval}s·${ratioPercent}%量·${scaleFactor}x倍] - 点击关闭` : '局部焦点巡航 [已关闭] - 点击开启';
             }
 
             const hud = document.getElementById('focusCruiseHud');
             const statusTag = document.getElementById('focusCruiseStatusTag');
             const intervalVal = document.getElementById('focusCruiseIntervalVal');
             const ratioVal = document.getElementById('focusCruiseRatioVal');
+            const scaleVal = document.getElementById('focusCruiseScaleVal');
 
             if (hud) {
                 hud.classList.toggle('enabled', enabled);
@@ -375,6 +509,9 @@
             if (ratioVal) {
                 ratioVal.textContent = String(ratioPercent);
             }
+            if (scaleVal) {
+                scaleVal.textContent = String(scaleFactor);
+            }
 
             const cb = document.getElementById('focusCruiseEnabled');
             const badge = document.getElementById('focusCruiseStatusBadge');
@@ -382,6 +519,8 @@
             const intRange = document.getElementById('focusCruiseIntervalRange');
             const ratInput = document.getElementById('focusCruiseRatioInput');
             const ratRange = document.getElementById('focusCruiseRatioRange');
+            const scaInput = document.getElementById('focusCruiseScaleInput');
+            const scaRange = document.getElementById('focusCruiseScaleRange');
 
             if (cb) cb.checked = enabled;
             if (badge) {
@@ -392,6 +531,8 @@
             if (intRange) intRange.value = String(interval);
             if (ratInput) ratInput.value = String(ratioPercent);
             if (ratRange) ratRange.value = String(ratioPercent);
+            if (scaInput) scaInput.value = String(scaleFactor);
+            if (scaRange) scaRange.value = String(scaleFactor);
         },
 
         initFocusCruiseHud() {
@@ -399,6 +540,7 @@
             const statusTag = document.getElementById('focusCruiseStatusTag');
             const intervalPill = document.getElementById('focusCruiseIntervalPill');
             const ratioPill = document.getElementById('focusCruiseRatioPill');
+            const scalePill = document.getElementById('focusCruiseScalePill');
             if (!hud) return;
 
             statusTag?.addEventListener('click', (e) => {
@@ -434,7 +576,7 @@
             ratioPill?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.showNumberPromptModal({
-                    title: '🔍 修改放大卡片比例 (1% - 40%)',
+                    title: '🔍 抽取放大卡片数量占比 (%)',
                     value: appState.focusCruise.ratioPercent || 8,
                     min: 1, max: 40, step: 1,
                     onConfirm: (ratio) => {
@@ -443,7 +585,23 @@
                         appState.focusCruise.currentSpotlightIndices.clear();
                         appState.focusCruise.lastSwitchTime = performance.now();
                         this.updateFocusCruiseVisuals();
-                        this.showToast(`🔍 放大卡片比例已修改为: ${ratio}%`);
+                        this.showToast(`🔍 放大卡片数量占比已设为: ${ratio}% (其余保持原样)`);
+                        appState.needsRender = true;
+                        schedulePersist();
+                    }
+                });
+            });
+
+            scalePill?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showNumberPromptModal({
+                    title: '🔎 抽中卡片的放大倍率 (倍)',
+                    value: appState.focusCruise.scaleFactor || 1.5,
+                    min: 1.1, max: 3.0, step: 0.1,
+                    onConfirm: (scale) => {
+                        appState.focusCruise.scaleFactor = scale;
+                        this.updateFocusCruiseVisuals();
+                        this.showToast(`🔎 抽中卡片放大倍率已设为: ${scale} 倍`);
                         appState.needsRender = true;
                         schedulePersist();
                     }
@@ -573,6 +731,12 @@
                 appState.focusCruise.remainingPool = [];
                 appState.focusCruise.currentSpotlightIndices.clear();
                 appState.focusCruise.lastSwitchTime = performance.now();
+                this.updateFocusCruiseVisuals();
+                appState.needsRender = true;
+            });
+
+            bindSync('focusCruiseScaleRange', 'focusCruiseScaleInput', (scale) => {
+                appState.focusCruise.scaleFactor = parseFloat(scale);
                 this.updateFocusCruiseVisuals();
                 appState.needsRender = true;
             });
@@ -935,6 +1099,13 @@
                 AppScene.zoomSphere(1.15);
             });
 
+            document.getElementById('speedUpBtn')?.addEventListener('click', () => {
+                this.changeViewAwareSpeed(1.25);
+            });
+            document.getElementById('speedDownBtn')?.addEventListener('click', () => {
+                this.changeViewAwareSpeed(0.80);
+            });
+
             document.getElementById('focusCruiseToggleBtn')?.addEventListener('click', () => {
                 appState.focusCruise.enabled = !appState.focusCruise.enabled;
                 if (!appState.focusCruise.enabled) {
@@ -944,7 +1115,7 @@
                 }
                 this.updateFocusCruiseVisuals();
                 appState.needsRender = true;
-                this.showToast(appState.focusCruise.enabled ? `✨ 局部巡航已开启 (${appState.focusCruise.interval}s·${appState.focusCruise.ratioPercent || 8}%)` : '💤 局部巡航已关闭');
+                this.showToast(appState.focusCruise.enabled ? `✨ 局部巡航已开启 (${appState.focusCruise.interval}s·${appState.focusCruise.ratioPercent || 8}%量·${appState.focusCruise.scaleFactor || 1.5}x)` : '💤 局部巡航已关闭');
                 schedulePersist();
             });
 
@@ -1714,7 +1885,8 @@
                         <li><strong>双击空白：</strong>触发瞬间加速（手动擒拿）。</li>
                         <li><strong>点击卡片：</strong>显示 3D 发音弹窗与详细释义。</li>
                         <li><strong>放大/缩小卡片：</strong>使用侧栏 <code>➕ / ➖</code> 自由缩放卡片大小。</li>
-                        <li><strong>局部焦点巡航：</strong>绝大部分卡片保持原样大小，极少数卡片智能放大 1.5 倍，周期与比例均可无级自定义。</li>
+                        <li><strong>加速/减速旋转：</strong>使用侧栏 <code>🚀 / 🐢</code> 无级调速。</li>
+                        <li><strong>局部焦点巡航：</strong>绝大部分卡片保持原样大小，极少数卡片智能放大，周期、抽取比例与放大倍数均可无级自定义。</li>
                     </ul>
                 `;
             }
@@ -1783,6 +1955,7 @@
                     appState.focusCruise.enabled = !!s.focusCruise.enabled;
                     appState.focusCruise.interval = s.focusCruise.interval || 50;
                     appState.focusCruise.ratioPercent = s.focusCruise.ratioPercent || 8;
+                    appState.focusCruise.scaleFactor = s.focusCruise.scaleFactor || 1.5;
                 }
                 if (s.cameraPosition && appState.camera) {
                     appState.camera.position.fromArray(s.cameraPosition);
@@ -1801,7 +1974,7 @@
                 'rotationSpeed', 'rotationSpeedInput', 'rotationModelSelect', 'cardRotationSpeed',
                 'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'grappleEnabled', 'batchSize',
                 'focusCruiseEnabled', 'focusCruiseIntervalInput', 'focusCruiseIntervalRange',
-                'focusCruiseRatioInput', 'focusCruiseRatioRange',
+                'focusCruiseRatioInput', 'focusCruiseRatioRange', 'focusCruiseScaleInput', 'focusCruiseScaleRange',
                 'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
                 'visualEffectsEnabled', 'vortexRotationModelSelect', 'vortexParticleCount', 'vortexColor', 'vortexSize',
                 'vortexSpeed', 'vortexSpeedInput', 'vortexTightness', 'bloomThreshold', 'bloomStrength', 'bloomRadius',
@@ -1830,7 +2003,8 @@
             settings.focusCruise = {
                 enabled: appState.focusCruise.enabled,
                 interval: appState.focusCruise.interval,
-                ratioPercent: appState.focusCruise.ratioPercent || 8
+                ratioPercent: appState.focusCruise.ratioPercent || 8,
+                scaleFactor: appState.focusCruise.scaleFactor || 1.5
             };
 
             localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
@@ -1857,6 +2031,7 @@
                 appState.focusCruise.enabled = settings.focusCruise.enabled !== undefined ? settings.focusCruise.enabled : true;
                 appState.focusCruise.interval = settings.focusCruise.interval || 50;
                 appState.focusCruise.ratioPercent = settings.focusCruise.ratioPercent || 8;
+                appState.focusCruise.scaleFactor = settings.focusCruise.scaleFactor || 1.5;
             }
 
             if (settings.cardScaleMultiplier) {
@@ -1887,7 +2062,8 @@
                 focusCruise: {
                     enabled: appState.focusCruise.enabled,
                     interval: appState.focusCruise.interval,
-                    ratioPercent: appState.focusCruise.ratioPercent || 8
+                    ratioPercent: appState.focusCruise.ratioPercent || 8,
+                    scaleFactor: appState.focusCruise.scaleFactor || 1.5
                 }
             };
             localStorage.setItem(APP_CONFIG.LAST_STATE_STORAGE_KEY, JSON.stringify(state));

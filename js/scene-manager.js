@@ -409,7 +409,7 @@
             const cardMult = appState.cardScaleMultiplier || 1.0;
 
             // ==================== 局部焦点巡航算法 ====================
-            // 保持绝大多数卡片尺寸不变，按周期循环抽取 ratioPercent% 放大至 1.5 倍
+            // 保持绝大多数卡片尺寸不变，按周期循环抽取 ratioPercent% 放大至 scaleFactor 倍
             if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0) {
                 const fc = appState.focusCruise;
                 if (time - fc.lastSwitchTime >= fc.interval * 1000) {
@@ -462,7 +462,7 @@
                 appState.wordObjects.forEach((card, idx) => {
                     card.quaternion.identity();
                     const isSpotlight = appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx);
-                    const localScale = cardMult * (isSpotlight ? appState.focusCruise.scaleFactor : 1.0);
+                    const localScale = cardMult * (isSpotlight ? (appState.focusCruise.scaleFactor || 1.5) : 1.0);
                     card.scale.set(localScale, localScale, localScale);
 
                     if (isHorizontal) {
@@ -580,7 +580,7 @@
                     const latScale = 1.0 - 0.45 * (normalizedY * normalizedY);
 
                     const isSpotlight = appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx);
-                    const spotlightScale = isSpotlight ? appState.focusCruise.scaleFactor : 1.0;
+                    const spotlightScale = isSpotlight ? (appState.focusCruise.scaleFactor || 1.5) : 1.0;
 
                     const finalScale = latScale * depthScale * cardMult * spotlightScale;
                     card.scale.set(finalScale, finalScale, finalScale);

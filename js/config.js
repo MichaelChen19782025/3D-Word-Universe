@@ -136,7 +136,7 @@ const APP_CONFIG = {
     HEMISPHERE_LAYOUT_THRESHOLD: 20,
     GRAPPLE_MAX_SPEED: 260,
 
-    // 局部巡航默认常量
+    // 局部焦点巡航默认配置
     DEFAULT_FOCUS_CRUISE_ENABLED: true,
     DEFAULT_FOCUS_CRUISE_INTERVAL: 50,
     DEFAULT_FOCUS_CRUISE_RATIO_PERCENT: 8,
@@ -196,7 +196,7 @@ const appState = {
         cardEmissiveIntensity: 1.0
     },
 
-    // 局部巡航状态中枢（百分比与周期全部可调）
+    // 局部巡航状态中枢（数量占比与放大倍率双可调）
     focusCruise: {
         enabled: true,
         interval: 50,
