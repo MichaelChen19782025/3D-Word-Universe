@@ -90,7 +90,7 @@ body {
 #wordSphere { width: 100%; height: 100%; cursor: grab; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 1); }
 #wordSphere:active { cursor: grabbing; }
 
-/* 选项设置抽屉面板：宽度减半（默认宽度紧凑，手机端严格保持 50vw） */
+/* 选项设置抽屉面板 */
 .controls-overlay {
     position: fixed; top: 0; left: 0; 
     width: min(320px, 50vw); 
@@ -103,7 +103,6 @@ body {
 }
 .controls-overlay.visible { transform: translateX(0); }
 
-/* 内容区域：双向滑动、永久锚定右边缘与下边缘 */
 .panel-content { 
     padding: 12px 10px; 
     flex-grow: 1; 
@@ -114,20 +113,9 @@ body {
     scrollbar-width: thin; 
     scrollbar-color: rgba(0, 240, 255, 0.5) rgba(10, 20, 48, 0.4);
 }
-.panel-content::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-.panel-content::-webkit-scrollbar-thumb {
-    background: rgba(0, 240, 255, 0.55);
-    border-radius: 3px;
-}
-.panel-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 240, 255, 0.85);
-}
-.panel-content::-webkit-scrollbar-track {
-    background: rgba(10, 20, 48, 0.5);
-}
+.panel-content::-webkit-scrollbar { width: 6px; height: 6px; }
+.panel-content::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.55); border-radius: 3px; }
+.panel-content::-webkit-scrollbar-track { background: rgba(10, 20, 48, 0.5); }
 
 .panel-header { text-align: center; padding: 12px 8px; border-bottom: 1px solid var(--border-color); }
 .panel-header h1 { font-size: 1.35rem; background: linear-gradient(45deg, var(--accent-color-1), var(--accent-color-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 15px var(--primary-glow-color); margin-bottom: 3px; }
@@ -154,7 +142,7 @@ body {
 .setting-item.checkbox-item { justify-content: flex-start; gap: 8px; }
 .setting-item.checkbox-item input[type="checkbox"] { transform: scale(1.15); }
 
-/* ==================== 自动化全滑块微调步进控制器 (▼/▲ + 数值输入) ==================== */
+/* 全滑块自动化微调步进控制器 (▼/▲ + 数值输入) */
 .slider-stepper-wrap {
     display: flex;
     align-items: center;
@@ -294,7 +282,6 @@ body {
 .modal-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(0,242,254, 0.7); }
 .modal-btn.secondary-btn { background: linear-gradient(45deg, #68737e, #4f565d); }
 
-/* 参数调节步进弹窗 */
 .prompt-modal-box {
     background: linear-gradient(145deg, rgba(16, 32, 70, 0.98), rgba(8, 18, 44, 0.98));
     border: 1px solid var(--accent-color-2);
@@ -401,43 +388,52 @@ body {
     border: 1px solid rgba(135, 205, 255, 0.22);
 }
 
-#studyCounterHud {
-    position: fixed; top: 18px; right: 20px;
+/* ==================== 右上角 HUD 组合栏 (测试单词计数 + 折叠式焦点巡航) ==================== */
+#topRightHudBar {
+    position: fixed; top: 16px; right: 16px;
     z-index: 46;
+    display: flex; align-items: center; gap: 8px;
+    pointer-events: auto;
+}
+
+#studyCounterHud {
     display: flex; align-items: center; gap: 7px;
     font-size: 1.35rem; font-weight: 700;
     color: #b9f6ff;
     text-shadow: 0 0 12px rgba(0, 220, 255, 0.8), 0 0 3px rgba(0, 0, 0, 0.9);
-    opacity: 0.85;
+    opacity: 0.88;
     cursor: pointer;
     user-select: none;
-    padding: 5px 14px;
+    padding: 5px 12px;
     border-radius: 11px;
-    background: rgba(10, 20, 48, 0.3);
-    backdrop-filter: blur(3px);
+    background: rgba(10, 20, 48, 0.35);
+    backdrop-filter: blur(4px);
     border: 1px solid rgba(135, 205, 255, 0.25);
     transition: all 0.25s;
+    flex-shrink: 0;
 }
 #studyCounterHud:hover { opacity: 1; border-color: var(--accent-color-2); box-shadow: 0 0 14px rgba(0, 240, 255, 0.35); }
 #studyCounterHud .study-counter-icon { font-size: 1.05rem; }
 #studyCounterHud .study-goal-sep { opacity: 0.5; font-weight: 400; }
 #studyGoalValue { cursor: pointer; border-bottom: 1px dashed rgba(255, 215, 120, 0.6); padding: 0 2px; }
 
+/* 折叠式焦点巡航 HUD：默认紧凑折叠，点击展开具体参数 */
 #focusCruiseHud {
-    position: fixed; top: 64px; right: 20px;
-    z-index: 46;
-    display: flex; align-items: center; gap: 5px;
+    display: flex; align-items: center;
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
     font-size: 0.85rem; font-weight: 700;
     user-select: none;
-    padding: 4px 8px;
-    border-radius: 10px;
+    padding: 5px 9px;
+    border-radius: 11px;
     backdrop-filter: blur(5px);
-    transition: all 0.25s;
+    transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    cursor: pointer;
+    white-space: nowrap;
 }
 #focusCruiseHud.enabled {
     color: #ffd875;
     border: 1px solid rgba(255, 216, 117, 0.55);
-    background: rgba(14, 28, 60, 0.85);
+    background: rgba(14, 28, 60, 0.88);
     box-shadow: 0 0 15px rgba(255, 216, 117, 0.35);
     opacity: 0.95;
 }
@@ -446,14 +442,32 @@ body {
     border: 1px dashed rgba(140, 160, 190, 0.3);
     background: rgba(10, 20, 48, 0.35);
     box-shadow: none;
-    opacity: 0.45;
-    filter: grayscale(0.8);
+    opacity: 0.55;
 }
+
+.focus-cruise-trigger {
+    display: flex; align-items: center; gap: 4px;
+    cursor: pointer; padding: 2px 4px; border-radius: 6px;
+    transition: background 0.2s, transform 0.2s;
+}
+.focus-cruise-trigger:hover {
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(1.03);
+}
+
+.focus-cruise-expand-panel {
+    display: none; align-items: center; gap: 5px; margin-left: 6px;
+    padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.22);
+}
+#focusCruiseHud.expanded .focus-cruise-expand-panel {
+    display: flex;
+}
+
 .hud-status-tag {
     cursor: pointer; padding: 2px 5px; border-radius: 5px; transition: background 0.2s;
 }
 .hud-status-tag:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15);
 }
 .focus-pill {
     cursor: pointer;
@@ -568,10 +582,14 @@ body {
     text-align: left; font-size: 0.92rem;
 }
 
-/* ==================== 移动端竖屏优化核心规则：宽度精确减半 (50vw)，右侧 50% 留给 3D 视图 ==================== */
 @media (max-width: 768px) {
     :root { 
         --immersive-panel-width: 100%; 
+    }
+    #topRightHudBar {
+        top: 14px !important;
+        right: 12px !important;
+        gap: 6px !important;
     }
     .controls-overlay { 
         width: 50vw !important; 
