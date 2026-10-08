@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与启动总装中枢
- * 集成全滑块自动化微调步进控制器 (▼/▲ + 直接输入)、选项半屏自适应与无障碍调节
+ * 折叠式焦点巡航交互、参数弹窗调节与自动微调步进器支持
  */
 (function() {
     let fontScale = 1.0;
@@ -64,7 +64,7 @@
             this.initPremiumHoverCard();
             this.initAllButtonsAndEvents();
             this.initDetailedSettingsListeners();
-            this.enhanceSlidersWithSteppers(); // 核心：为整个面板所有滑动条自动挂载 ▼/▲ 微调按键与直接输入框
+            this.enhanceSlidersWithSteppers();
             this.initMobileTouchHandlers();
             this.initClock();
             this.initFocusCruiseHud();
@@ -298,7 +298,6 @@
             setInterval(update, 1000);
         },
 
-        // ==================== 全滑块自动化微调步进控制器 (▼/▲ + 直接输入) ====================
         enhanceSlidersWithSteppers() {
             const sliders = document.querySelectorAll('#controlsOverlay input[type="range"]');
             sliders.forEach(slider => {
@@ -308,7 +307,6 @@
                 const wrap = document.createElement('div');
                 wrap.className = 'slider-stepper-wrap';
 
-                // 检查是否已有同源数字输入框
                 let existingInput = parent.querySelector(`input[type="number"]#${slider.id}Input`) ||
                                     parent.querySelector(`input[type="number"][id*="${slider.id.replace('Range','')}"]`);
 
@@ -316,21 +314,18 @@
                     existingInput = slider.nextElementSibling;
                 }
 
-                // 下微调按钮 (▼)
                 const downBtn = document.createElement('button');
                 downBtn.type = 'button';
                 downBtn.className = 'stepper-btn down-btn';
                 downBtn.textContent = '▼';
                 downBtn.title = '微调减少数值 (长按连续微调)';
 
-                // 上微调按钮 (▲)
                 const upBtn = document.createElement('button');
                 upBtn.type = 'button';
                 upBtn.className = 'stepper-btn up-btn';
                 upBtn.textContent = '▲';
                 upBtn.title = '微调增加数值 (长按连续微调)';
 
-                // 数值直接输入框
                 let numInput = existingInput;
                 if (!numInput) {
                     numInput = document.createElement('input');
@@ -491,6 +486,8 @@
             }
 
             const hud = document.getElementById('focusCruiseHud');
+            const triggerIcon = document.getElementById('focusCruiseTriggerIcon');
+            const triggerText = document.getElementById('focusCruiseTriggerText');
             const statusTag = document.getElementById('focusCruiseStatusTag');
             const intervalVal = document.getElementById('focusCruiseIntervalVal');
             const ratioVal = document.getElementById('focusCruiseRatioVal');
@@ -500,8 +497,14 @@
                 hud.classList.toggle('enabled', enabled);
                 hud.classList.toggle('disabled', !enabled);
             }
+            if (triggerIcon) {
+                triggerIcon.textContent = enabled ? '✨' : '💤';
+            }
+            if (triggerText) {
+                triggerText.textContent = enabled ? '巡航' : '巡航(关)';
+            }
             if (statusTag) {
-                statusTag.textContent = enabled ? '✨ 巡航:开' : '⚪ 巡航:关';
+                statusTag.textContent = enabled ? '开' : '关';
             }
             if (intervalVal) {
                 intervalVal.textContent = String(interval);
@@ -537,12 +540,30 @@
 
         initFocusCruiseHud() {
             const hud = document.getElementById('focusCruiseHud');
+            const trigger = document.getElementById('focusCruiseTrigger');
             const statusTag = document.getElementById('focusCruiseStatusTag');
             const intervalPill = document.getElementById('focusCruiseIntervalPill');
             const ratioPill = document.getElementById('focusCruiseRatioPill');
             const scalePill = document.getElementById('focusCruiseScalePill');
             if (!hud) return;
 
+            // 点击折叠触发标签，展开/收起参数面板
+            trigger?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isExpanded = hud.classList.contains('expanded');
+                hud.classList.toggle('expanded', !isExpanded);
+                hud.classList.toggle('collapsed', isExpanded);
+            });
+
+            // 点击面板外部区域自动收起折叠
+            document.addEventListener('pointerdown', (e) => {
+                if (!hud.contains(e.target) && !document.getElementById('numberPromptModalBackdrop')?.classList.contains('visible')) {
+                    hud.classList.remove('expanded');
+                    hud.classList.add('collapsed');
+                }
+            });
+
+            // 展开面板内部的状态开关切换
             statusTag?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 appState.focusCruise.enabled = !appState.focusCruise.enabled;
@@ -585,7 +606,7 @@
                         appState.focusCruise.currentSpotlightIndices.clear();
                         appState.focusCruise.lastSwitchTime = performance.now();
                         this.updateFocusCruiseVisuals();
-                        this.showToast(`🔍 放大卡片数量占比已设为: ${ratio}% (其余保持原样)`);
+                        this.showToast(`🔍 放大卡片数量占比已设为: ${ratio}%`);
                         appState.needsRender = true;
                         schedulePersist();
                     }
