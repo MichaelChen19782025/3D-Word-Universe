@@ -1,6 +1,5 @@
 /**
- * 3D单词宇宙 - Three.js 核心场景管理与渲染管线
- * 包含：3D 四角发光直角括号 (frameGroup) 呼吸动画、摄像机视口锁定与零光照纯黑处理
+ * 3D单词宇宙 - Three.js 核心场景管理与渲染管线 (四向平移支持版)
  */
 (function() {
     const AppScene = {
@@ -51,21 +50,13 @@
         },
 
         initLights() {
-            appState.hemisphereLight = new THREE.HemisphereLight(0xadd8e6, 0x404040, 2.0);
+            // 柔和半球自然光，降低中央闪光强光源
+            appState.hemisphereLight = new THREE.HemisphereLight(0xadd8e6, 0x1a243b, 1.5);
             appState.scene.add(appState.hemisphereLight);
-            appState.scene.add(appState.camera);
 
-            if (THREE.RectAreaLightUniformsLib) THREE.RectAreaLightUniformsLib.init();
-
-            appState.rectAreaLight1 = new THREE.RectAreaLight(0xffffff, 8.0, 200, 200);
-            appState.rectAreaLight1.position.set(0, 150, 50);
-            appState.rectAreaLight1.lookAt(0, 0, 0);
-            appState.scene.add(appState.rectAreaLight1);
-
-            appState.rectAreaLight2 = new THREE.RectAreaLight(0xffe0b3, 5.0, 250, 250);
-            appState.rectAreaLight2.position.set(-180, 50, -50);
-            appState.rectAreaLight2.lookAt(0, 0, 0);
-            appState.scene.add(appState.rectAreaLight2);
+            appState.dirLight1 = new THREE.DirectionalLight(0xa5e5ff, 1.2);
+            appState.dirLight1.position.set(0, 150, 200);
+            appState.scene.add(appState.dirLight1);
         },
 
         onWindowResize() {
@@ -99,18 +90,35 @@
             appState.needsRender = true;
         },
 
+        // 🎮 四向平移控制球体位移（与 Ctrl + 鼠标左键平移完全一致）
+        panSphere(deltaX, deltaY) {
+            if (!appState.camera || !appState.controls) return;
+            const factor = (appState.camera.position.length() || 165) * 0.0025;
+
+            const right = new THREE.Vector3().setFromMatrixColumn(appState.camera.matrix, 0).multiplyScalar(deltaX * factor);
+            const up = new THREE.Vector3().setFromMatrixColumn(appState.camera.matrix, 1).multiplyScalar(deltaY * factor);
+
+            appState.camera.position.add(right).add(up);
+            appState.controls.target.add(right).add(up);
+            appState.controls.update();
+            appState.needsRender = true;
+        },
+
+        resetSpherePan() {
+            if (!appState.controls) return;
+            const dist = appState.camera.position.distanceTo(appState.controls.target) || 165;
+            appState.controls.target.set(0, 0, 0);
+            appState.camera.position.set(0, 0, dist);
+            appState.controls.update();
+            appState.needsRender = true;
+            if (window.AppUI) AppUI.showToast('🎯 球体已复位至正中');
+        },
+
         animate(time) {
             if (time === undefined || time === null) time = performance.now();
             requestAnimationFrame((t) => AppScene.animate(t));
 
             if (!appState.controls || !appState.renderer || !appState.scene || !appState.camera) return;
-
-            if (IS_MOBILE_DEVICE) {
-                if (!appState.lastRenderTime) appState.lastRenderTime = time;
-                const delta = time - appState.lastRenderTime;
-                if (delta < 33.33) return;
-                appState.lastRenderTime = time - (delta % 33.33);
-            }
 
             const controlsChanged = appState.controls.update();
             let mustRender = controlsChanged || appState.needsRender;
@@ -119,6 +127,12 @@
             if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) mustRender = true;
             if (appState.vortexParticles && appState.vortexParticles.visible) mustRender = true;
 
+            // 宇宙涡旋旋转
+            if (appState.vortexParticles && appState.vortexParticles.visible) {
+                const spd = appState.rt.vortexSpeed || 0.003;
+                appState.vortexParticles.rotation.y += spd;
+            }
+
             const cardMult = appState.cardScaleMultiplier || 1.0;
             appState.camera.getWorldPosition(AppMath.vecCamWorld);
             const radius = appState.sphereRadius || 85;
@@ -126,51 +140,10 @@
             const minDist = camDist - radius;
             const distRange = 2 * radius;
 
-            // 局部焦点巡航计算
-            if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0) {
-                const fc = appState.focusCruise;
-                if (time - fc.lastSwitchTime >= fc.interval * 1000) {
-                    fc.lastSwitchTime = time;
-                    const frontCandidateIndices = [];
-                    for (let i = 0; i < appState.wordObjects.length; i++) {
-                        const card = appState.wordObjects[i];
-                        card.getWorldPosition(AppMath.vecCardWorld);
-                        const dist = AppMath.vecCardWorld.distanceTo(AppMath.vecCamWorld);
-                        const t = (dist - minDist) / distRange;
-                        if (t < 0.42) {
-                            frontCandidateIndices.push(i);
-                        }
-                    }
-
-                    if (frontCandidateIndices.length > 0) {
-                        if (!fc.visitedIndices) fc.visitedIndices = new Set();
-                        let available = frontCandidateIndices.filter(idx => !fc.visitedIndices.has(idx));
-                        if (available.length === 0) {
-                            fc.visitedIndices.clear();
-                            available = frontCandidateIndices;
-                        }
-
-                        for (let i = available.length - 1; i > 0; i--) {
-                            const j = Math.floor(Math.random() * (i + 1));
-                            [available[i], available[j]] = [available[j], available[i]];
-                        }
-
-                        const ratio = Math.max(0.005, Math.min(1.0, (fc.ratioPercent || 8) / 100));
-                        const batchCount = Math.max(1, Math.min(available.length, Math.round(appState.wordObjects.length * ratio)));
-                        const selected = available.slice(0, batchCount);
-                        selected.forEach(idx => fc.visitedIndices.add(idx));
-                        fc.currentSpotlightIndices = new Set(selected);
-                    } else {
-                        fc.currentSpotlightIndices = new Set();
-                    }
-                    mustRender = true;
-                }
-            }
-
             if (!mustRender) return;
             appState.needsRender = false;
 
-            // ★ 3D 浮动查词卡片渲染管线：平滑透明度、四角发光括号呼吸与零光照纯黑处理
+            // 3D 浮动卡片平滑动效
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
                 const screen = card.getObjectByName("textScreen") || card.userData.refs?.screen;
@@ -184,25 +157,16 @@
 
                     const backplate = card.getObjectByName("backplate") || card.userData.refs?.backplate;
                     if (backplate) {
-                        if (isPitchBlack) {
-                            backplate.material.color.setHex(0x000000);
-                            backplate.material.opacity = newOp;
-                        } else {
-                            backplate.material.color.set(0x0a1428);
-                            backplate.material.opacity = newOp * (appState.rt.hoverBgOpacity || 0.78);
-                        }
+                        backplate.material.color.set(isPitchBlack ? 0x000000 : 0x0a1428);
+                        backplate.material.opacity = isPitchBlack ? newOp : (newOp * (appState.rt.hoverBgOpacity || 0.78));
                     }
 
                     const coreGlow = card.getObjectByName("coreGlow") || card.userData.refs?.coreGlow;
-                    if (coreGlow) {
-                        coreGlow.material.opacity = isPitchBlack ? 0 : (newOp * 0.85);
-                    }
+                    if (coreGlow) coreGlow.material.opacity = isPitchBlack ? 0 : (newOp * 0.85);
 
-                    // 四角直角发光括号 (frameGroup) 呼吸特效
                     const frameGroup = card.getObjectByName("frameGroup") || card.userData.refs?.frameGroup;
                     if (frameGroup) {
-                        const hoverStyleMode = document.getElementById('hoverCardStyleModeSelect')?.value || 'classic_hud';
-                        if (hoverStyleMode === 'classic_hud' && !isPitchBlack) {
+                        if (!isPitchBlack) {
                             frameGroup.visible = true;
                             frameGroup.children.forEach((child, i) => {
                                 child.material.opacity = newOp * (0.65 + Math.sin(time * 0.003 + i * 1.57) * 0.35);
@@ -211,7 +175,6 @@
                             frameGroup.visible = false;
                         }
                     }
-
                     card.visible = (newOp > 0.01 && card.scale.x > 0.01);
                 }
 
@@ -223,17 +186,13 @@
             }
 
             const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.0058 * appState.rotationMultiplier * appState.rotationMultiplierTemporary;
-            if (appState.autoRotate && baseRotationSpeed > 0 && appState.wordSphereGroup && !appState.isFlowMode) {
-                let dynamicSpeed = baseRotationSpeed;
-                if (appState.rotationModel === 'sine-ease') {
-                    dynamicSpeed = baseRotationSpeed * (1.25 + 0.75 * Math.sin(time * 0.0005));
-                }
+            if (appState.autoRotate && baseRotationSpeed > 0 && appState.wordSphereGroup) {
                 const rx = appState.rt.rotateX !== undefined ? appState.rt.rotateX : true;
                 const ry = appState.rt.rotateY !== undefined ? appState.rt.rotateY : true;
                 const rz = appState.rt.rotateZ !== undefined ? appState.rt.rotateZ : false;
-                if (rx) appState.wordSphereGroup.rotation.x += dynamicSpeed;
-                if (ry) appState.wordSphereGroup.rotation.y += dynamicSpeed;
-                if (rz) appState.wordSphereGroup.rotation.z += dynamicSpeed;
+                if (rx) appState.wordSphereGroup.rotation.x += baseRotationSpeed;
+                if (ry) appState.wordSphereGroup.rotation.y += baseRotationSpeed;
+                if (rz) appState.wordSphereGroup.rotation.z += baseRotationSpeed;
             }
 
             const shouldCardsRotate = appState.rt.cardSelfRotation !== undefined ? appState.rt.cardSelfRotation : true;
@@ -243,41 +202,40 @@
                 appState.wordSphereGroup.updateMatrixWorld(true);
             }
 
-            if (!appState.isFlowMode) {
-                appState.wordObjects.forEach((card, idx) => {
-                    card.getWorldPosition(AppMath.vecCardWorld);
-                    const dist = AppMath.vecCardWorld.distanceTo(AppMath.vecCamWorld);
-                    const t = THREE.MathUtils.clamp((dist - minDist) / distRange, 0, 1);
+            appState.wordObjects.forEach((card, idx) => {
+                card.getWorldPosition(AppMath.vecCardWorld);
+                const dist = AppMath.vecCardWorld.distanceTo(AppMath.vecCamWorld);
+                const t = THREE.MathUtils.clamp((dist - minDist) / distRange, 0, 1);
 
-                    const depthScale = THREE.MathUtils.lerp(1.4, 0.32, t);
-                    const normalizedY = card.position.y / radius;
-                    const latScale = 1.0 - 0.45 * (normalizedY * normalizedY);
+                const depthScale = THREE.MathUtils.lerp(1.4, 0.32, t);
+                const normalizedY = card.position.y / radius;
+                const latScale = 1.0 - 0.45 * (normalizedY * normalizedY);
 
-                    let spotlightScale = 1.0;
-                    if (appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx)) {
-                        if (t < 0.5) {
-                            const frontFade = THREE.MathUtils.clamp((0.5 - t) / 0.08, 0, 1);
-                            spotlightScale = 1.0 + ((appState.focusCruise.scaleFactor || 1.5) - 1.0) * frontFade;
-                        }
+                let spotlightScale = 1.0;
+                if (appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx)) {
+                    if (t < 0.5) {
+                        const frontFade = THREE.MathUtils.clamp((0.5 - t) / 0.08, 0, 1);
+                        spotlightScale = 1.0 + ((appState.focusCruise.scaleFactor || 1.5) - 1.0) * frontFade;
                     }
+                }
 
-                    const finalScale = latScale * depthScale * cardMult * spotlightScale;
-                    card.scale.set(finalScale, finalScale, finalScale);
-                });
+                const finalScale = latScale * depthScale * cardMult * spotlightScale;
+                card.scale.set(finalScale, finalScale, finalScale);
+            });
 
-                AppMath.quadParentInv.copy(appState.wordSphereGroup.quaternion).invert();
-                AppMath.quadParentInv.multiply(appState.camera.quaternion);
+            AppMath.quadParentInv.copy(appState.wordSphereGroup.quaternion).invert();
+            AppMath.quadParentInv.multiply(appState.camera.quaternion);
 
-                appState.wordObjects.forEach(card => {
-                    card.quaternion.copy(AppMath.quadParentInv);
-                    if (shouldCardsRotate && cardMasterSpeed > 0) {
-                        card.rotateOnAxis(card.userData.rotationAxis, card.userData.rotationSpeed * cardMasterSpeed);
-                    }
-                });
-            }
+            appState.wordObjects.forEach(card => {
+                card.quaternion.copy(AppMath.quadParentInv);
+                if (shouldCardsRotate && cardMasterSpeed > 0) {
+                    card.rotateOnAxis(card.userData.rotationAxis, card.userData.rotationSpeed * cardMasterSpeed);
+                }
+            });
 
             const isBloomActive = !!(document.getElementById('visualEffectsEnabled')?.checked || appState.rt.visualFxEnabled);
-            if (isBloomActive && appState.composer) {
+            const bloomStrength = safeParseFloat(document.getElementById('bloomStrength')?.value, 0.5);
+            if (isBloomActive && bloomStrength > 0.001 && appState.composer) {
                 appState.composer.render();
             } else {
                 appState.renderer.render(appState.scene, appState.camera);

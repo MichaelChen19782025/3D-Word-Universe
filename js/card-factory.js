@@ -1,6 +1,6 @@
 /**
  * 3D单词宇宙 - 卡片工坊 (Card Factory)
- * 100% 还原参考图与老版本样式：3D角括号网格、右上角4个功能按钮 [🔊] [A-] [A+] [屏蔽]、宽安全边距
+ * 支持右上角 5 大功能键：[🔊] [A-] [A+] [📝 备注] [屏蔽]
  */
 (function() {
     let _sharedTestCanvas = null;
@@ -42,9 +42,6 @@
     }
 
     const AppCardFactory = {
-        /**
-         * 0ms 就地极速更新网格材质属性 (不触发 Canvas 重构)
-         */
         updateCardsMaterialsFast(options = {}) {
             if (!appState.wordObjects || appState.wordObjects.length === 0) return;
             const targetOpacity = options.opacity !== undefined ? options.opacity : parseFloat(document.getElementById('cardOpacityRange')?.value || '0.96');
@@ -92,11 +89,8 @@
             const customLightBrightness = parseFloat(document.getElementById('cardLightBrightnessRange')?.value ?? (preset.defaultLightBrightness ?? 0.85));
             const customLightSpread = parseFloat(document.getElementById('cardLightSpreadRange')?.value ?? (preset.defaultLightSpread ?? 0.85));
             const customDepth = parseFloat(document.getElementById('cardChamberDepthRange')?.value ?? 0.65);
-            const customTextStyle = document.getElementById('cardTextStyleSelect')?.value || preset.textStyle || 'relief_metal';
-            const customFontColor = document.getElementById('sphereCardFontColor')?.value || preset.textColor || '#ffffff';
-
-            const stormStyleCb = document.getElementById('stormWordCardStyleEnabled');
-            const isStormStyled = word.isStormWord && stormStyleCb && stormStyleCb.checked;
+            const customTextStyle = preset.textStyle || 'relief_metal';
+            const customFontColor = preset.textColor || '#ffffff';
 
             const displayWordRaw = appState.showEnglish ? (word.words || 'N/A') : ((word.chinese || '').split(/,|，/)[0] || 'N/A');
 
@@ -155,7 +149,7 @@
                 const chamberCfg = {
                     ...preset,
                     depthFactor: customDepth,
-                    lightColor: isStormStyled ? '#ffea00' : customLightColor,
+                    lightColor: customLightColor,
                     lightPosition: customLightPos,
                     lightBrightness: customLightBrightness,
                     lightSpread: customLightSpread
@@ -172,10 +166,10 @@
                 if (window.CardStyleManager) {
                     window.CardStyleManager.draw3DText(context, line, canvasWidth / 2, curY, {
                         fontSize: scaledFontSize,
-                        textColor: isStormStyled ? '#000000' : customFontColor,
-                        textStyle: isStormStyled ? 'relief_metal' : customTextStyle,
-                        textDepthColor: isStormStyled ? '#3d2500' : (preset.textDepthColor || '#070a12'),
-                        textHighlightColor: isStormStyled ? '#ffffff' : (preset.textHighlightColor || '#b5f5ff'),
+                        textColor: customFontColor,
+                        textStyle: customTextStyle,
+                        textDepthColor: preset.textDepthColor || '#070a12',
+                        textHighlightColor: preset.textHighlightColor || '#b5f5ff',
                         lightPosition: customLightPos,
                         lightColor: customLightColor,
                         lightBrightness: customLightBrightness
@@ -192,7 +186,6 @@
                 texture: finalizeCanvasTexture(canvas, 8),
                 pxWidth: canvasWidth,
                 pxHeight: canvasHeight,
-                resolutionScale: textureResolutionScale,
                 lightBrightness: customLightBrightness,
                 lightColor: customLightColor
             };
@@ -228,34 +221,10 @@
             const bevelSize = width * 0.008;
 
             const extrudeSettings = {
-                steps: 1,
-                depth: depth - bevelThickness * 2,
-                bevelEnabled: true,
-                bevelThickness: bevelThickness,
-                bevelSize: bevelSize,
-                bevelOffset: -bevelSize,
-                bevelSegments: 4,
-                curveSegments: 16,
-                UVGenerator: {
-                    generateTopUV: function (geometry, vertices, indexA, indexB, indexC) {
-                        const ax = vertices[indexA * 3], ay = vertices[indexA * 3 + 1];
-                        const bx = vertices[indexB * 3], by = vertices[indexB * 3 + 1];
-                        const cx = vertices[indexC * 3], cy = vertices[indexC * 3 + 1];
-                        return [
-                            new THREE.Vector2((ax - x) / w, (ay - y) / h),
-                            new THREE.Vector2((bx - x) / w, (by - y) / h),
-                            new THREE.Vector2((cx - x) / w, (cy - y) / h)
-                        ];
-                    },
-                    generateSideWallUV: function () {
-                        return [
-                            new THREE.Vector2(0, 0),
-                            new THREE.Vector2(1, 0),
-                            new THREE.Vector2(1, 1),
-                            new THREE.Vector2(0, 1)
-                        ];
-                    }
-                }
+                steps: 1, depth: depth - bevelThickness * 2,
+                bevelEnabled: true, bevelThickness: bevelThickness,
+                bevelSize: bevelSize, bevelOffset: -bevelSize,
+                bevelSegments: 4, curveSegments: 16
             };
 
             let geometry;
@@ -269,12 +238,8 @@
             const cardOpacity = parseFloat(document.getElementById('cardOpacityRange')?.value || '0.96');
 
             const frontMat = new THREE.MeshStandardMaterial({
-                map: texData.texture,
-                roughness: 0.85,
-                metalness: 0.15,
-                transparent: true,
-                opacity: cardOpacity,
-                visible: (cardOpacity > 0.001),
+                map: texData.texture, roughness: 0.85, metalness: 0.15,
+                transparent: true, opacity: cardOpacity, visible: (cardOpacity > 0.001),
                 side: THREE.FrontSide
             });
 
@@ -282,14 +247,9 @@
             const sideEmissiveIntensity = Math.max(0, texData.lightBrightness * 0.35);
 
             const sideMat = new THREE.MeshStandardMaterial({
-                color: 0x0a162b,
-                roughness: 0.85,
-                metalness: 0.25,
-                transparent: true,
-                opacity: cardOpacity * 0.45,
-                visible: (cardOpacity > 0.001),
-                emissive: sideEmissiveColor,
-                emissiveIntensity: sideEmissiveIntensity,
+                color: 0x0a162b, roughness: 0.85, metalness: 0.25,
+                transparent: true, opacity: cardOpacity * 0.45, visible: (cardOpacity > 0.001),
+                emissive: sideEmissiveColor, emissiveIntensity: sideEmissiveIntensity,
                 side: THREE.DoubleSide
             });
 
@@ -300,44 +260,25 @@
                 word: word,
                 originalMaterials: materials,
                 hoverSideMaterial: sideMat.clone(),
-                rotationAxis: new THREE.Vector3(
-                    Math.random() - 0.5,
-                    Math.random() - 0.5,
-                    Math.random() - 0.5
-                ).normalize(),
+                rotationAxis: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(),
                 rotationSpeed: 0.3 + Math.random() * 0.7
             };
 
             return card;
         },
 
-        /**
-         * 经典 3D 科技直角括号网格生成器 (复原参考截图与老版本四角发光框)
-         */
         createCornerBrackets() {
             const bracketGroup = new THREE.Group();
             const bracketCanvas = document.createElement('canvas');
-            bracketCanvas.width = 64;
-            bracketCanvas.height = 64;
+            bracketCanvas.width = 64; bracketCanvas.height = 64;
             const ctx = bracketCanvas.getContext('2d');
-            ctx.strokeStyle = '#00ffff';
-            ctx.lineWidth = 6;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(6, 34);
-            ctx.lineTo(6, 6);
-            ctx.lineTo(34, 6);
-            ctx.stroke();
+            ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(6, 34); ctx.lineTo(6, 6); ctx.lineTo(34, 6); ctx.stroke();
             const bracketTexture = new THREE.CanvasTexture(bracketCanvas);
 
             const bracketMat = new THREE.MeshBasicMaterial({
-                map: bracketTexture,
-                color: 0x00ffff,
-                transparent: true,
-                opacity: 0.9,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false,
-                depthTest: false
+                map: bracketTexture, color: 0x00ffff, transparent: true, opacity: 0.9,
+                blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false
             });
 
             const size = 0.24;
@@ -347,7 +288,6 @@
                 const bracket = new THREE.Mesh(bracketGeo, bracketMat.clone());
                 const signX = (i % 2 === 0) ? -1 : 1;
                 const signY = (i < 2) ? 1 : -1;
-                // 位于卡片 1x1 平面的四个顶点边缘
                 bracket.position.set(signX * 0.5, signY * 0.5, 0.01);
 
                 let rotation = 0;
@@ -361,14 +301,13 @@
         },
 
         /**
-         * 100% 还原参考图样式的查词卡片：宽边距、右上角4个功能按钮 [🔊] [A-] [A+] [屏蔽]
+         * 3D 浮动查词卡纹理生成：右上角配置 5 个按钮 [🔊] [A-] [A+] [📝 备注] [屏蔽]
          */
         createOverlayTexture(word) {
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
             const fontFamily = "'Segoe UI', 'Roboto', 'Microsoft YaHei', sans-serif";
 
-            const hoverStyleMode = document.getElementById('hoverCardStyleModeSelect')?.value || 'classic_hud';
             const rawBrightness = parseFloat(document.getElementById('hoverCardBrightness')?.value || '1.0');
             const isPitchBlack = (rawBrightness <= 0.001);
 
@@ -377,7 +316,6 @@
             const canvasWidth = Math.round(1240 * scale);
             const baseSize = 1240 * 0.038 * scale;
 
-            // 宽阔的安全内边距，确保文字舒展居中，绝不贴近边缘
             const paddingX = Math.round(68 * scale);
             const paddingY = Math.round(48 * scale);
             const wrapWidth = canvasWidth - paddingX * 2;
@@ -386,6 +324,7 @@
             const phoneticSymbol = word.phonetic ? `/${word.phonetic.replace(/^\/+|\/+$/g, '')}/` : '';
             const chineseMeaning = word.chinese || '无释义';
             const memoryMethod = word.method || '暂无联想记忆提示';
+            const notesCount = (Array.isArray(word.notes) ? word.notes.length : 0);
 
             const testCtx = getSharedTestContext();
             function wrapText(text, font, maxWidth) {
@@ -431,29 +370,16 @@
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
 
-            // 1. 绘制背景层：若为联动模式则绘制内腔透视，默认模式保持清空由 3D backplate 提供太空深蓝背景
             if (isPitchBlack) {
                 context.fillStyle = '#000000';
                 context.fillRect(0, 0, canvasWidth, canvasHeight);
-            } else if (hoverStyleMode === 'sync_sphere' && window.CardStyleManager) {
-                const currentPresetId = document.getElementById('cardStylePresetSelect')?.value || 'cyber_blue';
-                const preset = window.CardStyleManager.getPreset(currentPresetId);
-                const customLightColor = document.getElementById('cardLightColor')?.value || preset.defaultLightColor || '#00f0ff';
-                window.CardStyleManager.drawPerspectiveChamber(context, canvasWidth, canvasHeight, {
-                    ...preset,
-                    depthFactor: 0.75,
-                    lightColor: customLightColor,
-                    lightPosition: 'top',
-                    lightBrightness: rawBrightness * 0.75,
-                    lightSpread: 0.95
-                });
             } else {
                 context.clearRect(0, 0, canvasWidth, canvasHeight);
             }
 
             context.textBaseline = 'top';
 
-            // 2. 第一行：主英文单词 (加粗纯白，青蓝光晕)
+            // 1. 主英文单词
             context.textAlign = "left";
             context.font = fontMain;
             context.fillStyle = "#ffffff";
@@ -466,7 +392,7 @@
             testCtx.font = fontMain;
             const wordWidth = testCtx.measureText(englishWord).width;
 
-            // 音标居右
+            // 音标
             context.font = fontPhonetic;
             context.fillStyle = "#A0FFEE";
             context.save();
@@ -475,26 +401,36 @@
             context.fillText(phoneticSymbol, paddingX + wordWidth + 24 * scale, paddingY + (baseSize * 0.40));
             context.restore();
 
-            // 3. 第一行右侧：4 个独立功能胶囊按钮 [🔊] [A-] [A+] [屏蔽] (水平严格对齐)
+            // 2. 右侧 5 大胶囊按钮：[🔊] [A-] [A+] [📝 备注] [屏蔽]
             const btnHeight = baseSize * 0.95;
-            const spacing = 9 * scale;
+            const spacing = 8 * scale;
             const btnY = paddingY + (baseSize * 1.55 - btnHeight) / 2;
 
-            const btnWidthSpeaker = baseSize * 1.25;
-            const btnWidthA = baseSize * 1.1;
-            const btnWidthShield = baseSize * 1.6;
+            const btnWidthSpeaker = baseSize * 1.2;
+            const btnWidthA = baseSize * 1.05;
+            const btnWidthNote = notesCount > 0 ? (baseSize * 1.8) : (baseSize * 1.35);
+            const btnWidthShield = baseSize * 1.5;
 
             const btnShieldX = canvasWidth - paddingX - btnWidthShield;
-            const btnPlusX = btnShieldX - spacing - btnWidthA;
+            const btnNoteX = btnShieldX - spacing - btnWidthNote;
+            const btnPlusX = btnNoteX - spacing - btnWidthA;
             const btnMinusX = btnPlusX - spacing - btnWidthA;
             const btnSpeakerX = btnMinusX - spacing - btnWidthSpeaker;
 
             const zones = [];
 
-            function drawPillButton(label, x, y, w, h, isShield = false) {
+            function drawPillButton(label, x, y, w, h, variant = 'normal') {
                 context.save();
-                context.fillStyle = isShield ? "rgba(220, 38, 38, 0.18)" : "rgba(0, 240, 255, 0.08)";
-                context.strokeStyle = isShield ? "rgba(255, 120, 120, 0.65)" : "rgba(0, 240, 255, 0.45)";
+                if (variant === 'shield') {
+                    context.fillStyle = "rgba(220, 38, 38, 0.18)";
+                    context.strokeStyle = "rgba(255, 120, 120, 0.65)";
+                } else if (variant === 'note') {
+                    context.fillStyle = "rgba(255, 216, 117, 0.22)";
+                    context.strokeStyle = "rgba(255, 216, 117, 0.75)";
+                } else {
+                    context.fillStyle = "rgba(0, 240, 255, 0.08)";
+                    context.strokeStyle = "rgba(0, 240, 255, 0.45)";
+                }
                 context.lineWidth = Math.max(1.0, 1.4 * scale);
                 context.beginPath();
                 const r = h / 2;
@@ -512,7 +448,7 @@
                 context.stroke();
 
                 context.font = fontButton;
-                context.fillStyle = isShield ? "#ffb3b3" : "rgba(180, 230, 255, 0.95)";
+                context.fillStyle = (variant === 'shield') ? "#ffb3b3" : (variant === 'note' ? "#ffd875" : "rgba(180, 230, 255, 0.95)");
                 context.textAlign = "center";
                 context.textBaseline = "middle";
                 context.shadowColor = "rgba(0, 0, 0, 0.8)";
@@ -521,43 +457,31 @@
                 context.restore();
             }
 
-            // 绘制四个按钮并注册宽阔的命中热区 (上下左右各放宽 8 像素，消除触控死角)
-            drawPillButton("🔊", btnSpeakerX, btnY, btnWidthSpeaker, btnHeight, false);
-            zones.push({
-                type: 'speak',
-                xMin: btnSpeakerX - 8, xMax: btnSpeakerX + btnWidthSpeaker + 8,
-                yMin: btnY - 8, yMax: btnY + btnHeight + 8
-            });
+            // [🔊]
+            drawPillButton("🔊", btnSpeakerX, btnY, btnWidthSpeaker, btnHeight, 'normal');
+            zones.push({ type: 'speak', xMin: btnSpeakerX - 6, xMax: btnSpeakerX + btnWidthSpeaker + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
 
-            drawPillButton("A-", btnMinusX, btnY, btnWidthA, btnHeight, false);
-            zones.push({
-                type: 'fontSizeDown',
-                xMin: btnMinusX - 8, xMax: btnMinusX + btnWidthA + 8,
-                yMin: btnY - 8, yMax: btnY + btnHeight + 8
-            });
+            // [A-]
+            drawPillButton("A-", btnMinusX, btnY, btnWidthA, btnHeight, 'normal');
+            zones.push({ type: 'fontSizeDown', xMin: btnMinusX - 6, xMax: btnMinusX + btnWidthA + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
 
-            drawPillButton("A+", btnPlusX, btnY, btnWidthA, btnHeight, false);
-            zones.push({
-                type: 'fontSizeUp',
-                xMin: btnPlusX - 8, xMax: btnPlusX + btnWidthA + 8,
-                yMin: btnY - 8, yMax: btnY + btnHeight + 8
-            });
+            // [A+]
+            drawPillButton("A+", btnPlusX, btnY, btnWidthA, btnHeight, 'normal');
+            zones.push({ type: 'fontSizeUp', xMin: btnPlusX - 6, xMax: btnPlusX + btnWidthA + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
 
-            drawPillButton("屏蔽", btnShieldX, btnY, btnWidthShield, btnHeight, true);
-            zones.push({
-                type: 'shield',
-                xMin: btnShieldX - 8, xMax: btnShieldX + btnWidthShield + 8,
-                yMin: btnY - 8, yMax: btnY + btnHeight + 8
-            });
+            // [📝 备注] (带数量显示)
+            const noteLabel = notesCount > 0 ? `📝${notesCount}` : "📝";
+            drawPillButton(noteLabel, btnNoteX, btnY, btnWidthNote, btnHeight, 'note');
+            zones.push({ type: 'note', xMin: btnNoteX - 6, xMax: btnNoteX + btnWidthNote + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
 
-            // 点击主单词区域也触发发音
-            zones.push({
-                type: 'speak',
-                xMin: paddingX - 10, xMax: btnSpeakerX - spacing,
-                yMin: paddingY - 10, yMax: paddingY + mainWordHeight + 10
-            });
+            // [屏蔽]
+            drawPillButton("屏蔽", btnShieldX, btnY, btnWidthShield, btnHeight, 'shield');
+            zones.push({ type: 'shield', xMin: btnShieldX - 6, xMax: btnShieldX + btnWidthShield + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
 
-            // 4. 第二行：中文释义 (白色加粗带幽蓝外发光)
+            // 主单词发音区域
+            zones.push({ type: 'speak', xMin: paddingX - 10, xMax: btnSpeakerX - spacing, yMin: paddingY - 10, yMax: paddingY + mainWordHeight + 10 });
+
+            // 3. 中文释义
             let writeY = paddingY + mainWordHeight;
             context.font = fontMeaning;
             context.fillStyle = "#ffffff";
@@ -570,7 +494,7 @@
             });
             context.restore();
 
-            // 5. 装饰横向分割线 (青蓝色微光细线)
+            // 4. 分割线
             writeY += baseSize * 0.4;
             context.strokeStyle = "rgba(104, 240, 255, 0.28)";
             context.lineWidth = Math.max(1, Math.round(1 * scale));
@@ -579,7 +503,7 @@
             context.lineTo(canvasWidth - paddingX, writeY);
             context.stroke();
 
-            // 6. 记忆方法标题：💡 记忆方法 / Memory Association (金黄高光，100% 还原图片)
+            // 5. 记忆方法标题
             writeY += baseSize * 0.6;
             context.font = fontTitle;
             context.fillStyle = "#FFE600";
@@ -589,7 +513,7 @@
             context.fillText("💡 记忆方法 / Memory Association", paddingX, writeY);
             context.restore();
 
-            // 7. 记忆方法正文：(如 有没变热冷冷一~，明亮青蓝波浪字样)
+            // 6. 记忆方法正文
             writeY += baseSize * 1.35;
             context.font = fontMethod;
             context.fillStyle = "#A0FFEE";
@@ -602,12 +526,7 @@
             });
             context.restore();
 
-            // 点击卡片背景主体保护，阻止误关闭
-            zones.push({
-                type: 'card_body',
-                xMin: 0, xMax: canvasWidth,
-                yMin: 0, yMax: canvasHeight
-            });
+            zones.push({ type: 'card_body', xMin: 0, xMax: canvasWidth, yMin: 0, yMax: canvasHeight });
 
             word.hover_click_zones = zones;
             if (appState.hoverOverlayCard) {
@@ -619,17 +538,6 @@
                 pxWidth: canvasWidth,
                 pxHeight: canvasHeight
             };
-        },
-
-        updateCardWordData(card, newWord) {
-            if (!card || !newWord) return;
-            card.userData.word = newWord;
-            const texData = this.createCardTexture(newWord);
-            if (Array.isArray(card.material) && card.material[0] && card.material[0].map) {
-                card.material[0].map.dispose();
-                card.material[0].map = texData.texture;
-                card.material[0].needsUpdate = true;
-            }
         }
     };
 
