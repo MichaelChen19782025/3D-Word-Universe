@@ -146,7 +146,7 @@
     </div>
 
     <div class="appearance-group">
-        <h4>🃏 悬浮查词卡设置</h4>
+        <h4>🃏 悬浮查词卡设置 (全要素调控)</h4>
         <div class="setting-item">
             <label for="hoverCardStyleModeSelect">查词卡样机模式</label>
             <select id="hoverCardStyleModeSelect" style="width: 140px;">
@@ -154,8 +154,38 @@
                 <option value="sync_sphere">联动球体样机</option>
             </select>
         </div>
-        <div class="setting-item"><label for="hoverCardBrightness">查词卡光照亮度</label><input type="range" id="hoverCardBrightness" min="0.0" max="4.0" value="1.0" step="0.05"></div>
-        <div class="setting-item"><label for="hoverOverlayCardScale">查词卡缩放比例</label><input type="range" id="hoverOverlayCardScale" min="0.2" max="6.0" value="1.0" step="0.05"></div>
+        <div class="setting-item">
+            <label for="hoverCardBrightness">查词卡光照亮度</label>
+            <input type="range" id="hoverCardBrightness" min="0.0" max="4.0" value="1.0" step="0.05">
+        </div>
+        <div class="setting-item">
+            <label for="hoverOverlayCardScale">查词卡缩放比例</label>
+            <input type="range" id="hoverOverlayCardScale" min="0.2" max="6.0" value="1.0" step="0.05">
+        </div>
+        <div class="setting-item">
+            <label for="hoverCardBgOpacity">查词卡背景透明度</label>
+            <input type="range" id="hoverCardBgOpacity" min="0.0" max="1.0" value="0.78" step="0.02">
+        </div>
+        <div class="setting-item">
+            <label for="hoverCardMainWordColor">主单词颜色</label>
+            <input type="color" id="hoverCardMainWordColor" value="#ffffff">
+        </div>
+        <div class="setting-item">
+            <label for="hoverCardPhoneticColor">音标颜色</label>
+            <input type="color" id="hoverCardPhoneticColor" value="#a0ffee">
+        </div>
+        <div class="setting-item">
+            <label for="hoverCardMeaningColor">中文释义颜色</label>
+            <input type="color" id="hoverCardMeaningColor" value="#ffffff">
+        </div>
+        <div class="setting-item">
+            <label for="hoverCardMethodTitleColor">记忆法标题颜色</label>
+            <input type="color" id="hoverCardMethodTitleColor" value="#ffe600">
+        </div>
+        <div class="setting-item">
+            <label for="hoverCardMethodContentColor">记忆法正文颜色</label>
+            <input type="color" id="hoverCardMethodContentColor" value="#a0ffee">
+        </div>
     </div>
 </div>
 
