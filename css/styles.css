@@ -411,7 +411,86 @@ body {
 .hidden { display: none !important; }
 
 @media (max-width: 768px) {
-    :root { --immersive-panel-width: 100%; }
-    .controls-overlay { width: 52vw !important; min-width: 180px !important; }
-    #managementPanel { width: calc(100% - 20px); right: 10px; left: 10px; bottom: 85px; }
+    :root {
+        --immersive-panel-width: 100%;
+    }
+
+    /* ★ 修复 1：左侧设置中心抽屉在手机端宽度由 52vw 放大至 86vw，字号全面放大 */
+    .controls-overlay {
+        width: min(390px, 86vw) !important;
+        font-size: 0.95rem !important;
+    }
+    .panel-content {
+        padding: 16px 14px !important;
+    }
+    .panel-header h1 {
+        font-size: 1.45rem !important;
+    }
+    .setting-item label {
+        font-size: 0.92rem !important;
+    }
+    .action-btn {
+        padding: 11px 8px !important;
+        font-size: 0.92rem !important;
+    }
+    .stepper-btn {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 0.85rem !important;
+    }
+    .stepper-num-input {
+        width: 58px !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* ★ 修复 2：右上角学习数字与巡航按钮在手机端显著放大，易于辨识与轻触 */
+    #topRightHudBar {
+        top: 10px !important;
+        right: 10px !important;
+        gap: 8px !important;
+    }
+    #studyCounterHud {
+        font-size: 1.45rem !important;
+        padding: 6px 14px !important;
+        min-height: 40px !important;
+        border-radius: 12px !important;
+    }
+    #focusCruiseHud {
+        font-size: 0.92rem !important;
+        padding: 6px 10px !important;
+        min-height: 40px !important;
+        border-radius: 12px !important;
+    }
+    .focus-pill {
+        font-size: 0.85rem !important;
+        padding: 3px 7px !important;
+    }
+
+    /* ★ 修复 3：右侧浮动操作栏与平移摇杆放大为大拇指黄金触控尺寸 */
+    .view-controls {
+        bottom: 18px !important;
+        right: 14px !important;
+        gap: 8px !important;
+    }
+    .control-btn {
+        width: 48px !important;
+        height: 48px !important;
+        font-size: 1.25rem !important;
+    }
+    .pan-btn {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 1.05rem !important;
+    }
+    .pan-joystick-wrap {
+        padding: 6px !important;
+    }
+
+    /* 视角管理面板在手机端全宽适配 */
+    #managementPanel {
+        width: calc(100% - 24px) !important; 
+        right: 12px !important;
+        left: 12px !important;
+        bottom: 80px !important;
+    }
 }
