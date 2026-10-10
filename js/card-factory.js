@@ -68,246 +68,258 @@
         },
 
         createCardTexture(word) {
-            // ★ 修复：读取单独配置的卡片文字大小滑块
-            const baseFontSize = parseFloat(document.getElementById('sphereCardFontSize')?.value || APP_CONFIG.DEFAULT_SPHERE_CARD_FONT_SIZE);
-            const dpr = window.devicePixelRatio || 1;
-            let textureResolutionScale = IS_MOBILE_DEVICE ? Math.min(dpr, 1.8) : 1.25;
+    const baseFontSize = parseFloat(document.getElementById('sphereCardFontSize')?.value || APP_CONFIG.DEFAULT_SPHERE_CARD_FONT_SIZE);
+    const dpr = window.devicePixelRatio || 1;
+    let textureResolutionScale = IS_MOBILE_DEVICE ? Math.min(dpr, 1.8) : 1.25;
 
-            const rawFontSize = Math.round(baseFontSize * textureResolutionScale);
-            const fontFamily = document.getElementById('sphereCardFontFamily')?.value || "'Microsoft YaHei', sans-serif";
+    const rawFontSize = Math.round(baseFontSize * textureResolutionScale);
+    const fontFamily = document.getElementById('sphereCardFontFamily')?.value || "'Microsoft YaHei', sans-serif";
 
-            const currentPresetId = document.getElementById('cardStylePresetSelect')?.value || 'cyber_blue';
-            const preset = window.CardStyleManager ? window.CardStyleManager.getPreset(currentPresetId) : {};
+    const currentPresetId = document.getElementById('cardStylePresetSelect')?.value || 'cyber_blue';
+    const preset = window.CardStyleManager ? window.CardStyleManager.getPreset(currentPresetId) : {};
 
-            const customLightColor = document.getElementById('cardLightColor')?.value || preset.defaultLightColor || '#00f0ff';
-            const customLightPos = document.getElementById('cardLightPositionSelect')?.value || preset.defaultLightPosition || 'center';
-            const customLightBrightness = parseFloat(document.getElementById('cardLightBrightnessRange')?.value ?? (preset.defaultLightBrightness ?? 0.85));
-            const customLightSpread = parseFloat(document.getElementById('cardLightSpreadRange')?.value ?? (preset.defaultLightSpread ?? 0.85));
-            const customDepth = parseFloat(document.getElementById('cardChamberDepthRange')?.value ?? 0.65);
-            const customTextStyle = document.getElementById('cardTextStyleSelect')?.value || 'plain_bold';
-            const customFontColor = document.getElementById('sphereCardFontColor')?.value || '#ffffff';
-            const customBaseColor = document.getElementById('cardBaseColor')?.value || '#06122a';
+    const customLightColor = document.getElementById('cardLightColor')?.value || preset.defaultLightColor || '#00f0ff';
+    const customLightPos = document.getElementById('cardLightPositionSelect')?.value || preset.defaultLightPosition || 'center';
+    const customLightBrightness = parseFloat(document.getElementById('cardLightBrightnessRange')?.value ?? (preset.defaultLightBrightness ?? 0.85));
+    const customLightSpread = parseFloat(document.getElementById('cardLightSpreadRange')?.value ?? (preset.defaultLightSpread ?? 0.85));
+    const customDepth = parseFloat(document.getElementById('cardChamberDepthRange')?.value ?? 0.65);
+    const customTextStyle = document.getElementById('cardTextStyleSelect')?.value || 'plain_bold';
+    const customFontColor = document.getElementById('sphereCardFontColor')?.value || '#ffffff';
+    const customBaseColor = document.getElementById('cardBaseColor')?.value || '#06122a';
 
-            const displayWordRaw = appState.showEnglish ? (word.words || 'N/A') : ((word.chinese || '').split(/,|，/)[0] || 'N/A');
+    const displayWordRaw = appState.showEnglish ? (word.words || 'N/A') : ((word.chinese || '').split(/,|，/)[0] || 'N/A');
 
-            const testContext = getSharedTestContext();
-            testContext.font = `bold ${rawFontSize}px ${fontFamily}`;
+    const testContext = getSharedTestContext();
+    testContext.font = `bold ${rawFontSize}px ${fontFamily}`;
 
-            let mainContentLines = [];
-            if (appState.showEnglish) {
-                const words = displayWordRaw.split(' ');
-                let currentLine = "";
-                for (let wd of words) {
-                    if (testContext.measureText(currentLine + (currentLine ? " " : "") + wd).width > (rawFontSize * APP_CONFIG.MAX_CHARS_PER_LINE_EN * 0.78) && currentLine) {
-                        mainContentLines.push(currentLine);
-                        currentLine = wd;
-                    } else {
-                        currentLine += (currentLine ? " " : "") + wd;
-                    }
-                }
-                if (currentLine) mainContentLines.push(currentLine);
+    let mainContentLines = [];
+    if (appState.showEnglish) {
+        const words = displayWordRaw.split(' ');
+        let currentLine = "";
+        for (let wd of words) {
+            if (testContext.measureText(currentLine + (currentLine ? " " : "") + wd).width > (rawFontSize * APP_CONFIG.MAX_CHARS_PER_LINE_EN * 0.78) && currentLine) {
+                mainContentLines.push(currentLine);
+                currentLine = wd;
             } else {
-                let currentLine = "";
-                for (let char of displayWordRaw) {
-                    if (testContext.measureText(currentLine + char).width > (rawFontSize * APP_CONFIG.MAX_CHARS_PER_LINE_CN * 1.18) && currentLine) {
-                        mainContentLines.push(currentLine);
-                        currentLine = char;
-                    } else {
-                        currentLine += char;
-                    }
-                }
-                if (currentLine) mainContentLines.push(currentLine);
+                currentLine += (currentLine ? " " : "") + wd;
             }
-            if (mainContentLines.length === 0 && displayWordRaw.length > 0) mainContentLines.push(displayWordRaw);
-
-            const mainTextWidth = Math.max(...mainContentLines.map(line => testContext.measureText(line).width), 0);
-            let padding = rawFontSize * 1.35;
-            let lineHeight = rawFontSize * 1.35;
-            let canvasWidth = Math.max(240 * textureResolutionScale, mainTextWidth + padding * 3.6);
-            const mainTextHeight = mainContentLines.length * lineHeight;
-            let canvasHeight = Math.max(115 * textureResolutionScale, mainTextHeight + padding * 2.4);
-
-            const MAX_TEXTURE_SIZE = IS_MOBILE_DEVICE ? 512 : 1024;
-            const downScale = Math.min(1, MAX_TEXTURE_SIZE / Math.max(canvasWidth, canvasHeight));
-            canvasWidth = Math.round(canvasWidth * downScale) || 240;
-            canvasHeight = Math.round(canvasHeight * downScale) || 115;
-
-            const scaledFontSize = Math.round(rawFontSize * downScale);
-            const scaledLineHeight = lineHeight * downScale;
-
-            const canvas = document.createElement('canvas');
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            const context = canvas.getContext('2d');
-            context.font = `bold ${scaledFontSize}px ${fontFamily}`;
-
-            // 绘制底色与内腔
-            if (window.CardStyleManager) {
-                const chamberCfg = {
-                    ...preset,
-                    baseColor: customBaseColor,
-                    depthFactor: customDepth,
-                    lightColor: customLightColor,
-                    lightPosition: customLightPos,
-                    lightBrightness: customLightBrightness,
-                    lightSpread: customLightSpread
-                };
-                window.CardStyleManager.drawPerspectiveChamber(context, canvasWidth, canvasHeight, chamberCfg);
+        }
+        if (currentLine) mainContentLines.push(currentLine);
+    } else {
+        let currentLine = "";
+        for (let char of displayWordRaw) {
+            if (testContext.measureText(currentLine + char).width > (rawFontSize * APP_CONFIG.MAX_CHARS_PER_LINE_CN * 1.18) && currentLine) {
+                mainContentLines.push(currentLine);
+                currentLine = char;
             } else {
-                context.fillStyle = customBaseColor;
-                context.fillRect(0, 0, canvasWidth, canvasHeight);
+                currentLine += char;
             }
+        }
+        if (currentLine) mainContentLines.push(currentLine);
+    }
+    if (mainContentLines.length === 0 && displayWordRaw.length > 0) mainContentLines.push(displayWordRaw);
 
-            // 绘制卡片中央文字（超高对比度，保证清晰可见）
-            const textY = canvasHeight / 2 - ((mainContentLines.length - 1) * scaledLineHeight / 2);
-            mainContentLines.forEach((line, index) => {
-                const curY = textY + (index * scaledLineHeight);
-                if (customTextStyle === 'plain_bold' || !window.CardStyleManager) {
-                    context.save();
-                    context.textAlign = 'center';
-                    context.textBaseline = 'middle';
-                    // 柔和暗色描边增加可读性
-                    context.strokeStyle = 'rgba(0, 5, 20, 0.85)';
-                    context.lineWidth = Math.max(2, scaledFontSize * 0.12);
-                    context.strokeText(line, canvasWidth / 2, curY);
+    const mainTextWidth = Math.max(...mainContentLines.map(line => testContext.measureText(line).width), 0);
+    let padding = rawFontSize * 1.35;
+    let lineHeight = rawFontSize * 1.35;
+    let canvasWidth = Math.max(240 * textureResolutionScale, mainTextWidth + padding * 3.6);
+    const mainTextHeight = mainContentLines.length * lineHeight;
+    let canvasHeight = Math.max(115 * textureResolutionScale, mainTextHeight + padding * 2.4);
 
-                    context.fillStyle = customFontColor;
-                    context.shadowColor = customLightColor;
-                    context.shadowBlur = 8;
-                    context.fillText(line, canvasWidth / 2, curY);
-                    context.restore();
-                } else {
-                    window.CardStyleManager.draw3DText(context, line, canvasWidth / 2, curY, {
-                        fontSize: scaledFontSize,
-                        textColor: customFontColor,
-                        textStyle: customTextStyle,
-                        textDepthColor: preset.textDepthColor || '#070a12',
-                        textHighlightColor: preset.textHighlightColor || '#b5f5ff',
-                        lightPosition: customLightPos,
-                        lightColor: customLightColor,
-                        lightBrightness: customLightBrightness
-                    });
-                }
+    const MAX_TEXTURE_SIZE = IS_MOBILE_DEVICE ? 512 : 1024;
+    const downScale = Math.min(1, MAX_TEXTURE_SIZE / Math.max(canvasWidth, canvasHeight));
+    canvasWidth = Math.round(canvasWidth * downScale) || 240;
+    canvasHeight = Math.round(canvasHeight * downScale) || 115;
+
+    const scaledFontSize = Math.round(rawFontSize * downScale);
+    const scaledLineHeight = lineHeight * downScale;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const context = canvas.getContext('2d');
+    context.font = `bold ${scaledFontSize}px ${fontFamily}`;
+
+    // 绘制卡片底色
+    context.fillStyle = customBaseColor;
+    context.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    // ★ 内外边缘柔化处理：绘制羽化内腔光晕，彻底抹除生硬的 1px 高对比线条
+    if (window.CardStyleManager) {
+        const chamberCfg = {
+            ...preset,
+            baseColor: customBaseColor,
+            depthFactor: customDepth,
+            lightColor: customLightColor,
+            lightPosition: customLightPos,
+            lightBrightness: customLightBrightness * 0.8, // 适度柔化
+            lightSpread: customLightSpread
+        };
+        window.CardStyleManager.drawPerspectiveChamber(context, canvasWidth, canvasHeight, chamberCfg);
+    } else {
+        // 内置超柔渐变光罩：外边缘平滑过渡至中心，避免边缘出现发光硬切环
+        const radGrad = context.createRadialGradient(
+            canvasWidth / 2, canvasHeight / 2, Math.min(canvasWidth, canvasHeight) * 0.15,
+            canvasWidth / 2, canvasHeight / 2, Math.max(canvasWidth, canvasHeight) * 0.58
+        );
+        radGrad.addColorStop(0, 'rgba(0, 200, 255, 0.12)');
+        radGrad.addColorStop(0.7, 'rgba(0, 100, 180, 0.05)');
+        radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        context.fillStyle = radGrad;
+        context.fillRect(0, 0, canvasWidth, canvasHeight);
+    }
+
+    // 绘制清晰文字
+    const textY = canvasHeight / 2 - ((mainContentLines.length - 1) * scaledLineHeight / 2);
+    mainContentLines.forEach((line, index) => {
+        const curY = textY + (index * scaledLineHeight);
+        if (customTextStyle === 'plain_bold' || !window.CardStyleManager) {
+            context.save();
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.strokeStyle = 'rgba(0, 4, 16, 0.9)';
+            context.lineWidth = Math.max(2, scaledFontSize * 0.12);
+            context.strokeText(line, canvasWidth / 2, curY);
+
+            context.fillStyle = customFontColor;
+            context.shadowColor = 'rgba(0, 200, 255, 0.5)';
+            context.shadowBlur = 6;
+            context.fillText(line, canvasWidth / 2, curY);
+            context.restore();
+        } else {
+            window.CardStyleManager.draw3DText(context, line, canvasWidth / 2, curY, {
+                fontSize: scaledFontSize,
+                textColor: customFontColor,
+                textStyle: customTextStyle,
+                textDepthColor: preset.textDepthColor || '#070a12',
+                textHighlightColor: preset.textHighlightColor || '#b5f5ff',
+                lightPosition: customLightPos,
+                lightColor: customLightColor,
+                lightBrightness: customLightBrightness
             });
+        }
+    });
 
-            return {
-                texture: finalizeCanvasTexture(canvas, 8),
-                pxWidth: canvasWidth,
-                pxHeight: canvasHeight
-            };
-        },
+    return {
+        texture: finalizeCanvasTexture(canvas, 8),
+        pxWidth: canvasWidth,
+        pxHeight: canvasHeight
+    };
+},
 
         createIceCard(word) {
-            const texData = this.createCardTexture(word);
-            const pxH = texData.pxHeight || 115;
-            const pxW = texData.pxWidth || 240;
-            const aspect = pxH > 0 ? pxW / pxH : 2.0;
+    const texData = this.createCardTexture(word);
+    const pxH = texData.pxHeight || 115;
+    const pxW = texData.pxWidth || 240;
+    const aspect = pxH > 0 ? pxW / pxH : 2.0;
 
-            const sphereRadius = appState.sphereRadius || 85;
-            const width = sphereRadius * 0.125;
-            const height = width / aspect;
-            const depth = width * 0.045;
+    const sphereRadius = appState.sphereRadius || 85;
+    const width = sphereRadius * 0.125;
+    const height = width / aspect;
+    const depth = width * 0.045;
 
-            const shape = new THREE.Shape();
-            const x = -width / 2, y = -height / 2;
-            const radius = width * 0.085;
-            const w = width, h = height;
+    const shape = new THREE.Shape();
+    const x = -width / 2, y = -height / 2;
+    const radius = width * 0.085;
+    const w = width, h = height;
 
-            shape.moveTo(x + radius, y);
-            shape.lineTo(x + w - radius, y);
-            shape.quadraticCurveTo(x + w, y, x + w, y + radius);
-            shape.lineTo(x + w, y + h - radius);
-            shape.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-            shape.lineTo(x + radius, y + h);
-            shape.quadraticCurveTo(x, y + h, x, y + h - radius);
-            shape.lineTo(x, y + radius);
-            shape.quadraticCurveTo(x, y, x + radius, y);
+    shape.moveTo(x + radius, y);
+    shape.lineTo(x + w - radius, y);
+    shape.quadraticCurveTo(x + w, y, x + w, y + radius);
+    shape.lineTo(x + w, y + h - radius);
+    shape.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+    shape.lineTo(x + radius, y + h);
+    shape.quadraticCurveTo(x, y + h, x, y + h - radius);
+    shape.lineTo(x, y + radius);
+    shape.quadraticCurveTo(x, y, x + radius, y);
 
-            const bevelThickness = width * 0.012;
-            const bevelSize = width * 0.008;
+    const bevelThickness = width * 0.012;
+    const bevelSize = width * 0.008;
 
-            const extrudeSettings = {
-                steps: 1,
-                depth: depth - bevelThickness * 2,
-                bevelEnabled: true,
-                bevelThickness: bevelThickness,
-                bevelSize: bevelSize,
-                bevelOffset: -bevelSize,
-                bevelSegments: 4,
-                curveSegments: 16,
-                UVGenerator: {
-                    generateTopUV: function (geometry, vertices, indexA, indexB, indexC) {
-                        const ax = vertices[indexA * 3], ay = vertices[indexA * 3 + 1];
-                        const bx = vertices[indexB * 3], by = vertices[indexB * 3 + 1];
-                        const cx = vertices[indexC * 3], cy = vertices[indexC * 3 + 1];
-                        return [
-                            new THREE.Vector2((ax - x) / w, (ay - y) / h),
-                            new THREE.Vector2((bx - x) / w, (by - y) / h),
-                            new THREE.Vector2((cx - x) / w, (cy - y) / h)
-                        ];
-                    },
-                    generateSideWallUV: function () {
-                        return [
-                            new THREE.Vector2(0, 0),
-                            new THREE.Vector2(1, 0),
-                            new THREE.Vector2(1, 1),
-                            new THREE.Vector2(0, 1)
-                        ];
-                    }
-                }
-            };
-
-            let geometry;
-            try {
-                geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-                geometry.center();
-            } catch (e) {
-                geometry = new THREE.BoxGeometry(width, height, depth);
+    const extrudeSettings = {
+        steps: 1,
+        depth: depth - bevelThickness * 2,
+        bevelEnabled: true,
+        bevelThickness: bevelThickness,
+        bevelSize: bevelSize,
+        bevelOffset: -bevelSize,
+        bevelSegments: 4,
+        curveSegments: 16,
+        UVGenerator: {
+            generateTopUV: function (geometry, vertices, indexA, indexB, indexC) {
+                const ax = vertices[indexA * 3], ay = vertices[indexA * 3 + 1];
+                const bx = vertices[indexB * 3], by = vertices[indexB * 3 + 1];
+                const cx = vertices[indexC * 3], cy = vertices[indexC * 3 + 1];
+                return [
+                    new THREE.Vector2((ax - x) / w, (ay - y) / h),
+                    new THREE.Vector2((bx - x) / w, (by - y) / h),
+                    new THREE.Vector2((cx - x) / w, (cy - y) / h)
+                ];
+            },
+            generateSideWallUV: function () {
+                return [
+                    new THREE.Vector2(0, 0),
+                    new THREE.Vector2(1, 0),
+                    new THREE.Vector2(1, 1),
+                    new THREE.Vector2(0, 1)
+                ];
             }
+        }
+    };
 
-            const cardOpacity = parseFloat(document.getElementById('cardOpacityRange')?.value || '0.96');
-            const cardTextBrightness = parseFloat(document.getElementById('cardBrightnessRange')?.value || '1.0');
+    let geometry;
+    try {
+        geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        geometry.center();
+    } catch (e) {
+        geometry = new THREE.BoxGeometry(width, height, depth);
+    }
 
-            // ★ 修复：为正面赋予自发光贴图通道，确保无论相机在什么阴影角度，文字始终明亮清晰绝不发暗！
-            const frontMat = new THREE.MeshStandardMaterial({
-                map: texData.texture,
-                emissiveMap: texData.texture,
-                emissive: new THREE.Color(0xffffff),
-                emissiveIntensity: Math.min(1.2, cardTextBrightness * 0.65), // 自发光适度，文字清晰又不至于过曝
-                roughness: 0.5,
-                metalness: 0.1,
-                transparent: true,
-                opacity: cardOpacity,
-                visible: (cardOpacity > 0.001),
-                side: THREE.FrontSide
-            });
+    const cardOpacity = parseFloat(document.getElementById('cardOpacityRange')?.value || '0.96');
+    const cardTextBrightness = parseFloat(document.getElementById('cardBrightnessRange')?.value || '1.0');
+    const baseEmissiveIntensity = Math.min(1.0, cardTextBrightness * 0.55);
 
-            // ★ 关键修复：卡片背部与边框自发光设为 0，彻底根除 Bloom 大于 0 时整球卡片边框剧烈频闪与背后过曝问题！
-            const sideMat = new THREE.MeshStandardMaterial({
-                color: 0x0a162b,
-                roughness: 0.85,
-                metalness: 0.25,
-                transparent: true,
-                opacity: cardOpacity * 0.45,
-                visible: (cardOpacity > 0.001),
-                emissive: new THREE.Color(0x000000), // 彻底无自发光，杜绝辉光频闪
-                emissiveIntensity: 0.0,
-                side: THREE.DoubleSide
-            });
+    // ★ 消除高反光金属度与粗糙度跳动，防止边缘旋转产生流动反光；文字与内面发光柔和化
+    const frontMat = new THREE.MeshStandardMaterial({
+        map: texData.texture,
+        emissiveMap: texData.texture,
+        emissive: new THREE.Color(0xffffff),
+        emissiveIntensity: baseEmissiveIntensity,
+        roughness: 0.88, // 高漫反射，彻底消除边缘刺眼的反光流动条纹
+        metalness: 0.0,  // 去除金属反光走样
+        transparent: true,
+        opacity: cardOpacity,
+        visible: (cardOpacity > 0.001),
+        side: THREE.FrontSide
+    });
 
-            const materials = [frontMat, sideMat];
-            const card = new THREE.Mesh(geometry, materials);
+    // ★ 卡片侧壁与倒角边缘：纯净消光暗黑科技蓝，彻底不自发光，根除边缘频闪
+    const sideMat = new THREE.MeshStandardMaterial({
+        color: 0x081224,
+        roughness: 0.95,
+        metalness: 0.0,
+        transparent: true,
+        opacity: cardOpacity * 0.5,
+        visible: (cardOpacity > 0.001),
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 0.0,
+        side: THREE.DoubleSide
+    });
 
-            card.userData = {
-                word: word,
-                originalMaterials: materials,
-                hoverSideMaterial: sideMat.clone(),
-                rotationAxis: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(),
-                rotationSpeed: 0.3 + Math.random() * 0.7
-            };
+    const materials = [frontMat, sideMat];
+    const card = new THREE.Mesh(geometry, materials);
 
-            return card;
-        },
+    card.userData = {
+        word: word,
+        originalMaterials: materials,
+        baseEmissiveIntensity: baseEmissiveIntensity,
+        hoverSideMaterial: sideMat.clone(),
+        rotationAxis: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize(),
+        rotationSpeed: 0.3 + Math.random() * 0.7
+    };
+
+    return card;
+},
 
         createCornerBrackets() {
     const bracketGroup = new THREE.Group();
