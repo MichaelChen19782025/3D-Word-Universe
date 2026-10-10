@@ -240,12 +240,24 @@ body {
 .help-modal { max-width: 680px; }
 .note-modal-box { max-width: 580px; }
 
+/* 数字调节弹窗样式 */
+.prompt-modal-box {
+    background: linear-gradient(145deg, rgba(16, 32, 70, 0.98), rgba(8, 18, 44, 0.98));
+    border: 1px solid var(--accent-color-2);
+    box-shadow: 0 10px 45px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 240, 255, 0.25);
+    border-radius: 18px; padding: 22px; width: min(380px, 90vw); text-align: center;
+}
+.prompt-modal-box h3 { color: #ffd875; margin-bottom: 16px; font-size: 1.15rem; }
+.prompt-stepper-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; }
+.prompt-step-btn { width: 42px; height: 42px; border-radius: 8px; font-size: 1.3rem; font-weight: bold; background: rgba(30, 52, 98, 0.8); border: 1px solid rgba(130, 200, 255, 0.5); color: white; cursor: pointer; }
+.prompt-num-input { width: 95px; height: 42px; font-size: 1.25rem; font-weight: bold; text-align: center; background: rgba(10, 20, 50, 0.9); border: 1px solid var(--border-color); border-radius: 8px; color: #68FFC0; }
+
 .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 25px; padding-top:16px; border-top: 1px solid var(--border-color);}
 .modal-btn { padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: all 0.3s ease; background: linear-gradient(45deg, var(--accent-color-1), var(--accent-color-2)); color: white; box-shadow: 0 2px 13px rgba(79,172,254, 0.5); font-size: 0.88rem; }
 .modal-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(0,242,254, 0.7); }
 .modal-btn.secondary-btn { background: linear-gradient(45deg, #68737e, #4f565d); }
 
-/* 🌟 目标达成全屏浮现提示 (彻底杜绝提前暴露) */
+/* 🌟 目标达成全屏浮现提示 */
 #dailyGoalToast {
     position: fixed;
     top: 32px;
@@ -375,6 +387,26 @@ body {
     background: rgba(10, 20, 48, 0.35); backdrop-filter: blur(4px);
     border: 1px solid rgba(135, 205, 255, 0.25);
 }
+
+/* 巡航 HUD 样式：默认折叠状态 */
+#focusCruiseHud {
+    display: flex; align-items: center; font-size: 0.85rem; font-weight: 700;
+    user-select: none; padding: 5px 9px; border-radius: 11px;
+    backdrop-filter: blur(5px); cursor: pointer; white-space: nowrap;
+}
+#focusCruiseHud.enabled {
+    color: #ffd875; border: 1px solid rgba(255, 216, 117, 0.55);
+    background: rgba(14, 28, 60, 0.88); opacity: 0.95;
+}
+#focusCruiseHud.disabled {
+    color: #8fa0b5; border: 1px dashed rgba(140, 160, 190, 0.3);
+    background: rgba(10, 20, 48, 0.35); opacity: 0.55;
+}
+.focus-cruise-trigger { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 6px; }
+.focus-cruise-expand-panel { display: none; align-items: center; gap: 5px; margin-left: 6px; padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.22); }
+#focusCruiseHud.expanded .focus-cruise-expand-panel { display: flex; }
+.focus-pill { cursor: pointer; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 2px 6px; font-family: 'Consolas', monospace; font-size: 0.82rem; }
+.focus-pill:hover { background: rgba(0, 240, 255, 0.25); border-color: var(--accent-color-2); color: #fff; }
 
 .hidden { display: none !important; }
 
