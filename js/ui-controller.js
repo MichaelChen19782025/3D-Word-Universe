@@ -1109,6 +1109,7 @@
 
     let hoverTimer = null;
     let longPressTimer = null;
+    let didLongPress = false;
     let downTime = 0;
     let downPos = new THREE.Vector2();
     let isMoving = false;
@@ -1120,7 +1121,7 @@
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    // 检测鼠标当前是否在 3D 悬浮查词卡范围内
+    // 检测鼠标/触点是否在 3D 浮动查词卡范围内
     const isPointerOverHoverCard = (clientX, clientY) => {
         if (!appState.hoverOverlayCard || !appState.hoverOverlayCard.visible || appState.overlayCardTargetOpacity < 0.05) {
             return false;
@@ -1132,7 +1133,7 @@
         return hits.length > 0;
     };
 
-    // 检测鼠标是否在某个球面单词卡上
+    // 检测当前坐标命中的球面单词卡
     const getRaycastCard = (clientX, clientY) => {
         mouse.x = (clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -1141,7 +1142,7 @@
         return hits.length > 0 ? hits[0].object : null;
     };
 
-    // ★ 核心调度：2 秒内保底不消失；离开窗口超过 200ms 自动消失
+    // 查词卡 2 秒常驻与移出超过 200ms 自动关闭调度
     const checkOrScheduleDismiss = () => {
         if (appState.hoverCardDismissTimer) {
             clearTimeout(appState.hoverCardDismissTimer);
@@ -1157,13 +1158,9 @@
         const isOver = isPointerOverHoverCard(lastClientX, lastClientY);
 
         if (isOver) {
-            // 鼠标正悬停在查词窗口内，保持开启，绝不消失
             return;
         }
 
-        // 鼠标不在查词窗口内：
-        // 规则 1：出现后至少 2000ms 内绝不自动消失
-        // 规则 2：若已过 2000ms，离开查词窗口超过 200ms 自动消失
         const remaining2sLock = Math.max(0, 2000 - timeSinceShow);
         const delay = Math.max(200, remaining2sLock);
 
@@ -1176,10 +1173,8 @@
         }, delay);
     };
 
-    // 挂载到 appState，供 triggerCardDisplay 随时调度
     appState.scheduleHoverCardAutoDismiss = checkOrScheduleDismiss;
 
-    // 全局追踪鼠标坐标
     window.addEventListener('pointermove', (e) => {
         if (e.pointerType !== 'touch') {
             lastClientX = e.clientX;
@@ -1187,80 +1182,95 @@
         }
     }, { passive: true });
 
-    // ★ PC 端鼠标移动逻辑
+    // 移动与拖动检测
     canvasEl.addEventListener('pointermove', (e) => {
-        if (e.pointerType === 'touch') return;
-
-        lastClientX = e.clientX;
-        lastClientY = e.clientY;
-
         const curPos = new THREE.Vector2(e.clientX, e.clientY);
-        if (downPos.distanceTo(curPos) > 6) isMoving = true;
-
-        // 1. 如果光标位于悬浮查词卡范围内
-        if (isPointerOverHoverCard(e.clientX, e.clientY)) {
-            if (hoverTimer) clearTimeout(hoverTimer);
-            if (appState.hoverCardDismissTimer) {
-                clearTimeout(appState.hoverCardDismissTimer);
-                appState.hoverCardDismissTimer = null;
+        if (downPos.distanceTo(curPos) > 8) {
+            isMoving = true;
+            // 一旦发生手指滑动旋转球体，立即取消长按定时器
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
             }
-            return;
         }
 
-        // 2. 如果光标位于某个球面单词卡上（悬停满 200ms 替换为新卡片）
-        const hitCard = getRaycastCard(e.clientX, e.clientY);
-        if (hitCard) {
-            if (hitCard !== currentHoverCard) {
-                currentHoverCard = hitCard;
+        // 仅在 PC 桌面端启用鼠标移动悬停 200ms 探测
+        if (e.pointerType !== 'touch') {
+            lastClientX = e.clientX;
+            lastClientY = e.clientY;
+
+            if (isPointerOverHoverCard(e.clientX, e.clientY)) {
                 if (hoverTimer) clearTimeout(hoverTimer);
-                hoverTimer = setTimeout(() => {
-                    // ★ 新卡片替换立即触发，并重置 2 秒保底保护
-                    AppUI.triggerCardDisplay(hitCard);
-                }, 200);
+                if (appState.hoverCardDismissTimer) {
+                    clearTimeout(appState.hoverCardDismissTimer);
+                    appState.hoverCardDismissTimer = null;
+                }
+                return;
             }
-        } else {
-            currentHoverCard = null;
-            if (hoverTimer) clearTimeout(hoverTimer);
-        }
 
-        // 3. 触发离开检测
-        checkOrScheduleDismiss();
+            const hitCard = getRaycastCard(e.clientX, e.clientY);
+            if (hitCard) {
+                if (hitCard !== currentHoverCard) {
+                    currentHoverCard = hitCard;
+                    if (hoverTimer) clearTimeout(hoverTimer);
+                    hoverTimer = setTimeout(() => {
+                        AppUI.triggerCardDisplay(hitCard);
+                    }, 200);
+                }
+            } else {
+                currentHoverCard = null;
+                if (hoverTimer) clearTimeout(hoverTimer);
+            }
+
+            checkOrScheduleDismiss();
+        }
     });
 
-    // 鼠标/触控按下
+    // 手指/鼠标按下
     canvasEl.addEventListener('pointerdown', (e) => {
         downTime = performance.now();
         downPos.set(e.clientX, e.clientY);
         isMoving = false;
+        didLongPress = false;
 
-        // 移动端：长按超过 450ms 触发右侧完整信息详情窗口
+        // ★ 核心修复：手机端长按精确判定（必须持续长按超过 750 毫秒且不晃动）
         if (e.pointerType === 'touch') {
             if (longPressTimer) clearTimeout(longPressTimer);
             const touchedCard = getRaycastCard(e.clientX, e.clientY);
             if (touchedCard) {
                 longPressTimer = setTimeout(() => {
                     if (!isMoving && touchedCard.userData?.word) {
-                        if (navigator.vibrate) navigator.vibrate(50);
+                        didLongPress = true;
+                        if (navigator.vibrate) {
+                            navigator.vibrate([40, 30, 40]);
+                        }
+                        // 长按超过 750ms，触发右侧完整详情窗口
                         AppUI.showImmersiveDetailPanel(touchedCard.userData.word);
                         longPressTimer = null;
                     }
-                }, 450);
+                }, 750);
             }
         }
     });
 
-    // 鼠标/触控抬起
+    // 手指/鼠标抬起
     canvasEl.addEventListener('pointerup', (e) => {
         if (longPressTimer) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
         }
 
+        // 如果已经触发了长按展开完整面板，抬起时不触发单击
+        if (didLongPress) {
+            didLongPress = false;
+            return;
+        }
+
         const duration = performance.now() - downTime;
         const dist = downPos.distanceTo(new THREE.Vector2(e.clientX, e.clientY));
 
-        // 判定为单击（非拖动旋转视角）
-        if (dist < 6 && duration < 400 && !isMoving) {
+        // 判定为未移动的单击
+        if (dist < 8 && duration < 750 && !isMoving) {
             this.handleQuickTap(e);
         }
     });
@@ -1274,7 +1284,7 @@
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, appState.camera);
 
-    // 1. 优先判定当前打开的 3D 悬浮查词卡及其右上角 5 大功能按钮
+    // 1. 优先判定当前已经处于打开状态的 3D 悬浮查词卡及其功能按钮
     if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
         const intersectsCard = raycaster.intersectObjects([appState.hoverOverlayCard], true);
         if (intersectsCard.length > 0) {
@@ -1331,7 +1341,7 @@
                                     this.showToast(`🛡️ 已屏蔽单词: ${wordData.words}`);
                                 }
                             } else if (zone.type === 'card_body') {
-                                // 点击快速查词卡主体，直接打开右侧完整详情窗口
+                                // 点击查词卡内部主体文字，打开右侧完整详情面板
                                 this.showImmersiveDetailPanel(wordData);
                             }
                             appState.needsRender = true;
@@ -1344,14 +1354,20 @@
         }
     }
 
-    // 2. 判定球面单词卡片点击
+    // 2. 判定球面单词卡片的单击行为
     const intersects = raycaster.intersectObjects(appState.wordObjects || [], false);
     if (intersects.length > 0) {
         const card = intersects[0].object;
         const wordData = card.userData.word;
 
-        // ★ 核心逻辑：在 PC 端或触屏上点击球面卡片，直接打开右侧滑出的完整信息详情窗口
-        this.showImmersiveDetailPanel(wordData);
+        // ★ 核心修复：手机端或电脑端单击卡片，统一弹出“快速查词卡窗口”！
+        // 只有长按超过 750 毫秒或点击查词卡内部，才会展开右侧完整详情面板
+        if (appState.hoveredObject === card && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
+            appState.hoveredObject = null;
+            appState.overlayCardTargetOpacity = 0;
+        } else {
+            this.triggerCardDisplay(card);
+        }
 
         const result = AppStorage.recordStudyClick(wordData);
         this.updateStudyCounterDisplay();
