@@ -190,54 +190,65 @@
         },
 
         initPremiumHoverCard() {
-            const group = new THREE.Group();
+    const group = new THREE.Group();
 
-            const backplate = new THREE.Mesh(
-                new THREE.PlaneGeometry(1, 1),
-                new THREE.MeshBasicMaterial({ color: 0x0a1428, transparent: true, opacity: 0, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
-            );
-            backplate.name = "backplate";
-            group.add(backplate);
+    const backplate = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({ color: 0x0a1428, transparent: true, opacity: 0, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
+    );
+    backplate.name = "backplate";
+    group.add(backplate);
 
-            const glowCanvas = document.createElement('canvas');
-            glowCanvas.width = 128; glowCanvas.height = 128;
-            const glowCtx = glowCanvas.getContext('2d');
-            const gradient = glowCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
-            gradient.addColorStop(0, "rgba(100, 200, 255, 0.4)");
-            gradient.addColorStop(1, "rgba(50, 100, 150, 0)");
-            glowCtx.fillStyle = gradient;
-            glowCtx.fillRect(0, 0, 128, 128);
+    // ★ 升级 256×256 超柔多阶深空呼吸光环
+    const glowCanvas = document.createElement('canvas');
+    glowCanvas.width = 256;
+    glowCanvas.height = 256;
+    const glowCtx = glowCanvas.getContext('2d');
+    const gradient = glowCtx.createRadialGradient(128, 128, 40, 128, 128, 128);
+    gradient.addColorStop(0, "rgba(0, 200, 255, 0.32)");
+    gradient.addColorStop(0.45, "rgba(20, 110, 220, 0.16)");
+    gradient.addColorStop(0.85, "rgba(10, 40, 120, 0.04)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+    glowCtx.fillStyle = gradient;
+    glowCtx.fillRect(0, 0, 256, 256);
 
-            const glowTexture = new THREE.CanvasTexture(glowCanvas);
-            const coreGlow = new THREE.Mesh(
-                new THREE.PlaneGeometry(1, 1),
-                new THREE.MeshBasicMaterial({ map: glowTexture, blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthTest: false, depthWrite: false })
-            );
-            coreGlow.name = "coreGlow";
-            coreGlow.position.z = 0.01;
-            group.add(coreGlow);
+    const glowTexture = new THREE.CanvasTexture(glowCanvas);
+    const coreGlow = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.15, 1.15),
+        new THREE.MeshBasicMaterial({
+            map: glowTexture,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            opacity: 0,
+            depthTest: false,
+            depthWrite: false
+        })
+    );
+    coreGlow.name = "coreGlow";
+    coreGlow.position.z = 0.008;
+    group.add(coreGlow);
 
-            const screen = new THREE.Mesh(
-                new THREE.PlaneGeometry(1, 1),
-                new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, side: THREE.DoubleSide })
-            );
-            screen.position.z = 0.02;
-            screen.name = "textScreen";
-            group.add(screen);
+    const screen = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, side: THREE.DoubleSide })
+    );
+    screen.position.z = 0.02;
+    screen.name = "textScreen";
+    group.add(screen);
 
-            const cornerBracketsGroup = AppCardFactory.createCornerBrackets();
-            cornerBracketsGroup.name = 'frameGroup';
-            cornerBracketsGroup.position.z = 0.03;
-            group.add(cornerBracketsGroup);
+    const cornerBracketsGroup = AppCardFactory.createCornerBrackets();
+    cornerBracketsGroup.name = 'frameGroup';
+    cornerBracketsGroup.position.z = 0.03;
+    group.add(cornerBracketsGroup);
 
-            group.visible = false;
-            group.userData.refs = { screen, backplate, coreGlow, frameGroup: cornerBracketsGroup };
+    group.visible = false;
+    group.userData.refs = { screen, backplate, coreGlow, frameGroup: cornerBracketsGroup };
 
-            appState.hoverOverlayCard = group;
-            appState.overlayCardTargetScale = new THREE.Vector3(1, 1, 1);
-            appState.overlayCardTargetPosition = new THREE.Vector3(0, 0, 100);
-            appState.scene.add(group);
-        },
+    appState.hoverOverlayCard = group;
+    appState.overlayCardTargetScale = new THREE.Vector3(1, 1, 1);
+    appState.overlayCardTargetPosition = new THREE.Vector3(0, 0, 100);
+    appState.scene.add(group);
+},
 
         initClock() {
             const clockEl = document.getElementById('clockHud');

@@ -114,131 +114,143 @@ appState.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.inn
  },
 
  animate(time) {
-     if (time === undefined || time === null) time = performance.now();
-     requestAnimationFrame((t) => AppScene.animate(t));
+    if (time === undefined || time === null) time = performance.now();
+    requestAnimationFrame((t) => AppScene.animate(t));
 
-     if (!appState.controls || !appState.renderer || !appState.scene || !appState.camera) return;
+    if (!appState.controls || !appState.renderer || !appState.scene || !appState.camera) return;
 
-     const controlsChanged = appState.controls.update();
-     let mustRender = controlsChanged || appState.needsRender;
+    const controlsChanged = appState.controls.update();
+    let mustRender = controlsChanged || appState.needsRender;
 
-     if (appState.autoRotate && appState.actualDisplayRotationSpeed > 0 && appState.rotationMultiplier > 0.001) mustRender = true;
-     if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) mustRender = true;
-     if (appState.vortexParticles && appState.vortexParticles.visible) mustRender = true;
+    if (appState.autoRotate && appState.actualDisplayRotationSpeed > 0 && appState.rotationMultiplier > 0.001) mustRender = true;
+    if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) mustRender = true;
+    if (appState.vortexParticles && appState.vortexParticles.visible) mustRender = true;
 
-     // 宇宙涡旋平滑旋转
-     if (appState.vortexParticles && appState.vortexParticles.visible) {
-         const spd = appState.rt.vortexSpeed || 0.003;
-         appState.vortexParticles.rotation.y += spd;
-     }
+    // 宇宙涡旋平滑旋转
+    if (appState.vortexParticles && appState.vortexParticles.visible) {
+        const spd = appState.rt.vortexSpeed || 0.003;
+        appState.vortexParticles.rotation.y += spd;
+    }
 
-     const cardMult = appState.cardScaleMultiplier || 1.0;
-     appState.camera.getWorldPosition(AppMath.vecCamWorld);
-     const radius = appState.sphereRadius || 85;
-     const camDist = AppMath.vecCamWorld.length();
-     const minDist = camDist - radius;
-     const distRange = 2 * radius;
+    const cardMult = appState.cardScaleMultiplier || 1.0;
+    appState.camera.getWorldPosition(AppMath.vecCamWorld);
+    const radius = appState.sphereRadius || 85;
+    const camDist = AppMath.vecCamWorld.length();
+    const minDist = camDist - radius;
+    const distRange = 2 * radius;
 
-     if (!mustRender) return;
-     appState.needsRender = false;
+    if (!mustRender) return;
+    appState.needsRender = false;
 
-     if (appState.hoverOverlayCard) {
-         const card = appState.hoverOverlayCard;
-         const screen = card.getObjectByName("textScreen") || card.userData.refs?.screen;
-         if (screen) {
-             const currentOp = screen.material.opacity;
-             const newOp = THREE.MathUtils.lerp(currentOp, appState.overlayCardTargetOpacity, 0.22);
-             screen.material.opacity = newOp;
+    // ★ 3D 浮动查词卡片：柔和全局同步呼吸光管线
+    if (appState.hoverOverlayCard) {
+        const card = appState.hoverOverlayCard;
+        const screen = card.getObjectByName("textScreen") || card.userData.refs?.screen;
+        if (screen) {
+            const currentOp = screen.material.opacity;
+            const newOp = THREE.MathUtils.lerp(currentOp, appState.overlayCardTargetOpacity, 0.22);
+            screen.material.opacity = newOp;
 
-             const rawBrightness = parseFloat(document.getElementById('hoverCardBrightness')?.value || '1.0');
-             const isPitchBlack = (rawBrightness <= 0.001);
+            const rawBrightness = parseFloat(document.getElementById('hoverCardBrightness')?.value || '1.0');
+            const isPitchBlack = (rawBrightness <= 0.001);
 
-             const backplate = card.getObjectByName("backplate") || card.userData.refs?.backplate;
-             if (backplate) {
-                 backplate.material.color.set(isPitchBlack ? 0x000000 : 0x0a1428);
-                 backplate.material.opacity = isPitchBlack ? newOp : (newOp * (appState.rt.hoverBgOpacity || 0.78));
-             }
+            const backplate = card.getObjectByName("backplate") || card.userData.refs?.backplate;
+            if (backplate) {
+                backplate.material.color.set(isPitchBlack ? 0x000000 : 0x0a1428);
+                backplate.material.opacity = isPitchBlack ? newOp : (newOp * (appState.rt.hoverBgOpacity || 0.78));
+            }
 
-             const coreGlow = card.getObjectByName("coreGlow") || card.userData.refs?.coreGlow;
-             if (coreGlow) coreGlow.material.opacity = isPitchBlack ? 0 : (newOp * 0.85);
+            // 计算平滑自然的人体舒缓呼吸波形（4秒/周期，0~1 平滑渐变）
+            const breath = 0.5 + 0.5 * Math.sin(time * 0.0016);
 
-             const frameGroup = card.getObjectByName("frameGroup") || card.userData.refs?.frameGroup;
-             if (frameGroup) {
-                 if (!isPitchBlack) {
-                     frameGroup.visible = true;
-                     frameGroup.children.forEach((child, i) => {
-                         child.material.opacity = newOp * (0.65 + Math.sin(time * 0.003 + i * 1.57) * 0.35);
-                     });
-                 } else {
-                     frameGroup.visible = false;
-                 }
-             }
-             card.visible = (newOp > 0.01 && card.scale.x > 0.01);
-         }
+            // 柔和环境光晕：同步膨胀收缩与透明度呼吸
+            const coreGlow = card.getObjectByName("coreGlow") || card.userData.refs?.coreGlow;
+            if (coreGlow) {
+                const glowBaseOpacity = isPitchBlack ? 0 : (newOp * (0.20 + breath * 0.35));
+                coreGlow.material.opacity = glowBaseOpacity;
+                const glowPulse = 1.04 + 0.035 * breath;
+                coreGlow.scale.set(glowPulse, glowPulse, 1);
+            }
 
-         if (appState.overlayCardTargetPosition && card.visible) {
-             card.position.lerp(appState.overlayCardTargetPosition, 0.2);
-             card.quaternion.slerp(appState.camera.quaternion, 0.2);
-             card.scale.lerp(appState.overlayCardTargetScale, 0.2);
-         }
-     }
+            // 四角科技边框：消除急速频闪，同步柔和呼吸，不刺激眼睛
+            const frameGroup = card.getObjectByName("frameGroup") || card.userData.refs?.frameGroup;
+            if (frameGroup) {
+                if (!isPitchBlack) {
+                    frameGroup.visible = true;
+                    const frameOpacity = newOp * (0.35 + breath * 0.35);
+                    frameGroup.children.forEach((child) => {
+                        child.material.opacity = frameOpacity;
+                    });
+                } else {
+                    frameGroup.visible = false;
+                }
+            }
+            card.visible = (newOp > 0.01 && card.scale.x > 0.01);
+        }
 
-     const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.0058 * appState.rotationMultiplier * appState.rotationMultiplierTemporary;
-     if (appState.autoRotate && baseRotationSpeed > 0 && appState.wordSphereGroup) {
-         const rx = appState.rt.rotateX !== undefined ? appState.rt.rotateX : true;
-         const ry = appState.rt.rotateY !== undefined ? appState.rt.rotateY : true;
-         const rz = appState.rt.rotateZ !== undefined ? appState.rt.rotateZ : false;
-         if (rx) appState.wordSphereGroup.rotation.x += baseRotationSpeed;
-         if (ry) appState.wordSphereGroup.rotation.y += baseRotationSpeed;
-         if (rz) appState.wordSphereGroup.rotation.z += baseRotationSpeed;
-     }
+        if (appState.overlayCardTargetPosition && card.visible) {
+            card.position.lerp(appState.overlayCardTargetPosition, 0.2);
+            card.quaternion.slerp(appState.camera.quaternion, 0.2);
+            card.scale.lerp(appState.overlayCardTargetScale, 0.2);
+        }
+    }
 
-     const shouldCardsRotate = appState.rt.cardSelfRotation !== undefined ? appState.rt.cardSelfRotation : true;
-     const cardMasterSpeed = (appState.rt.cardRotationSpeed !== undefined ? appState.rt.cardRotationSpeed : 2) * 0.00115;
+    const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.0058 * appState.rotationMultiplier * appState.rotationMultiplierTemporary;
+    if (appState.autoRotate && baseRotationSpeed > 0 && appState.wordSphereGroup) {
+        const rx = appState.rt.rotateX !== undefined ? appState.rt.rotateX : true;
+        const ry = appState.rt.rotateY !== undefined ? appState.rt.rotateY : true;
+        const rz = appState.rt.rotateZ !== undefined ? appState.rt.rotateZ : false;
+        if (rx) appState.wordSphereGroup.rotation.x += baseRotationSpeed;
+        if (ry) appState.wordSphereGroup.rotation.y += baseRotationSpeed;
+        if (rz) appState.wordSphereGroup.rotation.z += baseRotationSpeed;
+    }
 
-     if (appState.wordSphereGroup) {
-         appState.wordSphereGroup.updateMatrixWorld(true);
-     }
+    const shouldCardsRotate = appState.rt.cardSelfRotation !== undefined ? appState.rt.cardSelfRotation : true;
+    const cardMasterSpeed = (appState.rt.cardRotationSpeed !== undefined ? appState.rt.cardRotationSpeed : 2) * 0.00115;
 
-     appState.wordObjects.forEach((card, idx) => {
-         card.getWorldPosition(AppMath.vecCardWorld);
-         const dist = AppMath.vecCardWorld.distanceTo(AppMath.vecCamWorld);
-         const t = THREE.MathUtils.clamp((dist - minDist) / distRange, 0, 1);
+    if (appState.wordSphereGroup) {
+        appState.wordSphereGroup.updateMatrixWorld(true);
+    }
 
-         const depthScale = THREE.MathUtils.lerp(1.4, 0.32, t);
-         const normalizedY = card.position.y / radius;
-         const latScale = 1.0 - 0.45 * (normalizedY * normalizedY);
+    appState.wordObjects.forEach((card, idx) => {
+        card.getWorldPosition(AppMath.vecCardWorld);
+        const dist = AppMath.vecCardWorld.distanceTo(AppMath.vecCamWorld);
+        const t = THREE.MathUtils.clamp((dist - minDist) / distRange, 0, 1);
 
-         let spotlightScale = 1.0;
-         if (appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx)) {
-             if (t < 0.5) {
-                 const frontFade = THREE.MathUtils.clamp((0.5 - t) / 0.08, 0, 1);
-                 spotlightScale = 1.0 + ((appState.focusCruise.scaleFactor || 1.5) - 1.0) * frontFade;
-             }
-         }
+        const depthScale = THREE.MathUtils.lerp(1.4, 0.32, t);
+        const normalizedY = card.position.y / radius;
+        const latScale = 1.0 - 0.45 * (normalizedY * normalizedY);
 
-         const finalScale = latScale * depthScale * cardMult * spotlightScale;
-         card.scale.set(finalScale, finalScale, finalScale);
-     });
+        let spotlightScale = 1.0;
+        if (appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx)) {
+            if (t < 0.5) {
+                const frontFade = THREE.MathUtils.clamp((0.5 - t) / 0.08, 0, 1);
+                spotlightScale = 1.0 + ((appState.focusCruise.scaleFactor || 1.5) - 1.0) * frontFade;
+            }
+        }
 
-     AppMath.quadParentInv.copy(appState.wordSphereGroup.quaternion).invert();
-     AppMath.quadParentInv.multiply(appState.camera.quaternion);
+        const finalScale = latScale * depthScale * cardMult * spotlightScale;
+        card.scale.set(finalScale, finalScale, finalScale);
+    });
 
-     appState.wordObjects.forEach(card => {
-         card.quaternion.copy(AppMath.quadParentInv);
-         if (shouldCardsRotate && cardMasterSpeed > 0) {
-             card.rotateOnAxis(card.userData.rotationAxis, card.userData.rotationSpeed * cardMasterSpeed);
-         }
-     });
+    AppMath.quadParentInv.copy(appState.wordSphereGroup.quaternion).invert();
+    AppMath.quadParentInv.multiply(appState.camera.quaternion);
 
-     const isBloomActive = !!(document.getElementById('visualEffectsEnabled')?.checked || appState.rt.visualFxEnabled);
-     const bloomStrength = safeParseFloat(document.getElementById('bloomStrength')?.value, 0.5);
-     if (isBloomActive && bloomStrength > 0.001 && appState.composer) {
-         appState.composer.render();
-     } else {
-         appState.renderer.render(appState.scene, appState.camera);
-     }
- }
+    appState.wordObjects.forEach(card => {
+        card.quaternion.copy(AppMath.quadParentInv);
+        if (shouldCardsRotate && cardMasterSpeed > 0) {
+            card.rotateOnAxis(card.userData.rotationAxis, card.userData.rotationSpeed * cardMasterSpeed);
+        }
+    });
+
+    const isBloomActive = !!(document.getElementById('visualEffectsEnabled')?.checked || appState.rt.visualFxEnabled);
+    const bloomStrength = safeParseFloat(document.getElementById('bloomStrength')?.value, 0.5);
+    if (isBloomActive && bloomStrength > 0.001 && appState.composer) {
+        appState.composer.render();
+    } else {
+        appState.renderer.render(appState.scene, appState.camera);
+    }
+}
 };
 window.AppScene = AppScene;
 })();

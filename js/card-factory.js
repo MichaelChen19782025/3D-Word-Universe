@@ -310,37 +310,64 @@
         },
 
         createCornerBrackets() {
-            const bracketGroup = new THREE.Group();
-            const bracketCanvas = document.createElement('canvas');
-            bracketCanvas.width = 64; bracketCanvas.height = 64;
-            const ctx = bracketCanvas.getContext('2d');
-            ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 6; ctx.lineCap = 'round';
-            ctx.beginPath(); ctx.moveTo(6, 34); ctx.lineTo(6, 6); ctx.lineTo(34, 6); ctx.stroke();
-            const bracketTexture = new THREE.CanvasTexture(bracketCanvas);
+    const bracketGroup = new THREE.Group();
+    const bracketCanvas = document.createElement('canvas');
+    bracketCanvas.width = 128;
+    bracketCanvas.height = 128;
+    const ctx = bracketCanvas.getContext('2d');
 
-            const bracketMat = new THREE.MeshBasicMaterial({
-                map: bracketTexture, color: 0x00ffff, transparent: true, opacity: 0.9,
-                blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false
-            });
+    // 采用双层羽化柔光线，避免刺眼激光边缘
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-            const size = 0.24;
-            const bracketGeo = new THREE.PlaneGeometry(size, size);
+    // 外层微晕
+    ctx.strokeStyle = 'rgba(0, 220, 255, 0.35)';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.moveTo(14, 60);
+    ctx.lineTo(14, 14);
+    ctx.lineTo(60, 14);
+    ctx.stroke();
 
-            for (let i = 0; i < 4; i++) {
-                const bracket = new THREE.Mesh(bracketGeo, bracketMat.clone());
-                const signX = (i % 2 === 0) ? -1 : 1;
-                const signY = (i < 2) ? 1 : -1;
-                bracket.position.set(signX * 0.5, signY * 0.5, 0.01);
+    // 内芯柔光
+    ctx.strokeStyle = 'rgba(120, 240, 255, 0.85)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(14, 60);
+    ctx.lineTo(14, 14);
+    ctx.lineTo(60, 14);
+    ctx.stroke();
 
-                let rotation = 0;
-                if (signX === 1 && signY === 1) rotation = -Math.PI / 2;
-                else if (signX === -1 && signY === -1) rotation = Math.PI / 2;
-                else if (signX === 1 && signY === -1) rotation = Math.PI;
-                bracket.rotation.z = rotation;
-                bracketGroup.add(bracket);
-            }
-            return bracketGroup;
-        },
+    const bracketTexture = new THREE.CanvasTexture(bracketCanvas);
+
+    const bracketMat = new THREE.MeshBasicMaterial({
+        map: bracketTexture,
+        color: 0x88e8ff,
+        transparent: true,
+        opacity: 0.65,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        depthTest: false
+    });
+
+    const size = 0.24;
+    const bracketGeo = new THREE.PlaneGeometry(size, size);
+
+    for (let i = 0; i < 4; i++) {
+        const bracket = new THREE.Mesh(bracketGeo, bracketMat.clone());
+        const signX = (i % 2 === 0) ? -1 : 1;
+        const signY = (i < 2) ? 1 : -1;
+        bracket.position.set(signX * 0.5, signY * 0.5, 0.01);
+
+        let rotation = 0;
+        if (signX === 1 && signY === 1) rotation = -Math.PI / 2;
+        else if (signX === -1 && signY === -1) rotation = Math.PI / 2;
+        else if (signX === 1 && signY === -1) rotation = Math.PI;
+        bracket.rotation.z = rotation;
+        bracketGroup.add(bracket);
+    }
+    return bracketGroup;
+},
 
         createOverlayTexture(word) {
             const canvas = document.createElement('canvas');
