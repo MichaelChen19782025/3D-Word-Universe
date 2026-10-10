@@ -45,27 +45,33 @@
 
     const AppCardFactory = {
         updateCardsMaterialsFast(options = {}) {
-            if (!appState.wordObjects || appState.wordObjects.length === 0) return;
-            const targetOpacity = options.opacity !== undefined ? options.opacity : parseFloat(document.getElementById('cardOpacityRange')?.value || '0.96');
+    if (!appState.wordObjects || appState.wordObjects.length === 0) return;
+    const targetOpacity = options.opacity !== undefined ? options.opacity : parseFloat(document.getElementById('cardOpacityRange')?.value || '0.96');
 
-            for (let i = 0; i < appState.wordObjects.length; i++) {
-                const card = appState.wordObjects[i];
-                if (Array.isArray(card.material)) {
-                    if (card.material[0]) {
-                        card.material[0].opacity = targetOpacity;
-                        card.material[0].visible = (targetOpacity > 0.001);
-                    }
-                    if (card.material[1]) {
-                        card.material[1].opacity = targetOpacity * 0.45;
-                        card.material[1].visible = (targetOpacity > 0.001);
-                    }
-                } else if (card.material) {
-                    card.material.opacity = targetOpacity;
-                    card.material.visible = (targetOpacity > 0.001);
-                }
+    for (let i = 0; i < appState.wordObjects.length; i++) {
+        const card = appState.wordObjects[i];
+        if (Array.isArray(card.material)) {
+            if (card.material[0]) {
+                card.material[0].opacity = targetOpacity;
+                card.material[0].transparent = true;
+                card.material[0].visible = (targetOpacity > 0.001);
+                card.material[0].needsUpdate = true;
             }
-            appState.needsRender = true;
-        },
+            if (card.material[1]) {
+                card.material[1].opacity = targetOpacity * 0.45;
+                card.material[1].transparent = true;
+                card.material[1].visible = (targetOpacity > 0.001);
+                card.material[1].needsUpdate = true;
+            }
+        } else if (card.material) {
+            card.material.opacity = targetOpacity;
+            card.material.transparent = true;
+            card.material.visible = (targetOpacity > 0.001);
+            card.material.needsUpdate = true;
+        }
+    }
+    appState.needsRender = true;
+},
 
         createCardTexture(word) {
     const baseFontSize = parseFloat(document.getElementById('sphereCardFontSize')?.value || APP_CONFIG.DEFAULT_SPHERE_CARD_FONT_SIZE);
@@ -78,6 +84,11 @@
     const currentPresetId = document.getElementById('cardStylePresetSelect')?.value || 'cyber_blue';
     const preset = window.CardStyleManager ? window.CardStyleManager.getPreset(currentPresetId) : {};
 
+    // ★ 全量精准读取用户设定的所有参数（杜绝任何变量缺失导致的静默中断）
+    const customLightColor = document.getElementById('cardLightColor')?.value || preset.defaultLightColor || '#00f0ff';
+    const customLightPos = document.getElementById('cardLightPositionSelect')?.value || preset.defaultLightPosition || 'center';
+    const customLightBrightness = parseFloat(document.getElementById('cardLightBrightnessRange')?.value ?? (preset.defaultLightBrightness ?? 0.85));
+    const customLightSpread = parseFloat(document.getElementById('cardLightSpreadRange')?.value ?? (preset.defaultLightSpread ?? 0.85));
     const customDepth = parseFloat(document.getElementById('cardChamberDepthRange')?.value ?? 0.65);
     const customTextStyle = document.getElementById('cardTextStyleSelect')?.value || 'plain_bold';
     const customFontColor = document.getElementById('sphereCardFontColor')?.value || '#ffffff';
@@ -136,28 +147,55 @@
     const context = canvas.getContext('2d');
     context.font = `bold ${scaledFontSize}px ${fontFamily}`;
 
-    // 1. 铺设卡片深暗纯净底色
+    // 1. 铺设用户选定的卡片底色
     context.fillStyle = customBaseColor;
     context.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // 2. ★ 根除闪烁绿光来源：灯光亮度直接置为 0，彻底关闭边缘发光条与反光功能！
+    // 2. 绘制展舱内腔（内缩 3% 安全区，防止倒角漏边）
+    const marginX = Math.round(canvasWidth * 0.03);
+    const marginY = Math.round(canvasHeight * 0.03);
+    const chamberW = canvasWidth - marginX * 2;
+    const chamberH = canvasHeight - marginY * 2;
+
+    context.save();
+    context.translate(marginX, marginY);
     if (window.CardStyleManager) {
         const chamberCfg = {
             ...preset,
             baseColor: customBaseColor,
             depthFactor: customDepth,
-            lightColor: 'transparent',
-            lightPosition: 'center',
-            lightBrightness: 0.0, // 闪光根源彻底删除归零
-            lightSpread: 0.0
+            lightColor: customLightColor,
+            lightPosition: customLightPos,
+            lightBrightness: customLightBrightness * 0.75,
+            lightSpread: customLightSpread
         };
-        window.CardStyleManager.drawPerspectiveChamber(context, canvasWidth, canvasHeight, chamberCfg);
-    }
+        window.CardStyleManager.drawPerspectiveChamber(context, chamberW, chamberH, chamberCfg);
 
-    // 3. ★ 彻底删除厚重边框，仅保留清爽优雅的 1 像素超细外边缘
+        // ★ 核心修复：若用户选择了自定义底色（如粉色），向展舱叠加色调层，确保底色显现
+        if (customBaseColor.toLowerCase() !== '#06122a' && customBaseColor.toLowerCase() !== '#000000') {
+            context.save();
+            context.globalAlpha = 0.45;
+            context.fillStyle = customBaseColor;
+            context.fillRect(0, 0, chamberW, chamberH);
+            context.restore();
+        }
+    } else {
+        const radGrad = context.createRadialGradient(
+            chamberW / 2, chamberH / 2, Math.min(chamberW, chamberH) * 0.15,
+            chamberW / 2, chamberH / 2, Math.max(chamberW, chamberH) * 0.55
+        );
+        radGrad.addColorStop(0, customLightColor);
+        radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        context.fillStyle = radGrad;
+        context.fillRect(0, 0, chamberW, chamberH);
+    }
+    context.restore();
+
+    // 3. ★ 清爽精致的 1 像素内敛外边缘，绝无厚重边框
     context.save();
     context.lineWidth = 1;
-    context.strokeStyle = 'rgba(0, 240, 255, 0.25)';
+    context.strokeStyle = customLightColor;
+    context.globalAlpha = 0.35;
     const r = Math.round(canvasWidth * 0.085);
     context.beginPath();
     context.moveTo(r, 0.5);
@@ -173,20 +211,33 @@
     context.stroke();
     context.restore();
 
-    // 4. 绘制中心清晰高对比度文字
+    // 4. ★ 绘制中心文字：全量支持纯色高对比、全息霓虹、浮雕金属等所有质感
     const textY = canvasHeight / 2 - ((mainContentLines.length - 1) * scaledLineHeight / 2);
     mainContentLines.forEach((line, index) => {
         const curY = textY + (index * scaledLineHeight);
-        context.save();
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-        context.lineWidth = Math.max(2, scaledFontSize * 0.12);
-        context.strokeText(line, canvasWidth / 2, curY);
+        if (customTextStyle === 'plain_bold' || !window.CardStyleManager) {
+            context.save();
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+            context.lineWidth = Math.max(2, scaledFontSize * 0.12);
+            context.strokeText(line, canvasWidth / 2, curY);
 
-        context.fillStyle = customFontColor;
-        context.fillText(line, canvasWidth / 2, curY);
-        context.restore();
+            context.fillStyle = customFontColor;
+            context.fillText(line, canvasWidth / 2, curY);
+            context.restore();
+        } else {
+            window.CardStyleManager.draw3DText(context, line, canvasWidth / 2, curY, {
+                fontSize: scaledFontSize,
+                textColor: customFontColor,
+                textStyle: customTextStyle,
+                textDepthColor: preset.textDepthColor || '#070a12',
+                textHighlightColor: customLightColor || preset.textHighlightColor || '#b5f5ff',
+                lightPosition: customLightPos,
+                lightColor: customLightColor,
+                lightBrightness: customLightBrightness
+            });
+        }
     });
 
     return {

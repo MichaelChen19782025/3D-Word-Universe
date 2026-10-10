@@ -321,35 +321,72 @@
         },
 
         init3DCardChamberListeners() {
-            document.getElementById('cardStylePresetSelect')?.addEventListener('change', (e) => {
-                const presetId = e.target.value;
-                if (window.CardStyleManager) {
-                    const p = window.CardStyleManager.getPreset(presetId);
-                    if (p) {
-                        const lightBrightRange = document.getElementById('cardLightBrightnessRange');
-                        const lightColorInput = document.getElementById('cardLightColor');
-                        if (lightBrightRange) lightBrightRange.value = p.defaultLightBrightness;
-                        if (lightColorInput) lightColorInput.value = p.defaultLightColor;
-                        this.updateCardPresetDescription();
-                        this.showToast(`🎴 已应用风格: ${p.name}`);
-                    }
-                }
-                scheduleSphereRebuild(10);
-                schedulePersist();
-            });
+    // 样机风格切换监听
+    document.getElementById('cardStylePresetSelect')?.addEventListener('change', (e) => {
+        const presetId = e.target.value;
+        if (window.CardStyleManager) {
+            const p = window.CardStyleManager.getPreset(presetId);
+            if (p) {
+                const lightBrightRange = document.getElementById('cardLightBrightnessRange');
+                const lightColorInput = document.getElementById('cardLightColor');
+                const lightPosSelect = document.getElementById('cardLightPositionSelect');
+                const lightSpreadRange = document.getElementById('cardLightSpreadRange');
+                const textStyleSelect = document.getElementById('cardTextStyleSelect');
+                const fontColorInput = document.getElementById('sphereCardFontColor');
 
-            // 包含字号、颜色、文本亮度、底色在内的所有卡片参数监听
-            const heavyInputs = [
-                'sphereCardFontSize', 'cardBrightnessRange', 'sphereCardFontColor', 'cardTextStyleSelect', 'sphereCardFontFamily',
-                'cardBaseColor', 'cardChamberDepthRange', 'cardLightBrightnessRange', 'cardLightSpreadRange', 'cardLightColor'
-            ];
-            heavyInputs.forEach(id => {
-                const el = document.getElementById(id);
-                if (!el) return;
-                el.addEventListener('input', () => { scheduleSphereRebuild(250); schedulePersist(); });
-                el.addEventListener('change', () => { scheduleSphereRebuild(10); schedulePersist(); });
-            });
-        },
+                if (lightBrightRange) lightBrightRange.value = p.defaultLightBrightness ?? 0.85;
+                if (lightColorInput) lightColorInput.value = p.defaultLightColor ?? '#00f0ff';
+                if (lightPosSelect) lightPosSelect.value = p.defaultLightPosition ?? 'center';
+                if (lightSpreadRange) lightSpreadRange.value = p.defaultLightSpread ?? 0.85;
+                if (textStyleSelect && p.textStyle) textStyleSelect.value = p.textStyle;
+                if (fontColorInput && p.textColor) fontColorInput.value = p.textColor;
+
+                this.updateCardPresetDescription();
+                this.showToast(`🎴 已应用风格: ${p.name}`);
+            }
+        }
+        scheduleSphereRebuild(10);
+        schedulePersist();
+    });
+
+    // ★ 卡片不透明度：0ms 即地更新，拖拽滑块立即透明化
+    const opacityRange = document.getElementById('cardOpacityRange');
+    if (opacityRange) {
+        opacityRange.addEventListener('input', (e) => {
+            const op = parseFloat(e.target.value);
+            AppCardFactory.updateCardsMaterialsFast({ opacity: op });
+            schedulePersist();
+        });
+    }
+
+    // ★ 卡片所有外观参数全面无死角监听（底色、文字颜色、质感、字号、灯光位置与色彩等）
+    const cardSettingInputs = [
+        'sphereCardFontSize',
+        'cardBrightnessRange',
+        'sphereCardFontColor',
+        'cardTextStyleSelect',
+        'sphereCardFontFamily',
+        'cardBaseColor',
+        'cardChamberDepthRange',
+        'cardLightPositionSelect',
+        'cardLightBrightnessRange',
+        'cardLightSpreadRange',
+        'cardLightColor'
+    ];
+
+    cardSettingInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => {
+            scheduleSphereRebuild(200);
+            schedulePersist();
+        });
+        el.addEventListener('change', () => {
+            scheduleSphereRebuild(10);
+            schedulePersist();
+        });
+    });
+},
 
         updateCardPresetDescription() {
             const descLabel = document.getElementById('cardPresetDescLabel');
