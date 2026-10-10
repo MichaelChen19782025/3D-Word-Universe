@@ -1114,9 +1114,25 @@
     let isMoving = false;
     let currentHoverCard = null;
 
+    let lastClientX = -9999;
+    let lastClientY = -9999;
+
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
+    // 检测鼠标当前是否在 3D 悬浮查词卡范围内
+    const isPointerOverHoverCard = (clientX, clientY) => {
+        if (!appState.hoverOverlayCard || !appState.hoverOverlayCard.visible || appState.overlayCardTargetOpacity < 0.05) {
+            return false;
+        }
+        mouse.x = (clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, appState.camera);
+        const hits = raycaster.intersectObjects([appState.hoverOverlayCard], true);
+        return hits.length > 0;
+    };
+
+    // 检测鼠标是否在某个球面单词卡上
     const getRaycastCard = (clientX, clientY) => {
         mouse.x = (clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -1125,32 +1141,80 @@
         return hits.length > 0 ? hits[0].object : null;
     };
 
-    // ★ PC 端：鼠标移动检测，悬停满 200ms 自动弹出查词窗口
+    // ★ 核心调度：2 秒内保底不消失；离开窗口超过 200ms 自动消失
+    const checkOrScheduleDismiss = () => {
+        if (appState.hoverCardDismissTimer) {
+            clearTimeout(appState.hoverCardDismissTimer);
+            appState.hoverCardDismissTimer = null;
+        }
+        if (!appState.hoverOverlayCard || !appState.hoverOverlayCard.visible || appState.overlayCardTargetOpacity < 0.05) {
+            return;
+        }
+
+        const now = performance.now();
+        const shownTime = appState.hoverCardShownTime || 0;
+        const timeSinceShow = now - shownTime;
+        const isOver = isPointerOverHoverCard(lastClientX, lastClientY);
+
+        if (isOver) {
+            // 鼠标正悬停在查词窗口内，保持开启，绝不消失
+            return;
+        }
+
+        // 鼠标不在查词窗口内：
+        // 规则 1：出现后至少 2000ms 内绝不自动消失
+        // 规则 2：若已过 2000ms，离开查词窗口超过 200ms 自动消失
+        const remaining2sLock = Math.max(0, 2000 - timeSinceShow);
+        const delay = Math.max(200, remaining2sLock);
+
+        appState.hoverCardDismissTimer = setTimeout(() => {
+            if (!isPointerOverHoverCard(lastClientX, lastClientY)) {
+                appState.hoveredObject = null;
+                appState.overlayCardTargetOpacity = 0;
+                appState.needsRender = true;
+            }
+        }, delay);
+    };
+
+    // 挂载到 appState，供 triggerCardDisplay 随时调度
+    appState.scheduleHoverCardAutoDismiss = checkOrScheduleDismiss;
+
+    // 全局追踪鼠标坐标
+    window.addEventListener('pointermove', (e) => {
+        if (e.pointerType !== 'touch') {
+            lastClientX = e.clientX;
+            lastClientY = e.clientY;
+        }
+    }, { passive: true });
+
+    // ★ PC 端鼠标移动逻辑
     canvasEl.addEventListener('pointermove', (e) => {
-        if (e.pointerType === 'touch') return; // 移动触控由 touch 事件处理
+        if (e.pointerType === 'touch') return;
+
+        lastClientX = e.clientX;
+        lastClientY = e.clientY;
 
         const curPos = new THREE.Vector2(e.clientX, e.clientY);
         if (downPos.distanceTo(curPos) > 6) isMoving = true;
 
-        // 如果鼠标此时正移动到悬浮查词卡上面，不清除查词卡，方便用户点击按钮
-        if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, appState.camera);
-            const overlayHits = raycaster.intersectObjects([appState.hoverOverlayCard], true);
-            if (overlayHits.length > 0) {
-                if (hoverTimer) clearTimeout(hoverTimer);
-                return;
+        // 1. 如果光标位于悬浮查词卡范围内
+        if (isPointerOverHoverCard(e.clientX, e.clientY)) {
+            if (hoverTimer) clearTimeout(hoverTimer);
+            if (appState.hoverCardDismissTimer) {
+                clearTimeout(appState.hoverCardDismissTimer);
+                appState.hoverCardDismissTimer = null;
             }
+            return;
         }
 
+        // 2. 如果光标位于某个球面单词卡上（悬停满 200ms 替换为新卡片）
         const hitCard = getRaycastCard(e.clientX, e.clientY);
         if (hitCard) {
             if (hitCard !== currentHoverCard) {
                 currentHoverCard = hitCard;
                 if (hoverTimer) clearTimeout(hoverTimer);
-                // 满 200 毫秒立刻呼出快速查词卡
                 hoverTimer = setTimeout(() => {
+                    // ★ 新卡片替换立即触发，并重置 2 秒保底保护
                     AppUI.triggerCardDisplay(hitCard);
                 }, 200);
             }
@@ -1158,6 +1222,9 @@
             currentHoverCard = null;
             if (hoverTimer) clearTimeout(hoverTimer);
         }
+
+        // 3. 触发离开检测
+        checkOrScheduleDismiss();
     });
 
     // 鼠标/触控按下
@@ -1166,7 +1233,7 @@
         downPos.set(e.clientX, e.clientY);
         isMoving = false;
 
-        // ★ 移动端：长按超过 450ms 触发右侧完整信息详情窗口
+        // 移动端：长按超过 450ms 触发右侧完整信息详情窗口
         if (e.pointerType === 'touch') {
             if (longPressTimer) clearTimeout(longPressTimer);
             const touchedCard = getRaycastCard(e.clientX, e.clientY);
@@ -1192,7 +1259,7 @@
         const duration = performance.now() - downTime;
         const dist = downPos.distanceTo(new THREE.Vector2(e.clientX, e.clientY));
 
-        // 判定为单击（非拖拽旋转视角）
+        // 判定为单击（非拖动旋转视角）
         if (dist < 6 && duration < 400 && !isMoving) {
             this.handleQuickTap(e);
         }
@@ -1300,32 +1367,44 @@
 },
 
         triggerCardDisplay(card) {
-            if (!card) return;
-            const word = card.userData.word;
-            appState.hoveredObject = card;
+    if (!card) return;
+    const word = card.userData.word;
+    appState.hoveredObject = card;
 
-            const { texture, pxWidth, pxHeight } = AppCardFactory.createOverlayTexture(word);
-            const screen = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
-            if (screen.material.map) screen.material.map.dispose();
-            screen.material.map = texture;
-            screen.material.needsUpdate = true;
+    const { texture, pxWidth, pxHeight } = AppCardFactory.createOverlayTexture(word);
+    const screen = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
+    if (screen.material.map) screen.material.map.dispose();
+    screen.material.map = texture;
+    screen.material.needsUpdate = true;
 
-            appState.hoverOverlayCard.userData.word = word;
-            appState.hoverOverlayCard.visible = true;
-            appState.overlayCardTargetOpacity = 1;
+    appState.hoverOverlayCard.userData.word = word;
+    appState.hoverOverlayCard.visible = true;
+    appState.overlayCardTargetOpacity = 1;
 
-            const scaleVal = parseFloat(document.getElementById('hoverOverlayCardScale')?.value || 1.0);
-            updateHoverCardPosition(pxWidth, pxHeight, scaleVal);
+    const scaleVal = parseFloat(document.getElementById('hoverOverlayCardScale')?.value || 1.0);
+    updateHoverCardPosition(pxWidth, pxHeight, scaleVal);
 
-            appState.hoverOverlayCard.position.copy(appState.overlayCardTargetPosition);
-            appState.hoverOverlayCard.quaternion.copy(appState.camera.quaternion);
-            appState.hoverOverlayCard.scale.copy(appState.overlayCardTargetScale);
+    appState.hoverOverlayCard.position.copy(appState.overlayCardTargetPosition);
+    appState.hoverOverlayCard.quaternion.copy(appState.camera.quaternion);
+    appState.hoverOverlayCard.scale.copy(appState.overlayCardTargetScale);
 
-            if (word && word.words) {
-                AppAudio.speakWord(word.words, 1);
-            }
-            appState.needsRender = true;
-        },
+    if (word && word.words) {
+        AppAudio.speakWord(word.words, 1);
+    }
+    appState.needsRender = true;
+
+    // ★ 核心逻辑：记录出现时刻，确立至少 2000ms 保护期，除非有新卡片替换
+    appState.hoverCardShownTime = performance.now();
+    if (appState.hoverCardDismissTimer) {
+        clearTimeout(appState.hoverCardDismissTimer);
+        appState.hoverCardDismissTimer = null;
+    }
+
+    // 触发自动关闭判定调度
+    if (typeof appState.scheduleHoverCardAutoDismiss === 'function') {
+        appState.scheduleHoverCardAutoDismiss();
+    }
+},
 
         showImmersiveDetailPanel(word) {
             if (!word) return;
