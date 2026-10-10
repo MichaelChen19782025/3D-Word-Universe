@@ -448,7 +448,41 @@
         schedulePersist();
     });
 
-    // ★ 悬浮查词卡缩放比例：拖动滑块实时放大/缩小查词卡
+    // ★ 悬浮查词卡全量颜色实时监听 (主单词、音标、释义、记忆法标题及正文)
+    const hoverColorInputs = [
+        'hoverCardMainWordColor',
+        'hoverCardPhoneticColor',
+        'hoverCardMeaningColor',
+        'hoverCardMethodTitleColor',
+        'hoverCardMethodContentColor'
+    ];
+    hoverColorInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => {
+            if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
+                AppUI.triggerCardDisplay(appState.hoveredObject);
+            }
+            schedulePersist();
+        });
+        el.addEventListener('change', () => schedulePersist());
+    });
+
+    // ★ 悬浮查词卡背景透明度实时调节
+    document.getElementById('hoverCardBgOpacity')?.addEventListener('input', (e) => {
+        const op = parseFloat(e.target.value || '0.78');
+        appState.rt.hoverBgOpacity = op;
+        if (appState.hoverOverlayCard) {
+            const backplate = appState.hoverOverlayCard.getObjectByName("backplate");
+            if (backplate) {
+                backplate.material.opacity = appState.overlayCardTargetOpacity * op;
+            }
+        }
+        appState.needsRender = true;
+        schedulePersist();
+    });
+
+    // ★ 悬浮查词卡缩放比例实时更新
     document.getElementById('hoverOverlayCardScale')?.addEventListener('input', (e) => {
         const scaleVal = parseFloat(e.target.value || '1.0');
         if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
@@ -463,7 +497,7 @@
         schedulePersist();
     });
 
-    // ★ 悬浮查词卡亮度调节：拖动即刻更新光照亮度
+    // ★ 悬浮查词卡光照亮度实时调节
     document.getElementById('hoverCardBrightness')?.addEventListener('input', () => {
         if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
             AppUI.triggerCardDisplay(appState.hoveredObject);
@@ -472,7 +506,6 @@
         schedulePersist();
     });
 
-    // ★ 悬浮查词卡样机模式切换
     document.getElementById('hoverCardStyleModeSelect')?.addEventListener('change', () => {
         if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
             AppUI.triggerCardDisplay(appState.hoveredObject);
@@ -1701,49 +1734,96 @@
         },
 
         exportSettings() {
-            const fullBackup = {};
-            const keysToBackup = [
-                APP_CONFIG.SETTINGS_STORAGE_KEY,
-                APP_CONFIG.LAST_STATE_STORAGE_KEY,
-                APP_CONFIG.VIEWED_WORDS_STORAGE_KEY,
-                APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY
-            ];
-            keysToBackup.forEach(key => {
-                const data = localStorage.getItem(key);
-                if (data) fullBackup[key] = safeJSONParse(data, null);
-            });
-            const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `WordUniverse_Settings_${Date.now()}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            this.showToast('⚙️ 系统配置已成功导出！');
-        },
+    const fullBackup = {
+        exportedAt: new Date().toISOString(),
+        version: "V8.6"
+    };
+
+    // 1. 系统核心设置 (含查词卡所有颜色、亮度及外观参数)
+    this.saveSettings();
+    const settingsRaw = localStorage.getItem(APP_CONFIG.SETTINGS_STORAGE_KEY);
+    if (settingsRaw) fullBackup[APP_CONFIG.SETTINGS_STORAGE_KEY] = safeJSONParse(settingsRaw, {});
+
+    // 2. 最后视角与摄像机状态
+    this.saveLastState();
+    const lastStateRaw = localStorage.getItem(APP_CONFIG.LAST_STATE_STORAGE_KEY);
+    if (lastStateRaw) fullBackup[APP_CONFIG.LAST_STATE_STORAGE_KEY] = safeJSONParse(lastStateRaw, {});
+
+    // 3. 右侧管理面板自定义视角列表
+    fullBackup[APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY] = appState.customViews || [];
+
+    // 4. 每日学习目标与学习日志
+    fullBackup[APP_CONFIG.STUDY_GOAL_STORAGE_KEY] = AppStorage.getStudyGoal();
+    fullBackup[APP_CONFIG.STUDY_LOG_STORAGE_KEY] = AppStorage.loadStudyLog();
+
+    // 5. 已查看单词集合与屏蔽词库
+    fullBackup[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY] = Array.from(AppStorage.loadViewedWords());
+    fullBackup['shieldedWordsV8'] = Array.from(AppStorage.loadShieldedWords());
+
+    const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `WordUniverse_FullConfigBackup_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this.showToast('⚙️ 系统全量配置(含查词卡色彩与视角预设)已成功导出！');
+},
 
         importSettings() {
-            selectLocalFile('application/json,.json', (file) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        const imported = JSON.parse(e.target.result);
-                        for (let key in imported) {
-                            if (imported.hasOwnProperty(key)) {
-                                localStorage.setItem(key, JSON.stringify(imported[key]));
-                            }
-                        }
-                        alert('设置导入成功，页面即将刷新！');
-                        location.reload();
-                    } catch (err) {
-                        alert('解析失败: ' + err.message);
-                    }
-                };
-                reader.readAsText(file);
-            });
-        },
+    selectLocalFile('application/json,.json', (file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (!imported || typeof imported !== 'object') {
+                    throw new Error('导入文件内容不是合法的 JSON 对象');
+                }
+
+                // 还原系统设置项
+                if (imported[APP_CONFIG.SETTINGS_STORAGE_KEY]) {
+                    localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(imported[APP_CONFIG.SETTINGS_STORAGE_KEY]));
+                }
+
+                // 还原上次状态
+                if (imported[APP_CONFIG.LAST_STATE_STORAGE_KEY]) {
+                    localStorage.setItem(APP_CONFIG.LAST_STATE_STORAGE_KEY, JSON.stringify(imported[APP_CONFIG.LAST_STATE_STORAGE_KEY]));
+                }
+
+                // 还原右侧管理面板自定义视角预设
+                if (imported[APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY]) {
+                    appState.customViews = imported[APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY];
+                    localStorage.setItem(APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY, JSON.stringify(appState.customViews));
+                }
+
+                // 还原每日学习目标与打卡日志
+                if (imported[APP_CONFIG.STUDY_GOAL_STORAGE_KEY]) {
+                    AppStorage.setStudyGoal(imported[APP_CONFIG.STUDY_GOAL_STORAGE_KEY]);
+                }
+                if (imported[APP_CONFIG.STUDY_LOG_STORAGE_KEY]) {
+                    AppStorage.saveStudyLog(imported[APP_CONFIG.STUDY_LOG_STORAGE_KEY]);
+                }
+
+                // 还原已查词汇与屏蔽词库
+                if (imported[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY]) {
+                    AppStorage.saveViewedWords(new Set(imported[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY]));
+                }
+                if (imported['shieldedWordsV8']) {
+                    AppStorage.saveShieldedWords(new Set(imported['shieldedWordsV8']));
+                }
+
+                alert('全量系统配置已成功恢复导入！即将刷新页面以应用所有新参数。');
+                location.reload();
+            } catch (err) {
+                alert('设置解析失败: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    });
+},
+
 
         loadAllPersistentStates() {
             const lastStateJSON = localStorage.getItem(APP_CONFIG.LAST_STATE_STORAGE_KEY);
@@ -1764,31 +1844,71 @@
         },
 
         saveSettings() {
-            if (appState.isInitializing) return;
-            const settings = {};
-            const settingIds = [
-                'rotationSpeed', 'cardRotationSpeed', 'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'batchSize',
-                'focusCruiseEnabled', 'focusCruiseIntervalRange', 'focusCruiseRatioRange', 'focusCruiseScaleRange',
-                'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
-                'visualEffectsEnabled', 'vortexParticleCount', 'vortexColor', 'vortexSize', 'vortexSpeed', 'vortexTightness',
-                'bloomThreshold', 'bloomStrength', 'bloomRadius',
-                'starfieldEnabled', 'starCount', 'starColor', 'starSize',
-                'cardStylePresetSelect', 'sphereCardFontSize', 'cardBrightnessRange', 'sphereCardFontColor', 'cardTextStyleSelect', 'sphereCardFontFamily',
-                'cardBaseColor', 'cardChamberDepthRange', 'cardOpacityRange',
-                'cardLightPositionSelect', 'cardLightBrightnessRange', 'cardLightSpreadRange', 'cardLightColor',
-                'hoverCardStyleModeSelect', 'hoverOverlayCardScale', 'hoverCardBrightness',
-                'voiceSelect', 'rateInput', 'timesInput', 'volumeInput'
-            ];
+    if (appState.isInitializing) return;
+    const settings = {};
+    const settingIds = [
+        'rotationSpeed', 'cardRotationSpeed', 'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'batchSize',
+        'focusCruiseEnabled', 'focusCruiseIntervalRange', 'focusCruiseRatioRange', 'focusCruiseScaleRange',
+        'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
+        'visualEffectsEnabled', 'vortexParticleCount', 'vortexColor', 'vortexSize', 'vortexSpeed', 'vortexTightness',
+        'bloomThreshold', 'bloomStrength', 'bloomRadius',
+        'starfieldEnabled', 'starCount', 'starColor', 'starSize',
+        'cardStylePresetSelect', 'sphereCardFontSize', 'cardBrightnessRange', 'sphereCardFontColor', 'cardTextStyleSelect', 'sphereCardFontFamily',
+        'cardBaseColor', 'cardChamberDepthRange', 'cardOpacityRange',
+        'cardLightPositionSelect', 'cardLightBrightnessRange', 'cardLightSpreadRange', 'cardLightColor',
+        // ★ 查词卡完整外观与色彩设置持久化字段
+        'hoverCardStyleModeSelect', 'hoverOverlayCardScale', 'hoverCardBrightness', 'hoverCardBgOpacity',
+        'hoverCardMainWordColor', 'hoverCardPhoneticColor', 'hoverCardMeaningColor', 'hoverCardMethodTitleColor', 'hoverCardMethodContentColor',
+        'voiceSelect', 'rateInput', 'timesInput', 'volumeInput'
+    ];
 
-            settingIds.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) settings[id] = (el.type === 'checkbox') ? el.checked : el.value;
-            });
+    settingIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            settings[id] = (el.type === 'checkbox') ? el.checked : el.value;
+        }
+    });
 
-            settings.showEnglish = appState.showEnglish;
-            settings.cardScaleMultiplier = appState.cardScaleMultiplier;
-            localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-        },
+    settings.showEnglish = appState.showEnglish;
+    settings.cardScaleMultiplier = appState.cardScaleMultiplier;
+    localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+},
+
+loadSettings() {
+    const raw = localStorage.getItem(APP_CONFIG.SETTINGS_STORAGE_KEY);
+    if (!raw) return;
+    const settings = safeJSONParse(raw, null);
+    if (!settings) return;
+
+    for (const key in settings) {
+        const el = document.getElementById(key);
+        if (el) {
+            if (el.type === 'checkbox') el.checked = !!settings[key];
+            else el.value = settings[key];
+        }
+    }
+
+    if (settings.cardScaleMultiplier) appState.cardScaleMultiplier = settings.cardScaleMultiplier;
+    if (settings.showEnglish !== undefined) {
+        appState.showEnglish = !!settings.showEnglish;
+        const toggleLang = document.getElementById('toggleLanguage');
+        if (toggleLang) toggleLang.textContent = appState.showEnglish ? '中' : '英';
+    }
+
+    if (settings.hoverCardBgOpacity !== undefined) {
+        appState.rt.hoverBgOpacity = parseFloat(settings.hoverCardBgOpacity);
+    }
+
+    if (settings.voiceSelect) appState.ttsSettings.voice = settings.voiceSelect;
+    if (settings.rateInput) appState.ttsSettings.rate = safeParseFloat(settings.rateInput, 1.0);
+    if (settings.timesInput) appState.ttsSettings.times = safeParseInt(settings.timesInput, 1);
+    if (settings.volumeInput) appState.ttsSettings.volume = safeParseFloat(settings.volumeInput, 1.0);
+
+    AppParticles.updateCoreSphereSettings();
+    AppParticles.updateVisualEffects();
+    AppParticles.initStarfield();
+    this.updateCardPresetDescription();
+},
 
         loadSettings() {
             const raw = localStorage.getItem(APP_CONFIG.SETTINGS_STORAGE_KEY);

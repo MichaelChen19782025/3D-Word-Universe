@@ -422,235 +422,242 @@
 },
 
         createOverlayTexture(word) {
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            const fontFamily = "'Segoe UI', 'Roboto', 'Microsoft YaHei', sans-serif";
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const fontFamily = "'Segoe UI', 'Roboto', 'Microsoft YaHei', sans-serif";
 
-            const rawBrightness = parseFloat(document.getElementById('hoverCardBrightness')?.value || '1.0');
-            const isPitchBlack = (rawBrightness <= 0.001);
+    // 读取用户配置的光照亮度与色彩
+    const rawBrightness = parseFloat(document.getElementById('hoverCardBrightness')?.value || '1.0');
+    const isPitchBlack = (rawBrightness <= 0.001);
 
-            const dpr = window.devicePixelRatio || 1;
-            const scale = IS_MOBILE_DEVICE ? Math.min(dpr, 1.8) : 1.0;
-            const canvasWidth = Math.round(1240 * scale);
-            const baseSize = 1240 * 0.038 * scale;
+    const mainWordColor = document.getElementById('hoverCardMainWordColor')?.value || '#ffffff';
+    const phoneticColor = document.getElementById('hoverCardPhoneticColor')?.value || '#A0FFEE';
+    const meaningColor = document.getElementById('hoverCardMeaningColor')?.value || '#ffffff';
+    const methodTitleColor = document.getElementById('hoverCardMethodTitleColor')?.value || '#FFE600';
+    const methodContentColor = document.getElementById('hoverCardMethodContentColor')?.value || '#A0FFEE';
 
-            const paddingX = Math.round(68 * scale);
-            const paddingY = Math.round(48 * scale);
-            const wrapWidth = canvasWidth - paddingX * 2;
+    const dpr = window.devicePixelRatio || 1;
+    const scale = IS_MOBILE_DEVICE ? Math.min(dpr, 1.8) : 1.0;
+    const canvasWidth = Math.round(1240 * scale);
+    const baseSize = 1240 * 0.038 * scale;
 
-            const englishWord = (word.words || 'N/A').trim();
-            const phoneticSymbol = word.phonetic ? `/${word.phonetic.replace(/^\/+|\/+$/g, '')}/` : '';
-            const chineseMeaning = word.chinese || '无释义';
-            const memoryMethod = word.method || '暂无联想记忆提示';
-            const notesCount = (Array.isArray(word.notes) ? word.notes.length : 0);
+    const paddingX = Math.round(68 * scale);
+    const paddingY = Math.round(48 * scale);
+    const wrapWidth = canvasWidth - paddingX * 2;
 
-            const testCtx = getSharedTestContext();
-            function wrapText(text, font, maxWidth) {
-                testCtx.font = font;
-                const lines = [];
-                let currentLine = "";
-                for (let char of text.split("")) {
-                    let testLine = currentLine + char;
-                    if (testCtx.measureText(testLine).width > maxWidth && currentLine) {
-                        lines.push(currentLine);
-                        currentLine = char;
-                    } else {
-                        currentLine = testLine;
-                    }
-                }
-                if (currentLine) lines.push(currentLine);
-                return lines;
-            }
+    const englishWord = (word.words || 'N/A').trim();
+    const phoneticSymbol = word.phonetic ? `/${word.phonetic.replace(/^\/+|\/+$/g, '')}/` : '';
+    const chineseMeaning = word.chinese || '无释义';
+    const memoryMethod = word.method || '暂无联想记忆提示';
+    const notesCount = (Array.isArray(word.notes) ? word.notes.length : 0);
 
-            const fontMain = `bold ${Math.round(baseSize * 1.55)}px ${fontFamily}`;
-            const fontPhonetic = `${Math.round(baseSize * 0.95)}px ${fontFamily}`;
-            const fontMeaning = `bold ${Math.round(baseSize * 1.25)}px ${fontFamily}`;
-            const fontTitle = `bold ${Math.round(baseSize * 1.05)}px ${fontFamily}`;
-            const fontMethod = `bold ${Math.round(baseSize * 1.15)}px ${fontFamily}`;
-            const fontButton = `bold ${Math.round(baseSize * 0.72)}px ${fontFamily}`;
-
-            const meaningLines = wrapText(chineseMeaning, fontMeaning, wrapWidth);
-            const methodLines = wrapText(memoryMethod, fontMethod, wrapWidth);
-
-            let currentY = paddingY;
-            const mainWordHeight = baseSize * 1.8;
-            currentY += mainWordHeight;
-
-            const meaningLineHeight = baseSize * 1.5;
-            currentY += meaningLines.length * meaningLineHeight + baseSize * 0.4;
-            currentY += baseSize * 0.6;
-            currentY += baseSize * 1.3;
-
-            const methodLineHeight = baseSize * 1.35;
-            currentY += methodLines.length * methodLineHeight + paddingY;
-
-            const canvasHeight = Math.round(currentY);
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-
-            if (isPitchBlack) {
-                context.fillStyle = '#000000';
-                context.fillRect(0, 0, canvasWidth, canvasHeight);
+    const testCtx = getSharedTestContext();
+    function wrapText(text, font, maxWidth) {
+        testCtx.font = font;
+        const lines = [];
+        let currentLine = "";
+        for (let char of text.split("")) {
+            let testLine = currentLine + char;
+            if (testCtx.measureText(testLine).width > maxWidth && currentLine) {
+                lines.push(currentLine);
+                currentLine = char;
             } else {
-                context.clearRect(0, 0, canvasWidth, canvasHeight);
+                currentLine = testLine;
             }
-
-            context.textBaseline = 'top';
-
-            // 1. 主单词
-            context.textAlign = "left";
-            context.font = fontMain;
-            context.fillStyle = "#ffffff";
-            context.save();
-            context.shadowColor = "rgba(0, 240, 255, 0.95)";
-            context.shadowBlur = 18 * scale;
-            context.fillText(englishWord, paddingX, paddingY);
-            context.restore();
-
-            testCtx.font = fontMain;
-            const wordWidth = testCtx.measureText(englishWord).width;
-
-            // 音标
-            context.font = fontPhonetic;
-            context.fillStyle = "#A0FFEE";
-            context.save();
-            context.shadowColor = "rgba(0, 240, 255, 0.6)";
-            context.shadowBlur = 8 * scale;
-            context.fillText(phoneticSymbol, paddingX + wordWidth + 24 * scale, paddingY + (baseSize * 0.40));
-            context.restore();
-
-            // 2. 右侧 5 大胶囊按钮
-            const btnHeight = baseSize * 0.95;
-            const spacing = 8 * scale;
-            const btnY = paddingY + (baseSize * 1.55 - btnHeight) / 2;
-
-            const btnWidthSpeaker = baseSize * 1.2;
-            const btnWidthA = baseSize * 1.05;
-            const btnWidthNote = notesCount > 0 ? (baseSize * 1.8) : (baseSize * 1.35);
-            const btnWidthShield = baseSize * 1.5;
-
-            const btnShieldX = canvasWidth - paddingX - btnWidthShield;
-            const btnNoteX = btnShieldX - spacing - btnWidthNote;
-            const btnPlusX = btnNoteX - spacing - btnWidthA;
-            const btnMinusX = btnPlusX - spacing - btnWidthA;
-            const btnSpeakerX = btnMinusX - spacing - btnWidthSpeaker;
-
-            const zones = [];
-
-            function drawPillButton(label, x, y, w, h, variant = 'normal') {
-                context.save();
-                if (variant === 'shield') {
-                    context.fillStyle = "rgba(220, 38, 38, 0.18)";
-                    context.strokeStyle = "rgba(255, 120, 120, 0.65)";
-                } else if (variant === 'note') {
-                    context.fillStyle = "rgba(255, 216, 117, 0.22)";
-                    context.strokeStyle = "rgba(255, 216, 117, 0.75)";
-                } else {
-                    context.fillStyle = "rgba(0, 240, 255, 0.08)";
-                    context.strokeStyle = "rgba(0, 240, 255, 0.45)";
-                }
-                context.lineWidth = Math.max(1.0, 1.4 * scale);
-                context.beginPath();
-                const r = h / 2;
-                context.moveTo(x + r, y);
-                context.lineTo(x + w - r, y);
-                context.quadraticCurveTo(x + w, y, x + w, y + r);
-                context.lineTo(x + w, y + h - r);
-                context.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-                context.lineTo(x + r, y + h);
-                context.quadraticCurveTo(x, y + h, x, y + h - r);
-                context.lineTo(x, y + r);
-                context.quadraticCurveTo(x, y, x + r, y);
-                context.closePath();
-                context.fill();
-                context.stroke();
-
-                context.font = fontButton;
-                context.fillStyle = (variant === 'shield') ? "#ffb3b3" : (variant === 'note' ? "#ffd875" : "rgba(180, 230, 255, 0.95)");
-                context.textAlign = "center";
-                context.textBaseline = "middle";
-                context.shadowColor = "rgba(0, 0, 0, 0.8)";
-                context.shadowBlur = 4;
-                context.fillText(label, x + w / 2, y + h / 2);
-                context.restore();
-            }
-
-            drawPillButton("🔊", btnSpeakerX, btnY, btnWidthSpeaker, btnHeight, 'normal');
-            zones.push({ type: 'speak', xMin: btnSpeakerX - 6, xMax: btnSpeakerX + btnWidthSpeaker + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
-
-            drawPillButton("A-", btnMinusX, btnY, btnWidthA, btnHeight, 'normal');
-            zones.push({ type: 'fontSizeDown', xMin: btnMinusX - 6, xMax: btnMinusX + btnWidthA + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
-
-            drawPillButton("A+", btnPlusX, btnY, btnWidthA, btnHeight, 'normal');
-            zones.push({ type: 'fontSizeUp', xMin: btnPlusX - 6, xMax: btnPlusX + btnWidthA + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
-
-            const noteLabel = notesCount > 0 ? `📝${notesCount}` : "📝";
-            drawPillButton(noteLabel, btnNoteX, btnY, btnWidthNote, btnHeight, 'note');
-            zones.push({ type: 'note', xMin: btnNoteX - 6, xMax: btnNoteX + btnWidthNote + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
-
-            drawPillButton("屏蔽", btnShieldX, btnY, btnWidthShield, btnHeight, 'shield');
-            zones.push({ type: 'shield', xMin: btnShieldX - 6, xMax: btnShieldX + btnWidthShield + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
-
-            zones.push({ type: 'speak', xMin: paddingX - 10, xMax: btnSpeakerX - spacing, yMin: paddingY - 10, yMax: paddingY + mainWordHeight + 10 });
-
-            // 3. 中文释义
-            let writeY = paddingY + mainWordHeight;
-            context.font = fontMeaning;
-            context.fillStyle = "#ffffff";
-            context.save();
-            context.shadowColor = "rgba(0, 240, 255, 0.7)";
-            context.shadowBlur = 12 * scale;
-            meaningLines.forEach(line => {
-                context.fillText(line, paddingX, writeY);
-                writeY += meaningLineHeight;
-            });
-            context.restore();
-
-            // 4. 分割线
-            writeY += baseSize * 0.4;
-            context.strokeStyle = "rgba(104, 240, 255, 0.28)";
-            context.lineWidth = Math.max(1, Math.round(1 * scale));
-            context.beginPath();
-            context.moveTo(paddingX, writeY);
-            context.lineTo(canvasWidth - paddingX, writeY);
-            context.stroke();
-
-            // 5. 记忆方法标题
-            writeY += baseSize * 0.6;
-            context.font = fontTitle;
-            context.fillStyle = "#FFE600";
-            context.save();
-            context.shadowColor = "rgba(255, 230, 0, 0.9)";
-            context.shadowBlur = 14 * scale;
-            context.fillText("💡 记忆方法 / Memory Association", paddingX, writeY);
-            context.restore();
-
-            // 6. 记忆方法正文
-            writeY += baseSize * 1.35;
-            context.font = fontMethod;
-            context.fillStyle = "#A0FFEE";
-            context.save();
-            context.shadowColor = "rgba(0, 240, 255, 0.65)";
-            context.shadowBlur = 8 * scale;
-            methodLines.forEach(line => {
-                context.fillText(line, paddingX, writeY);
-                writeY += methodLineHeight;
-            });
-            context.restore();
-
-            zones.push({ type: 'card_body', xMin: 0, xMax: canvasWidth, yMin: 0, yMax: canvasHeight });
-
-            word.hover_click_zones = zones;
-            if (appState.hoverOverlayCard) {
-                appState.hoverOverlayCard.userData.hover_click_zones = zones;
-            }
-
-            return {
-                texture: finalizeCanvasTexture(canvas, 8),
-                pxWidth: canvasWidth,
-                pxHeight: canvasHeight
-            };
         }
+        if (currentLine) lines.push(currentLine);
+        return lines;
+    }
+
+    const fontMain = `bold ${Math.round(baseSize * 1.55)}px ${fontFamily}`;
+    const fontPhonetic = `${Math.round(baseSize * 0.95)}px ${fontFamily}`;
+    const fontMeaning = `bold ${Math.round(baseSize * 1.25)}px ${fontFamily}`;
+    const fontTitle = `bold ${Math.round(baseSize * 1.05)}px ${fontFamily}`;
+    const fontMethod = `bold ${Math.round(baseSize * 1.15)}px ${fontFamily}`;
+    const fontButton = `bold ${Math.round(baseSize * 0.72)}px ${fontFamily}`;
+
+    const meaningLines = wrapText(chineseMeaning, fontMeaning, wrapWidth);
+    const methodLines = wrapText(memoryMethod, fontMethod, wrapWidth);
+
+    let currentY = paddingY;
+    const mainWordHeight = baseSize * 1.8;
+    currentY += mainWordHeight;
+
+    const meaningLineHeight = baseSize * 1.5;
+    currentY += meaningLines.length * meaningLineHeight + baseSize * 0.4;
+    currentY += baseSize * 0.6;
+    currentY += baseSize * 1.3;
+
+    const methodLineHeight = baseSize * 1.35;
+    currentY += methodLines.length * methodLineHeight + paddingY;
+
+    const canvasHeight = Math.round(currentY);
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+
+    if (isPitchBlack) {
+        context.fillStyle = '#000000';
+        context.fillRect(0, 0, canvasWidth, canvasHeight);
+    } else {
+        context.clearRect(0, 0, canvasWidth, canvasHeight);
+    }
+
+    context.textBaseline = 'top';
+
+    // 1. 主单词 (颜色受控)
+    context.textAlign = "left";
+    context.font = fontMain;
+    context.fillStyle = mainWordColor;
+    context.save();
+    context.shadowColor = mainWordColor;
+    context.shadowBlur = Math.round(16 * scale * Math.min(2.0, rawBrightness));
+    context.fillText(englishWord, paddingX, paddingY);
+    context.restore();
+
+    testCtx.font = fontMain;
+    const wordWidth = testCtx.measureText(englishWord).width;
+
+    // 音标 (颜色受控)
+    context.font = fontPhonetic;
+    context.fillStyle = phoneticColor;
+    context.save();
+    context.shadowColor = phoneticColor;
+    context.shadowBlur = Math.round(8 * scale * Math.min(2.0, rawBrightness));
+    context.fillText(phoneticSymbol, paddingX + wordWidth + 24 * scale, paddingY + (baseSize * 0.40));
+    context.restore();
+
+    // 2. 右侧 5 大胶囊按钮
+    const btnHeight = baseSize * 0.95;
+    const spacing = 8 * scale;
+    const btnY = paddingY + (baseSize * 1.55 - btnHeight) / 2;
+
+    const btnWidthSpeaker = baseSize * 1.2;
+    const btnWidthA = baseSize * 1.05;
+    const btnWidthNote = notesCount > 0 ? (baseSize * 1.8) : (baseSize * 1.35);
+    const btnWidthShield = baseSize * 1.5;
+
+    const btnShieldX = canvasWidth - paddingX - btnWidthShield;
+    const btnNoteX = btnShieldX - spacing - btnWidthNote;
+    const btnPlusX = btnNoteX - spacing - btnWidthA;
+    const btnMinusX = btnPlusX - spacing - btnWidthA;
+    const btnSpeakerX = btnMinusX - spacing - btnWidthSpeaker;
+
+    const zones = [];
+
+    function drawPillButton(label, x, y, w, h, variant = 'normal') {
+        context.save();
+        if (variant === 'shield') {
+            context.fillStyle = "rgba(220, 38, 38, 0.18)";
+            context.strokeStyle = "rgba(255, 120, 120, 0.65)";
+        } else if (variant === 'note') {
+            context.fillStyle = "rgba(255, 216, 117, 0.22)";
+            context.strokeStyle = "rgba(255, 216, 117, 0.75)";
+        } else {
+            context.fillStyle = "rgba(0, 240, 255, 0.08)";
+            context.strokeStyle = "rgba(0, 240, 255, 0.45)";
+        }
+        context.lineWidth = Math.max(1.0, 1.4 * scale);
+        context.beginPath();
+        const r = h / 2;
+        context.moveTo(x + r, y);
+        context.lineTo(x + w - r, y);
+        context.quadraticCurveTo(x + w, y, x + w, y + r);
+        context.lineTo(x + w, y + h - r);
+        context.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        context.lineTo(x + r, y + h);
+        context.quadraticCurveTo(x, y + h, x, y + h - r);
+        context.lineTo(x, y + r);
+        context.quadraticCurveTo(x, y, x + r, y);
+        context.closePath();
+        context.fill();
+        context.stroke();
+
+        context.font = fontButton;
+        context.fillStyle = (variant === 'shield') ? "#ffb3b3" : (variant === 'note' ? "#ffd875" : "rgba(180, 230, 255, 0.95)");
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.shadowColor = "rgba(0, 0, 0, 0.8)";
+        context.shadowBlur = 4;
+        context.fillText(label, x + w / 2, y + h / 2);
+        context.restore();
+    }
+
+    drawPillButton("🔊", btnSpeakerX, btnY, btnWidthSpeaker, btnHeight, 'normal');
+    zones.push({ type: 'speak', xMin: btnSpeakerX - 6, xMax: btnSpeakerX + btnWidthSpeaker + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+
+    drawPillButton("A-", btnMinusX, btnY, btnWidthA, btnHeight, 'normal');
+    zones.push({ type: 'fontSizeDown', xMin: btnMinusX - 6, xMax: btnMinusX + btnWidthA + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+
+    drawPillButton("A+", btnPlusX, btnY, btnWidthA, btnHeight, 'normal');
+    zones.push({ type: 'fontSizeUp', xMin: btnPlusX - 6, xMax: btnPlusX + btnWidthA + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+
+    const noteLabel = notesCount > 0 ? `📝${notesCount}` : "📝";
+    drawPillButton(noteLabel, btnNoteX, btnY, btnWidthNote, btnHeight, 'note');
+    zones.push({ type: 'note', xMin: btnNoteX - 6, xMax: btnNoteX + btnWidthNote + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+
+    drawPillButton("屏蔽", btnShieldX, btnY, btnWidthShield, btnHeight, 'shield');
+    zones.push({ type: 'shield', xMin: btnShieldX - 6, xMax: btnShieldX + btnWidthShield + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+
+    zones.push({ type: 'speak', xMin: paddingX - 10, xMax: btnSpeakerX - spacing, yMin: paddingY - 10, yMax: paddingY + mainWordHeight + 10 });
+
+    // 3. 中文释义 (颜色受控)
+    let writeY = paddingY + mainWordHeight;
+    context.font = fontMeaning;
+    context.fillStyle = meaningColor;
+    context.save();
+    context.shadowColor = meaningColor;
+    context.shadowBlur = Math.round(10 * scale * Math.min(2.0, rawBrightness));
+    meaningLines.forEach(line => {
+        context.fillText(line, paddingX, writeY);
+        writeY += meaningLineHeight;
+    });
+    context.restore();
+
+    // 4. 分割线
+    writeY += baseSize * 0.4;
+    context.strokeStyle = "rgba(104, 240, 255, 0.28)";
+    context.lineWidth = Math.max(1, Math.round(1 * scale));
+    context.beginPath();
+    context.moveTo(paddingX, writeY);
+    context.lineTo(canvasWidth - paddingX, writeY);
+    context.stroke();
+
+    // 5. 记忆方法标题 (颜色受控)
+    writeY += baseSize * 0.6;
+    context.font = fontTitle;
+    context.fillStyle = methodTitleColor;
+    context.save();
+    context.shadowColor = methodTitleColor;
+    context.shadowBlur = Math.round(12 * scale * Math.min(2.0, rawBrightness));
+    context.fillText("💡 记忆方法 / Memory Association", paddingX, writeY);
+    context.restore();
+
+    // 6. 记忆方法正文 (颜色受控)
+    writeY += baseSize * 1.35;
+    context.font = fontMethod;
+    context.fillStyle = methodContentColor;
+    context.save();
+    context.shadowColor = methodContentColor;
+    context.shadowBlur = Math.round(8 * scale * Math.min(2.0, rawBrightness));
+    methodLines.forEach(line => {
+        context.fillText(line, paddingX, writeY);
+        writeY += methodLineHeight;
+    });
+    context.restore();
+
+    zones.push({ type: 'card_body', xMin: 0, xMax: canvasWidth, yMin: 0, yMax: canvasHeight });
+
+    word.hover_click_zones = zones;
+    if (appState.hoverOverlayCard) {
+        appState.hoverOverlayCard.userData.hover_click_zones = zones;
+    }
+
+    return {
+        texture: finalizeCanvasTexture(canvas, 8),
+        pxWidth: canvasWidth,
+        pxHeight: canvasHeight
+    };
+}
     };
 
     window.AppCardFactory = AppCardFactory;
