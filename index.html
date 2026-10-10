@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a1430">
-<title>3D单词宇宙 (V8.5 纯净超控版)</title>
+<title>3D单词宇宙 (V8.6 完美修复版)</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230a1c3d' stroke='%2300f0ff' stroke-width='6'/><text x='50' y='58' font-size='32' text-anchor='middle' fill='%2368d0ff' font-family='sans-serif'>🪐</text></svg>">
 <link rel="manifest" href="./manifest.json">
 <link rel="stylesheet" href="./css/styles.css">
@@ -30,10 +30,11 @@
 <div id="wordSphere"></div>
 </div>
 <div id="clockHud" aria-label="当前时间">00:00</div>
+
 <div id="topRightHudBar">
 <div id="studyCounterHud" title="点击查看今日学习结算">
 <span class="study-counter-icon">📖</span>
-<span id="studyCounterValue">0</span>
+<span id="studyCounterValue" title="点击修改今日复习单词数">0</span>
 <span class="study-goal-sep">/</span>
 <span class="study-counter-icon">🎯</span>
 <span id="studyGoalValue" title="点击修改每日学习目标">50</span>
@@ -45,7 +46,7 @@
     </div>
     <div id="focusCruiseExpandPanel" class="focus-cruise-expand-panel">
         <span id="focusCruiseStatusTag" class="hud-status-tag" title="点击一键开关">开</span>
-        <span id="focusCruiseIntervalPill" class="focus-pill" title="点击修改持续时长"><span id="focusCruiseIntervalVal">50</span>s</span>
+        <span id="focusCruiseIntervalPill" class="focus-pill" title="点击修改轮换周期"><span id="focusCruiseIntervalVal">50</span>s</span>
         <span id="focusCruiseRatioPill" class="focus-pill" title="点击修改抽取卡片数量占比(%)"><span id="focusCruiseRatioVal">8</span>%量</span>
         <span id="focusCruiseScalePill" class="focus-pill" title="点击修改单卡放大倍数"><span id="focusCruiseScaleVal">1.5</span>x倍</span>
     </div>
@@ -56,7 +57,7 @@
 <button id="closeControlsOverlayBtn" class="controls-overlay-close-btn" title="关闭设置面板">&times;</button>
 <div class="panel-header">
 <h1>3D单词宇宙</h1>
-<p>控制与设置中心 (V8.5 纯净超控版)</p>
+<p>控制与设置中心 (V8.6 修复版)</p>
 </div>
 <div class="panel-content">
 <div class="control-section">
@@ -73,7 +74,7 @@
 
 <!-- 3D立体卡片与内腔泛光引擎 -->
 <div class="control-section" id="card3DChamberSettingsSection">
-    <h3>🎴 3D立体卡片与内腔泛光</h3>
+    <h3>🎴 3D立体卡片外观与文字</h3>
     <div class="setting-item">
         <label for="cardStylePresetSelect">风格预设样机</label>
         <select id="cardStylePresetSelect" style="width: 140px;">
@@ -90,13 +91,46 @@
     <div id="cardPresetDescLabel" style="font-size: 0.73rem; color: #a2d8ff; margin: 4px 0 10px 0; line-height: 1.4; text-align: center;"></div>
     
     <div class="appearance-group">
-        <h4>🏛️ 3D 卡片内腔纵深</h4>
-        <div class="setting-item"><label for="cardChamberDepthRange">内腔纵深深度</label><input type="range" id="cardChamberDepthRange" min="0.0" max="3.0" value="0.65" step="0.05"></div>
-        <div class="setting-item"><label for="cardOpacityRange">卡片不透明度</label><input type="range" id="cardOpacityRange" min="0.0" max="1.0" value="0.96" step="0.02"></div>
+        <h4>🔤 卡片文字与清晰度调节</h4>
+        <div class="setting-item">
+            <label for="sphereCardFontSize" title="卡片内部单独字号大小 (不改变卡片几何尺寸)">卡片文字大小</label>
+            <input type="range" id="sphereCardFontSize" min="16" max="64" value="30" step="1">
+        </div>
+        <div class="setting-item">
+            <label for="cardBrightnessRange" title="提升文字自发光亮度，防止在阴影下变暗">文字发光清晰度</label>
+            <input type="range" id="cardBrightnessRange" min="0.2" max="3.0" value="1.0" step="0.05">
+        </div>
+        <div class="setting-item">
+            <label for="sphereCardFontColor">文字主色调</label>
+            <input type="color" id="sphereCardFontColor" value="#ffffff">
+        </div>
+        <div class="setting-item">
+            <label for="cardTextStyleSelect">文字立体质感</label>
+            <select id="cardTextStyleSelect" style="width: 140px;">
+                <option value="plain_bold">纯色高对比度 (清晰推荐)</option>
+                <option value="relief_metal">浮雕金属倒角</option>
+                <option value="neon_glow">全息霓虹发光</option>
+            </select>
+        </div>
+        <div class="setting-item">
+            <label for="sphereCardFontFamily">字形字体</label>
+            <select id="sphereCardFontFamily" style="width: 140px;">
+                <option value="'Microsoft YaHei', sans-serif">微软雅黑</option>
+                <option value="'Segoe UI', sans-serif">Segoe UI</option>
+                <option value="'SimSun', serif">宋体</option>
+                <option value="'KaiTi', serif">楷体</option>
+            </select>
+        </div>
     </div>
 
     <div class="appearance-group">
-        <h4>💡 内腔 3D 泛光设计 (柔光不刺眼)</h4>
+        <h4>🏛️ 卡片底色与内腔泛光</h4>
+        <div class="setting-item">
+            <label for="cardBaseColor">卡片正面底色</label>
+            <input type="color" id="cardBaseColor" value="#06122a">
+        </div>
+        <div class="setting-item"><label for="cardOpacityRange">卡片不透明度</label><input type="range" id="cardOpacityRange" min="0.0" max="1.0" value="0.96" step="0.02"></div>
+        <div class="setting-item"><label for="cardChamberDepthRange">内腔纵深深度</label><input type="range" id="cardChamberDepthRange" min="0.0" max="3.0" value="0.65" step="0.05"></div>
         <div class="setting-item">
             <label for="cardLightPositionSelect">内腔光照位置</label>
             <select id="cardLightPositionSelect" style="width: 140px;">
@@ -112,7 +146,7 @@
     </div>
 
     <div class="appearance-group">
-        <h4>🃏 查词卡设置</h4>
+        <h4>🃏 悬浮查词卡设置</h4>
         <div class="setting-item">
             <label for="hoverCardStyleModeSelect">查词卡样机模式</label>
             <select id="hoverCardStyleModeSelect" style="width: 140px;">
@@ -173,9 +207,9 @@
         <label for="visualEffectsEnabled">启用视觉增强系统</label>
     </div>
     <div class="appearance-group">
-        <h4>宇宙涡旋 (Vortex)</h4>
+        <h4>宇宙涡旋旋臂 (Vortex)</h4>
         <div class="setting-item">
-            <label for="vortexSpeed" title="范围0.001~0.01，无复数">旋转速度</label>
+            <label for="vortexSpeed" title="范围0.001~0.01，无复数">旋臂旋转速度</label>
             <input type="range" id="vortexSpeed" min="0.001" max="0.01" value="0.003" step="0.0005">
         </div>
         <div class="setting-item"><label for="vortexTightness">旋臂弯曲度</label><input type="range" id="vortexTightness" min="0.1" max="10.0" value="1.5" step="0.1"></div>
@@ -184,9 +218,9 @@
         <div class="setting-item"><label for="vortexSize">粒子大小</label><input type="range" id="vortexSize" min="0.01" max="10.0" value="1.5" step="0.05"></div>
     </div>
     <div class="appearance-group">
-        <h4>辉光效果 (Bloom - 可彻底熄灭归零)</h4>
-        <div class="setting-item"><label for="bloomThreshold">层阈值</label><input type="range" id="bloomThreshold" min="0" max="1" value="0.8" step="0.01"></div>
-        <div class="setting-item"><label for="bloomStrength">发光强度 (0即完全熄灭)</label><input type="range" id="bloomStrength" min="0" max="3.0" value="0.5" step="0.02"></div>
+        <h4>旋臂星光发光强度 (Bloom - 0即完全熄灭)</h4>
+        <div class="setting-item"><label for="bloomThreshold">层阈值 (防卡片过曝)</label><input type="range" id="bloomThreshold" min="0" max="1" value="0.85" step="0.01"></div>
+        <div class="setting-item"><label for="bloomStrength">星光发光强度</label><input type="range" id="bloomStrength" min="0" max="3.0" value="0.5" step="0.02"></div>
         <div class="setting-item"><label for="bloomRadius">发光半径</label><input type="range" id="bloomRadius" min="0" max="3.0" value="0.2" step="0.02"></div>
     </div>
 </div>
@@ -281,7 +315,23 @@
 </div>
 </div>
 
-<!-- 自定义视角命名输入弹窗 (替代不稳定的 prompt) -->
+<!-- 🔢 全功能数字参数步进模态弹窗 (学习目标/计数/巡航参数) -->
+<div id="numberPromptModalBackdrop" class="modal-backdrop">
+<div class="prompt-modal-box">
+    <h3 id="promptModalTitle">调节参数</h3>
+    <div class="prompt-stepper-row">
+        <button type="button" id="promptModalMinus" class="prompt-step-btn">−</button>
+        <input type="number" id="promptModalInput" class="prompt-num-input">
+        <button type="button" id="promptModalPlus" class="prompt-step-btn">+</button>
+    </div>
+    <div style="display: flex; justify-content: center; gap: 12px;">
+        <button type="button" id="promptModalConfirm" class="modal-btn">确定</button>
+        <button type="button" id="promptModalCancel" class="modal-btn secondary-btn">取消</button>
+    </div>
+</div>
+</div>
+
+<!-- 自定义视角命名输入弹窗 -->
 <div id="textPromptModalBackdrop" class="modal-backdrop">
 <div class="modal-content-box" style="max-width: 400px; text-align: center;">
 <h2 id="textPromptTitle" style="font-size: 1.25rem;">保存当前视角</h2>
@@ -333,6 +383,20 @@
 <span id="shieldCountLabel" style="color: #ffffff; font-size: 0.88rem;">已选择: 0 个单词</span>
 <button id="confirmBatchShieldBtn" class="modal-btn" style="background: linear-gradient(45deg, #ef4444, #b91c1c);">确认屏蔽</button>
 <button id="cancelBatchShieldBtn" class="modal-btn secondary-btn">取消</button>
+</div>
+
+<!-- 今日学习结算弹窗 -->
+<div id="studySettleModalBackdrop" class="modal-backdrop">
+<div class="modal-content-box" style="max-width: 520px;">
+<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-color); padding-bottom:8px; margin-bottom:14px;">
+<h2 style="margin:0; font-size: 1.35rem;">🎮 今日学习结算</h2>
+<button id="closeStudySettleBtn" style="background:transparent; border:none; color:#a2d8ff; font-size:2rem; cursor:pointer; line-height:1;">×</button>
+</div>
+<div class="study-modal-body" id="studySettleBody" style="font-size: 0.9rem; line-height: 1.6;"></div>
+<div class="modal-actions">
+<button id="closeStudyCompareBtn2" class="modal-btn">关闭</button>
+</div>
+</div>
 </div>
 
 <!-- 目标达成专属 HUD 胶囊提示 -->
