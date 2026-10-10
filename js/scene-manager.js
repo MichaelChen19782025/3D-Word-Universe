@@ -139,12 +139,26 @@ appState.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.inn
     const minDist = camDist - radius;
     const distRange = 2 * radius;
 
-    // ★ 已彻底取消球面卡片呼吸光：不进行逐帧明暗振荡，卡片发光保持恒定静止，彻底消除内外边缘闪烁走样
+    // ★ 全局超舒适慢呼吸律动（平缓 3.8 秒/周期，微幅 12% 起伏，绝无高频闪烁）
+    const globalBreath = 0.5 + 0.5 * Math.sin(time * 0.00165);
+
+    // 卡片内面整体柔和吐纳，替代生硬流动光
+    if (appState.wordObjects && appState.wordObjects.length > 0) {
+        const cardBreathFactor = 0.88 + 0.12 * globalBreath; // 88% ~ 100% 极温和呼吸
+        for (let i = 0; i < appState.wordObjects.length; i++) {
+            const cardObj = appState.wordObjects[i];
+            if (cardObj.material && cardObj.material[0]) {
+                const baseIntensity = cardObj.userData.baseEmissiveIntensity || 0.55;
+                cardObj.material[0].emissiveIntensity = baseIntensity * cardBreathFactor;
+            }
+        }
+        mustRender = true;
+    }
 
     if (!mustRender) return;
     appState.needsRender = false;
 
-    // 3D 浮动查词大卡片：保持恒定柔和静止，取消呼吸频闪
+    // 3D 浮动查词大卡片保持舒适同步
     if (appState.hoverOverlayCard) {
         const card = appState.hoverOverlayCard;
         const screen = card.getObjectByName("textScreen") || card.userData.refs?.screen;
@@ -164,15 +178,17 @@ appState.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.inn
 
             const coreGlow = card.getObjectByName("coreGlow") || card.userData.refs?.coreGlow;
             if (coreGlow) {
-                coreGlow.material.opacity = isPitchBlack ? 0 : (newOp * 0.35);
-                coreGlow.scale.set(1.05, 1.05, 1);
+                const glowBaseOpacity = isPitchBlack ? 0 : (newOp * (0.24 + globalBreath * 0.25));
+                coreGlow.material.opacity = glowBaseOpacity;
+                const glowPulse = 1.04 + 0.025 * globalBreath;
+                coreGlow.scale.set(glowPulse, glowPulse, 1);
             }
 
             const frameGroup = card.getObjectByName("frameGroup") || card.userData.refs?.frameGroup;
             if (frameGroup) {
                 if (!isPitchBlack) {
                     frameGroup.visible = true;
-                    const frameOpacity = newOp * 0.65;
+                    const frameOpacity = newOp * (0.40 + globalBreath * 0.25);
                     frameGroup.children.forEach((child) => {
                         child.material.opacity = frameOpacity;
                     });

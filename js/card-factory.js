@@ -140,11 +140,18 @@
     const context = canvas.getContext('2d');
     context.font = `bold ${scaledFontSize}px ${fontFamily}`;
 
-    // 绘制卡片底色
+    // 1. 铺设卡片深暗底色
     context.fillStyle = customBaseColor;
     context.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // ★ 内外边缘柔化处理：绘制羽化内腔光晕，彻底抹除生硬的 1px 高对比线条
+    // 2. ★ 核心改进：将内腔向内收缩 4% 安全边距绘制，彻底隔绝与外框倒角的碰撞
+    const marginX = Math.round(canvasWidth * 0.04);
+    const marginY = Math.round(canvasHeight * 0.04);
+    const chamberW = canvasWidth - marginX * 2;
+    const chamberH = canvasHeight - marginY * 2;
+
+    context.save();
+    context.translate(marginX, marginY);
     if (window.CardStyleManager) {
         const chamberCfg = {
             ...preset,
@@ -152,24 +159,46 @@
             depthFactor: customDepth,
             lightColor: customLightColor,
             lightPosition: customLightPos,
-            lightBrightness: customLightBrightness * 0.8, // 适度柔化
+            lightBrightness: customLightBrightness * 0.75,
             lightSpread: customLightSpread
         };
-        window.CardStyleManager.drawPerspectiveChamber(context, canvasWidth, canvasHeight, chamberCfg);
+        window.CardStyleManager.drawPerspectiveChamber(context, chamberW, chamberH, chamberCfg);
     } else {
-        // 内置超柔渐变光罩：外边缘平滑过渡至中心，避免边缘出现发光硬切环
         const radGrad = context.createRadialGradient(
-            canvasWidth / 2, canvasHeight / 2, Math.min(canvasWidth, canvasHeight) * 0.15,
-            canvasWidth / 2, canvasHeight / 2, Math.max(canvasWidth, canvasHeight) * 0.58
+            chamberW / 2, chamberH / 2, Math.min(chamberW, chamberH) * 0.15,
+            chamberW / 2, chamberH / 2, Math.max(chamberW, chamberH) * 0.55
         );
-        radGrad.addColorStop(0, 'rgba(0, 200, 255, 0.12)');
-        radGrad.addColorStop(0.7, 'rgba(0, 100, 180, 0.05)');
+        radGrad.addColorStop(0, 'rgba(0, 200, 255, 0.1)');
         radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         context.fillStyle = radGrad;
-        context.fillRect(0, 0, canvasWidth, canvasHeight);
+        context.fillRect(0, 0, chamberW, chamberH);
     }
+    context.restore();
 
-    // 绘制清晰文字
+    // 3. ★ 核心压边圈：沿外周绘制一道纯净深色圆角保护框，100% 抹杀所有生硬漏线
+    context.save();
+    const cornerRadius = Math.round(canvasWidth * 0.085);
+    const rimWidth = Math.round(canvasWidth * 0.05);
+    context.lineWidth = rimWidth;
+    context.strokeStyle = customBaseColor;
+    context.lineJoin = 'round';
+    context.beginPath();
+    const rx = rimWidth / 2, ry = rimWidth / 2;
+    const rw = canvasWidth - rimWidth, rh = canvasHeight - rimWidth;
+    context.moveTo(rx + cornerRadius, ry);
+    context.lineTo(rx + rw - cornerRadius, ry);
+    context.quadraticCurveTo(rx + rw, ry, rx + rw, ry + cornerRadius);
+    context.lineTo(rx + rw, ry + rh - cornerRadius);
+    context.quadraticCurveTo(rx + rw, ry + rh, rx + rw - cornerRadius, ry + rh);
+    context.lineTo(rx + cornerRadius, ry + rh);
+    context.quadraticCurveTo(rx, ry + rh, rx, ry + rh - cornerRadius);
+    context.lineTo(rx, ry + cornerRadius);
+    context.quadraticCurveTo(rx, ry, rx + cornerRadius, ry);
+    context.closePath();
+    context.stroke();
+    context.restore();
+
+    // 4. 绘制中心高对比度清晰文字
     const textY = canvasHeight / 2 - ((mainContentLines.length - 1) * scaledLineHeight / 2);
     mainContentLines.forEach((line, index) => {
         const curY = textY + (index * scaledLineHeight);
@@ -279,24 +308,24 @@
     const cardTextBrightness = parseFloat(document.getElementById('cardBrightnessRange')?.value || '1.0');
     const baseEmissiveIntensity = Math.min(1.0, cardTextBrightness * 0.55);
 
-    // ★ 消除高反光金属度与粗糙度跳动，防止边缘旋转产生流动反光；文字与内面发光柔和化
+    // ★ 正面材质：消灭金属反光度与镜面反射，自发光仅用于保持清晰可读，绝不外溢
     const frontMat = new THREE.MeshStandardMaterial({
         map: texData.texture,
         emissiveMap: texData.texture,
         emissive: new THREE.Color(0xffffff),
         emissiveIntensity: baseEmissiveIntensity,
-        roughness: 0.88, // 高漫反射，彻底消除边缘刺眼的反光流动条纹
-        metalness: 0.0,  // 去除金属反光走样
+        roughness: 0.92,
+        metalness: 0.0,
         transparent: true,
         opacity: cardOpacity,
         visible: (cardOpacity > 0.001),
         side: THREE.FrontSide
     });
 
-    // ★ 卡片侧壁与倒角边缘：纯净消光暗黑科技蓝，彻底不自发光，根除边缘频闪
+    // ★ 侧面与倒角黑边：100% 消光深蓝黑，自发光为 0，绝对不产生任何流动反光
     const sideMat = new THREE.MeshStandardMaterial({
-        color: 0x081224,
-        roughness: 0.95,
+        color: 0x060e1c,
+        roughness: 0.98,
         metalness: 0.0,
         transparent: true,
         opacity: cardOpacity * 0.5,
