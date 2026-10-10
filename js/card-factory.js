@@ -78,10 +78,6 @@
     const currentPresetId = document.getElementById('cardStylePresetSelect')?.value || 'cyber_blue';
     const preset = window.CardStyleManager ? window.CardStyleManager.getPreset(currentPresetId) : {};
 
-    const customLightColor = document.getElementById('cardLightColor')?.value || preset.defaultLightColor || '#00f0ff';
-    const customLightPos = document.getElementById('cardLightPositionSelect')?.value || preset.defaultLightPosition || 'center';
-    const customLightBrightness = parseFloat(document.getElementById('cardLightBrightnessRange')?.value ?? (preset.defaultLightBrightness ?? 0.85));
-    const customLightSpread = parseFloat(document.getElementById('cardLightSpreadRange')?.value ?? (preset.defaultLightSpread ?? 0.85));
     const customDepth = parseFloat(document.getElementById('cardChamberDepthRange')?.value ?? 0.65);
     const customTextStyle = document.getElementById('cardTextStyleSelect')?.value || 'plain_bold';
     const customFontColor = document.getElementById('sphereCardFontColor')?.value || '#ffffff';
@@ -140,93 +136,57 @@
     const context = canvas.getContext('2d');
     context.font = `bold ${scaledFontSize}px ${fontFamily}`;
 
-    // 1. 铺设卡片深暗底色
+    // 1. 铺设卡片深暗纯净底色
     context.fillStyle = customBaseColor;
     context.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // 2. ★ 核心改进：将内腔向内收缩 4% 安全边距绘制，彻底隔绝与外框倒角的碰撞
-    const marginX = Math.round(canvasWidth * 0.04);
-    const marginY = Math.round(canvasHeight * 0.04);
-    const chamberW = canvasWidth - marginX * 2;
-    const chamberH = canvasHeight - marginY * 2;
-
-    context.save();
-    context.translate(marginX, marginY);
+    // 2. ★ 根除闪烁绿光来源：灯光亮度直接置为 0，彻底关闭边缘发光条与反光功能！
     if (window.CardStyleManager) {
         const chamberCfg = {
             ...preset,
             baseColor: customBaseColor,
             depthFactor: customDepth,
-            lightColor: customLightColor,
-            lightPosition: customLightPos,
-            lightBrightness: customLightBrightness * 0.75,
-            lightSpread: customLightSpread
+            lightColor: 'transparent',
+            lightPosition: 'center',
+            lightBrightness: 0.0, // 闪光根源彻底删除归零
+            lightSpread: 0.0
         };
-        window.CardStyleManager.drawPerspectiveChamber(context, chamberW, chamberH, chamberCfg);
-    } else {
-        const radGrad = context.createRadialGradient(
-            chamberW / 2, chamberH / 2, Math.min(chamberW, chamberH) * 0.15,
-            chamberW / 2, chamberH / 2, Math.max(chamberW, chamberH) * 0.55
-        );
-        radGrad.addColorStop(0, 'rgba(0, 200, 255, 0.1)');
-        radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        context.fillStyle = radGrad;
-        context.fillRect(0, 0, chamberW, chamberH);
+        window.CardStyleManager.drawPerspectiveChamber(context, canvasWidth, canvasHeight, chamberCfg);
     }
-    context.restore();
 
-    // 3. ★ 核心压边圈：沿外周绘制一道纯净深色圆角保护框，100% 抹杀所有生硬漏线
+    // 3. ★ 彻底删除厚重边框，仅保留清爽优雅的 1 像素超细外边缘
     context.save();
-    const cornerRadius = Math.round(canvasWidth * 0.085);
-    const rimWidth = Math.round(canvasWidth * 0.05);
-    context.lineWidth = rimWidth;
-    context.strokeStyle = customBaseColor;
-    context.lineJoin = 'round';
+    context.lineWidth = 1;
+    context.strokeStyle = 'rgba(0, 240, 255, 0.25)';
+    const r = Math.round(canvasWidth * 0.085);
     context.beginPath();
-    const rx = rimWidth / 2, ry = rimWidth / 2;
-    const rw = canvasWidth - rimWidth, rh = canvasHeight - rimWidth;
-    context.moveTo(rx + cornerRadius, ry);
-    context.lineTo(rx + rw - cornerRadius, ry);
-    context.quadraticCurveTo(rx + rw, ry, rx + rw, ry + cornerRadius);
-    context.lineTo(rx + rw, ry + rh - cornerRadius);
-    context.quadraticCurveTo(rx + rw, ry + rh, rx + rw - cornerRadius, ry + rh);
-    context.lineTo(rx + cornerRadius, ry + rh);
-    context.quadraticCurveTo(rx, ry + rh, rx, ry + rh - cornerRadius);
-    context.lineTo(rx, ry + cornerRadius);
-    context.quadraticCurveTo(rx, ry, rx + cornerRadius, ry);
+    context.moveTo(r, 0.5);
+    context.lineTo(canvasWidth - r, 0.5);
+    context.quadraticCurveTo(canvasWidth - 0.5, 0.5, canvasWidth - 0.5, r);
+    context.lineTo(canvasWidth - 0.5, canvasHeight - r);
+    context.quadraticCurveTo(canvasWidth - 0.5, canvasHeight - 0.5, canvasWidth - r, canvasHeight - 0.5);
+    context.lineTo(r, canvasHeight - 0.5);
+    context.quadraticCurveTo(0.5, canvasHeight - 0.5, 0.5, canvasHeight - r);
+    context.lineTo(0.5, r);
+    context.quadraticCurveTo(0.5, 0.5, r, 0.5);
     context.closePath();
     context.stroke();
     context.restore();
 
-    // 4. 绘制中心高对比度清晰文字
+    // 4. 绘制中心清晰高对比度文字
     const textY = canvasHeight / 2 - ((mainContentLines.length - 1) * scaledLineHeight / 2);
     mainContentLines.forEach((line, index) => {
         const curY = textY + (index * scaledLineHeight);
-        if (customTextStyle === 'plain_bold' || !window.CardStyleManager) {
-            context.save();
-            context.textAlign = 'center';
-            context.textBaseline = 'middle';
-            context.strokeStyle = 'rgba(0, 4, 16, 0.9)';
-            context.lineWidth = Math.max(2, scaledFontSize * 0.12);
-            context.strokeText(line, canvasWidth / 2, curY);
+        context.save();
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        context.lineWidth = Math.max(2, scaledFontSize * 0.12);
+        context.strokeText(line, canvasWidth / 2, curY);
 
-            context.fillStyle = customFontColor;
-            context.shadowColor = 'rgba(0, 200, 255, 0.5)';
-            context.shadowBlur = 6;
-            context.fillText(line, canvasWidth / 2, curY);
-            context.restore();
-        } else {
-            window.CardStyleManager.draw3DText(context, line, canvasWidth / 2, curY, {
-                fontSize: scaledFontSize,
-                textColor: customFontColor,
-                textStyle: customTextStyle,
-                textDepthColor: preset.textDepthColor || '#070a12',
-                textHighlightColor: preset.textHighlightColor || '#b5f5ff',
-                lightPosition: customLightPos,
-                lightColor: customLightColor,
-                lightBrightness: customLightBrightness
-            });
-        }
+        context.fillStyle = customFontColor;
+        context.fillText(line, canvasWidth / 2, curY);
+        context.restore();
     });
 
     return {
