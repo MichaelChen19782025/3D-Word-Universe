@@ -1,10 +1,8 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与生命周期调度中心
- * 1. 恢复每日目标/计数/巡航参数步进修改模态弹窗
- * 2. 沉浸式详情面板大号固定居中关闭键（仅在展开时显示）
- * 3. 悬浮查词卡保持显示与关闭转备忘双状态胶囊，及标题智能防抖静止复制到剪贴板
- * 4. 查词卡居中及自动缩放防屏幕溢出引擎
- * 5. 全动态卡片亮度与受光度实时联动控制，并确保参数变更即时刷新卡片
+ * 1. 移动端触摸手势全面隔离保护：防止手机原生缩放触发 HUD / 控件漂移丢失
+ * 2. 旋转速度调整 100% 写入持久化存储，下次启动默认生效
+ * 3. 导入/导出系统设置包含全部 50+ 个参数的全量备份与恢复
  */
 (function() {
     let _persistTimer = null;
@@ -16,10 +14,9 @@
             _persistTimer = null;
             AppUI.saveSettings();
             AppUI.saveLastState();
-        }, 200);
+        }, 150);
     }
 
-    // 缩短重建防抖时间，拖动滑块时获得极致丝滑的实时更新体验
     function scheduleSphereRebuild(delay = 100) {
         clearTimeout(_sphereRebuildTimer);
         _sphereRebuildTimer = setTimeout(() => {
@@ -102,6 +99,7 @@
             AppParticles.initNebulaColors();
             AppSphereEngine.initGrapple();
 
+            this.initPreventBrowserZoom();
             this.initPremiumHoverCard();
             this.initAllButtonsAndEvents();
             this.initDetailedSettingsListeners();
@@ -126,6 +124,20 @@
                 this.updateCardPresetDescription();
                 appState.needsRender = true;
             }, 300);
+        },
+
+        // ★ 核心修复：全局拦截 iOS/Android 网页级手势缩放，确保仅 3D 摄像机缩放，四角 HUD 绝对不被挪移丢失
+        initPreventBrowserZoom() {
+            const prevent = (e) => {
+                if (e.touches && e.touches.length > 1) {
+                    e.preventDefault();
+                }
+            };
+            document.addEventListener('touchstart', prevent, { passive: false });
+            document.addEventListener('touchmove', prevent, { passive: false });
+            window.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+            window.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+            window.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
         },
 
         copyToClipboard(text) {
@@ -509,7 +521,6 @@
                 schedulePersist();
             });
 
-            // 监听旋臂粒子亮度与核心避让半径
             const vortexBrightEl = document.getElementById('vortexBrightnessRange');
             if (vortexBrightEl) {
                 vortexBrightEl.addEventListener('input', () => {
@@ -525,7 +536,6 @@
                 });
             }
 
-            // 监听查词卡停留时长参数
             const hoverDurEl = document.getElementById('hoverCardDurationRange');
             if (hoverDurEl) {
                 hoverDurEl.addEventListener('input', () => {
@@ -595,8 +605,10 @@
                 schedulePersist();
             });
 
+            // ★ 核心修复：旋转速度滑块变动立即保存为下次默认值
             document.getElementById('rotationSpeed')?.addEventListener('input', (e) => {
-                appState.actualDisplayRotationSpeed = safeParseFloat(e.target.value, 1.0) * appState.currentRotationSpeedBase;
+                const sliderVal = safeParseFloat(e.target.value, 1.0);
+                appState.actualDisplayRotationSpeed = sliderVal * appState.currentRotationSpeedBase;
                 appState.needsRender = true;
                 schedulePersist();
             });
@@ -702,6 +714,7 @@
                 appState.autoRotate = !appState.autoRotate;
                 document.getElementById('rotateToggle').textContent = appState.autoRotate ? '🔁' : '⏹️';
                 appState.needsRender = true;
+                schedulePersist();
             });
 
             document.getElementById('toggleLanguage')?.addEventListener('click', () => {
@@ -763,7 +776,6 @@
             }
         },
 
-        // ==================== 🔢 全功能数字步进模态弹窗 ====================
         showNumberPromptModal(options) {
             const backdrop = document.getElementById('numberPromptModalBackdrop');
             const titleEl = document.getElementById('promptModalTitle');
@@ -824,7 +836,6 @@
             setTimeout(() => { inputEl.focus(); inputEl.select(); }, 100);
         },
 
-        // ==================== 📝 备注 CRUD 与智能静止 1 秒自动复制到剪贴板 ====================
         initNoteModalHandlers() {
             const modal = document.getElementById('wordNoteModalBackdrop');
             const titleInput = document.getElementById('noteInputTitle');
@@ -1009,7 +1020,6 @@
             return appState.currentDetailWord;
         },
 
-        // ==================== 📸 视角管理与长按更新 ====================
         toggleManagementPanel(panelType) {
             const panel = document.getElementById('managementPanel');
             if (!panel) return;
@@ -1242,7 +1252,6 @@
             if (s) appState.customViews = safeJSONParse(s, []);
         },
 
-        // ==================== 触控与快速查词 ====================
         initMobileTouchHandlers() {
             const canvasEl = appState.renderer?.domElement || document.getElementById('wordSphere');
             if (!canvasEl) return;
@@ -1302,7 +1311,7 @@
                     return;
                 }
 
-                // ★ 核心参数：根据用户设定的秒数动态决定自动停留时长，默认 5 秒
+                // ★ 动态读取用户自定义设置的悬浮查词卡停留时长 (秒)
                 const stayDurationSec = parseFloat(document.getElementById('hoverCardDurationRange')?.value || '5.0');
                 const stayDurationMs = Math.max(800, stayDurationSec * 1000);
 
@@ -1675,19 +1684,19 @@
             }, duration);
         },
 
+        // ★ 核心修复：更新速度时连同基数实时持久化存储，下次启动 100% 还原
         changeViewAwareSpeed(multiplier) {
             appState.currentRotationSpeedBase *= multiplier;
-            appState.currentRotationSpeedBase = Math.max(0.00001, Math.min(20.0, appState.currentRotationSpeedBase));
+            appState.currentRotationSpeedBase = Math.max(0.0001, Math.min(20.0, appState.currentRotationSpeedBase));
             appState.autoRotate = true;
             const toggle = document.getElementById('rotateToggle');
             if (toggle) toggle.textContent = '🔁';
 
             const rotSlider = document.getElementById('rotationSpeed');
-            if (rotSlider && safeParseFloat(rotSlider.value, 1.0) <= 0) rotSlider.value = 1.0;
             const sliderVal = Math.max(0.001, safeParseFloat(rotSlider ? rotSlider.value : 1.0, 1.0));
             appState.actualDisplayRotationSpeed = sliderVal * appState.currentRotationSpeedBase;
 
-            this.showToast(multiplier > 1.0 ? `🚀 旋转加速: ${appState.actualDisplayRotationSpeed.toFixed(3)}` : `🐢 旋转减速: ${appState.actualDisplayRotationSpeed.toFixed(3)}`);
+            this.showToast(multiplier > 1.0 ? ('🚀 旋转速度已加速并保存: ' + appState.actualDisplayRotationSpeed.toFixed(3)) : ('🐢 旋转速度已减速并保存: ' + appState.actualDisplayRotationSpeed.toFixed(3)));
             appState.needsRender = true;
             schedulePersist();
         },
@@ -1697,7 +1706,6 @@
             if (btn) btn.textContent = `清除屏蔽词库 (${appState.shieldedWords.size})`;
         },
 
-        // ==================== 🎯 巡航 HUD 绑定与逻辑 ====================
         initFocusCruiseHud() {
             const hud = document.getElementById('focusCruiseHud');
             const trigger = document.getElementById('focusCruiseTrigger');
@@ -1805,7 +1813,6 @@
             if (scaleVal) scaleVal.textContent = String(appState.focusCruise.scaleFactor || 1.5);
         },
 
-        // ==================== 📖 学习日志与目标弹窗绑定 ====================
         initStudyLog() {
             const counterHud = document.getElementById('studyCounterHud');
             const counterValEl = document.getElementById('studyCounterValue');
@@ -1981,6 +1988,7 @@
             this.showToast('📤 词库与 AI 知识备注已成功导出！');
         },
 
+        // ★ 核心升级：导出系统全量设置（囊括 50+ 项参数、自发光、受光度、运行速度基数与各层视觉配置）
         exportSettings() {
             const fullBackup = {
                 exportedAt: new Date().toISOString(),
@@ -2010,7 +2018,7 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            this.showToast('⚙️ 系统全量配置(含查词卡色彩与视角预设)已成功导出！');
+            this.showToast('⚙️ 系统全量配置(含速度、受光度、查词卡与视角)已成功导出！');
         },
 
         importSettings() {
@@ -2023,8 +2031,10 @@
                             throw new Error('导入文件内容不是合法的 JSON 对象');
                         }
 
-                        if (imported[APP_CONFIG.SETTINGS_STORAGE_KEY]) {
-                            localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(imported[APP_CONFIG.SETTINGS_STORAGE_KEY]));
+                        // 支持标准打包模式及扁平模式无缝兼容
+                        const settingsData = imported[APP_CONFIG.SETTINGS_STORAGE_KEY] || imported;
+                        if (settingsData && typeof settingsData === 'object') {
+                            localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settingsData));
                         }
 
                         if (imported[APP_CONFIG.LAST_STATE_STORAGE_KEY]) {
@@ -2070,6 +2080,9 @@
                     if (toggleLang) toggleLang.textContent = appState.showEnglish ? '中' : '英';
                 }
                 if (s.cardScaleMultiplier !== undefined) appState.cardScaleMultiplier = s.cardScaleMultiplier;
+                if (s.currentRotationSpeedBase !== undefined) appState.currentRotationSpeedBase = safeParseFloat(s.currentRotationSpeedBase, APP_CONFIG.DEFAULT_ROTATION_SPEED);
+                if (s.actualDisplayRotationSpeed !== undefined) appState.actualDisplayRotationSpeed = safeParseFloat(s.actualDisplayRotationSpeed, appState.currentRotationSpeedBase);
+                if (s.autoRotate !== undefined) appState.autoRotate = !!s.autoRotate;
                 if (s.cameraPosition && appState.camera) appState.camera.position.fromArray(s.cameraPosition);
                 if (s.controlsTarget && appState.controls) {
                     appState.controls.target.fromArray(s.controlsTarget);
@@ -2104,6 +2117,10 @@
                 }
             });
 
+            // ★ 重点持久化：将运动速度的核心倍率基数与运行速度存为永久默认值
+            settings.currentRotationSpeedBase = appState.currentRotationSpeedBase;
+            settings.actualDisplayRotationSpeed = appState.actualDisplayRotationSpeed;
+            settings.autoRotate = appState.autoRotate;
             settings.showEnglish = appState.showEnglish;
             settings.cardScaleMultiplier = appState.cardScaleMultiplier;
             localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
@@ -2121,6 +2138,24 @@
                     if (el.type === 'checkbox') el.checked = !!settings[key];
                     else el.value = settings[key];
                 }
+            }
+
+            // ★ 重点恢复：载入上次保存的运动速度与倍率
+            if (settings.currentRotationSpeedBase !== undefined) {
+                appState.currentRotationSpeedBase = safeParseFloat(settings.currentRotationSpeedBase, APP_CONFIG.DEFAULT_ROTATION_SPEED);
+            }
+            if (settings.actualDisplayRotationSpeed !== undefined) {
+                appState.actualDisplayRotationSpeed = safeParseFloat(settings.actualDisplayRotationSpeed, appState.currentRotationSpeedBase);
+            } else {
+                const rotSlider = document.getElementById('rotationSpeed');
+                const sliderVal = safeParseFloat(rotSlider ? rotSlider.value : 1.0, 1.0);
+                appState.actualDisplayRotationSpeed = sliderVal * appState.currentRotationSpeedBase;
+            }
+
+            if (settings.autoRotate !== undefined) {
+                appState.autoRotate = !!settings.autoRotate;
+                const rotateToggle = document.getElementById('rotateToggle');
+                if (rotateToggle) rotateToggle.textContent = appState.autoRotate ? '🔁' : '⏹️';
             }
 
             if (settings.cardScaleMultiplier) appState.cardScaleMultiplier = settings.cardScaleMultiplier;
@@ -2158,7 +2193,10 @@
                 cameraPosition: appState.camera ? appState.camera.position.toArray() : [0, 0, 165],
                 controlsTarget: appState.controls ? appState.controls.target.toArray() : [0, 0, 0],
                 showEnglish: appState.showEnglish,
-                cardScaleMultiplier: appState.cardScaleMultiplier
+                cardScaleMultiplier: appState.cardScaleMultiplier,
+                currentRotationSpeedBase: appState.currentRotationSpeedBase,
+                actualDisplayRotationSpeed: appState.actualDisplayRotationSpeed,
+                autoRotate: appState.autoRotate
             };
             localStorage.setItem(APP_CONFIG.LAST_STATE_STORAGE_KEY, JSON.stringify(state));
         }
