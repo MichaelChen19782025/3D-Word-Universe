@@ -1,9 +1,10 @@
 /**
  * 3D单词宇宙 - 全功能 UI 交互控制器与生命周期调度中心
  * 1. 恢复每日目标/计数/巡航参数步进修改模态弹窗
- * 2. 巡航 HUD 严格保持默认折叠状态，修复参数药丸点击事件
- * 3. 补齐卡片字号、文本亮度、卡片底色等全部丢失的参数监听
- * 4. 视觉增强系统（Vortex）全参数实时响应与防闪烁治理
+ * 2. 沉浸式详情面板大号固定居中关闭键（仅在展开时显示）
+ * 3. 悬浮查词卡保持显示与关闭转备忘双状态胶囊，及标题智能防抖静止复制到剪贴板
+ * 4. 查词卡居中及自动缩放防屏幕溢出引擎
+ * 5. 全动态卡片亮度与受光度实时联动控制，并确保参数变更即时刷新卡片
  */
 (function() {
     let _persistTimer = null;
@@ -18,7 +19,8 @@
         }, 200);
     }
 
-    function scheduleSphereRebuild(delay = 250) {
+    // 缩短重建防抖时间，拖动滑块时获得极致丝滑的实时更新体验
+    function scheduleSphereRebuild(delay = 100) {
         clearTimeout(_sphereRebuildTimer);
         _sphereRebuildTimer = setTimeout(() => {
             _sphereRebuildTimer = null;
@@ -34,7 +36,6 @@
         input.accept = accept;
         input.style.display = 'none';
         document.body.appendChild(input);
-
         input.onchange = (e) => {
             if (e.target.files && e.target.files[0]) {
                 callback(e.target.files[0]);
@@ -45,42 +46,56 @@
     }
 
     function updateHoverCardPosition(pxWidth, pxHeight, scaleFactor) {
-    if (!appState.overlayCardTargetPosition) {
-        appState.overlayCardTargetPosition = new THREE.Vector3();
+        if (!appState.overlayCardTargetPosition) {
+            appState.overlayCardTargetPosition = new THREE.Vector3();
+        }
+        if (!appState.overlayCardTargetScale) {
+            appState.overlayCardTargetScale = new THREE.Vector3(1, 1, 1);
+        }
+        const camDist = appState.camera.position.length();
+        const sphereR = appState.sphereRadius || 85;
+
+        const distToFrontCard = Math.max(6, camDist - sphereR);
+        const distance = Math.max(10, Math.min(30, distToFrontCard * 0.72));
+
+        const aspect = appState.camera.aspect;
+        const fov = appState.camera.fov * (Math.PI / 180);
+        const viewHeight3D = 2 * Math.tan(fov / 2) * distance;
+        const viewWidth3D = viewHeight3D * aspect;
+        const cardAspect = (pxHeight > 0) ? (pxWidth / pxHeight) : 2.0;
+
+        const userScale = Math.max(0.2, Math.min(5.0, scaleFactor || 1.0));
+        let targetWidth3D = viewWidth3D * (IS_MOBILE_DEVICE ? 0.88 : 0.65) * userScale;
+
+        const maxAllowedWidth = viewWidth3D * 0.90;
+        const maxAllowedHeight = viewHeight3D * 0.85;
+
+        if (targetWidth3D > maxAllowedWidth) {
+            targetWidth3D = maxAllowedWidth;
+        }
+        let targetHeight3D = targetWidth3D / cardAspect;
+
+        if (targetHeight3D > maxAllowedHeight) {
+            targetHeight3D = maxAllowedHeight;
+            targetWidth3D = targetHeight3D * cardAspect;
+        }
+
+        appState.overlayCardTargetScale.set(targetWidth3D, targetHeight3D, 1);
+
+        const camDir = new THREE.Vector3();
+        appState.camera.getWorldDirection(camDir);
+        const centerPoint = appState.camera.position.clone().add(camDir.multiplyScalar(distance));
+        appState.overlayCardTargetPosition.copy(centerPoint);
+        appState.needsRender = true;
     }
-    if (!appState.overlayCardTargetScale) {
-        appState.overlayCardTargetScale = new THREE.Vector3(1, 1, 1);
-    }
-
-    const camDist = appState.camera.position.length();
-    const sphereR = appState.sphereRadius || 85;
-
-    // ★ 核心修复：动态计算安全前置距离，确保查词卡永远处于相机与球面最前排卡片之间，绝不受任何卡片遮挡
-    const distToFrontCard = Math.max(6, camDist - sphereR);
-    const distance = Math.max(10, Math.min(30, distToFrontCard * 0.72));
-
-    const aspect = appState.camera.aspect;
-    const fov = appState.camera.fov * (Math.PI / 180);
-    const viewHeight3D = 2 * Math.tan(fov / 2) * distance;
-    const viewWidth3D = viewHeight3D * aspect;
-    const cardAspect = (pxHeight > 0) ? (pxWidth / pxHeight) : 2.0;
-
-    const targetWidth3D = viewWidth3D * 0.58 * (scaleFactor || 1.0);
-    const targetHeight3D = targetWidth3D / cardAspect;
-
-    appState.overlayCardTargetScale.set(targetWidth3D, targetHeight3D, 1);
-
-    const camDir = new THREE.Vector3().setFromMatrixColumn(appState.camera.matrix, 2).multiplyScalar(-1);
-    const centerPoint = appState.camera.position.clone().add(camDir.multiplyScalar(distance));
-    appState.overlayCardTargetPosition.copy(centerPoint);
-    appState.needsRender = true;
-}
+    window.updateHoverCardPosition = updateHoverCardPosition;
 
     const AppUI = {
         async init() {
             await AppStorage.init();
-
-            AppScene.init();
+            if (window.AppScene && typeof window.AppScene.init === 'function') {
+                AppScene.init();
+            }
             AppAudio.init();
             AppParticles.initCoreSphere();
             AppParticles.initStarfield();
@@ -111,6 +126,35 @@
                 this.updateCardPresetDescription();
                 appState.needsRender = true;
             }, 300);
+        },
+
+        copyToClipboard(text) {
+            if (!text) return Promise.resolve(false);
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text).then(() => true).catch(() => {
+                    return this._fallbackCopyText(text);
+                });
+            }
+            return Promise.resolve(this._fallbackCopyText(text));
+        },
+
+        _fallbackCopyText(text) {
+            try {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed";
+                textArea.style.top = "-9999px";
+                textArea.style.left = "-9999px";
+                textArea.style.opacity = "0";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                const success = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                return success;
+            } catch (e) {
+                return false;
+            }
         },
 
         async loadWordDataAndBoot() {
@@ -198,90 +242,89 @@
         },
 
         initPremiumHoverCard() {
-    const group = new THREE.Group();
+            const group = new THREE.Group();
 
-    const backplate = new THREE.Mesh(
-        new THREE.PlaneGeometry(1, 1),
-        new THREE.MeshBasicMaterial({
-            color: 0x0a1428,
-            transparent: true,
-            opacity: 0,
-            side: THREE.DoubleSide,
-            depthTest: false,
-            depthWrite: false
-        })
-    );
-    backplate.name = "backplate";
-    backplate.renderOrder = 999990;
-    group.add(backplate);
+            const backplate = new THREE.Mesh(
+                new THREE.PlaneGeometry(1, 1),
+                new THREE.MeshBasicMaterial({
+                    color: 0x0a1428,
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide,
+                    depthTest: false,
+                    depthWrite: false
+                })
+            );
+            backplate.name = "backplate";
+            backplate.renderOrder = 999990;
+            group.add(backplate);
 
-    const glowCanvas = document.createElement('canvas');
-    glowCanvas.width = 256;
-    glowCanvas.height = 256;
-    const glowCtx = glowCanvas.getContext('2d');
-    const gradient = glowCtx.createRadialGradient(128, 128, 40, 128, 128, 128);
-    gradient.addColorStop(0, "rgba(0, 200, 255, 0.32)");
-    gradient.addColorStop(0.45, "rgba(20, 110, 220, 0.16)");
-    gradient.addColorStop(0.85, "rgba(10, 40, 120, 0.04)");
-    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-    glowCtx.fillStyle = gradient;
-    glowCtx.fillRect(0, 0, 256, 256);
+            const glowCanvas = document.createElement('canvas');
+            glowCanvas.width = 256;
+            glowCanvas.height = 256;
+            const glowCtx = glowCanvas.getContext('2d');
+            const gradient = glowCtx.createRadialGradient(128, 128, 40, 128, 128, 128);
+            gradient.addColorStop(0, "rgba(0, 200, 255, 0.32)");
+            gradient.addColorStop(0.45, "rgba(20, 110, 220, 0.16)");
+            gradient.addColorStop(0.85, "rgba(10, 40, 120, 0.04)");
+            gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+            glowCtx.fillStyle = gradient;
+            glowCtx.fillRect(0, 0, 256, 256);
 
-    const glowTexture = new THREE.CanvasTexture(glowCanvas);
-    const coreGlow = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.15, 1.15),
-        new THREE.MeshBasicMaterial({
-            map: glowTexture,
-            blending: THREE.AdditiveBlending,
-            transparent: true,
-            opacity: 0,
-            depthTest: false,
-            depthWrite: false
-        })
-    );
-    coreGlow.name = "coreGlow";
-    coreGlow.position.z = 0.008;
-    coreGlow.renderOrder = 999992;
-    group.add(coreGlow);
+            const glowTexture = new THREE.CanvasTexture(glowCanvas);
+            const coreGlow = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.15, 1.15),
+                new THREE.MeshBasicMaterial({
+                    map: glowTexture,
+                    blending: THREE.AdditiveBlending,
+                    transparent: true,
+                    opacity: 0,
+                    depthTest: false,
+                    depthWrite: false
+                })
+            );
+            coreGlow.name = "coreGlow";
+            coreGlow.position.z = 0.008;
+            coreGlow.renderOrder = 999992;
+            group.add(coreGlow);
 
-    const screen = new THREE.Mesh(
-        new THREE.PlaneGeometry(1, 1),
-        new THREE.MeshBasicMaterial({
-            transparent: true,
-            opacity: 0,
-            depthTest: false,
-            depthWrite: false,
-            side: THREE.DoubleSide
-        })
-    );
-    screen.position.z = 0.02;
-    screen.name = "textScreen";
-    screen.renderOrder = 999995;
-    group.add(screen);
+            const screen = new THREE.Mesh(
+                new THREE.PlaneGeometry(1, 1),
+                new THREE.MeshBasicMaterial({
+                    transparent: true,
+                    opacity: 0,
+                    depthTest: false,
+                    depthWrite: false,
+                    side: THREE.DoubleSide
+                })
+            );
+            screen.position.z = 0.02;
+            screen.name = "textScreen";
+            screen.renderOrder = 999995;
+            group.add(screen);
 
-    const cornerBracketsGroup = AppCardFactory.createCornerBrackets();
-    cornerBracketsGroup.name = 'frameGroup';
-    cornerBracketsGroup.position.z = 0.03;
-    cornerBracketsGroup.renderOrder = 999998;
-    cornerBracketsGroup.children.forEach(c => {
-        c.renderOrder = 999998;
-        if (c.material) {
-            c.material.depthTest = false;
-            c.material.depthWrite = false;
-        }
-    });
-    group.add(cornerBracketsGroup);
+            const cornerBracketsGroup = AppCardFactory.createCornerBrackets();
+            cornerBracketsGroup.name = 'frameGroup';
+            cornerBracketsGroup.position.z = 0.03;
+            cornerBracketsGroup.renderOrder = 999998;
+            cornerBracketsGroup.children.forEach(c => {
+                c.renderOrder = 999998;
+                if (c.material) {
+                    c.material.depthTest = false;
+                    c.material.depthWrite = false;
+                }
+            });
+            group.add(cornerBracketsGroup);
 
-    // ★ 赋予顶级渲染顺序，彻底禁止任何球面三维卡片遮挡
-    group.renderOrder = 999999;
-    group.visible = false;
-    group.userData.refs = { screen, backplate, coreGlow, frameGroup: cornerBracketsGroup };
+            group.renderOrder = 999999;
+            group.visible = false;
+            group.userData.refs = { screen, backplate, coreGlow, frameGroup: cornerBracketsGroup };
 
-    appState.hoverOverlayCard = group;
-    appState.overlayCardTargetScale = new THREE.Vector3(1, 1, 1);
-    appState.overlayCardTargetPosition = new THREE.Vector3(0, 0, 100);
-    appState.scene.add(group);
-},
+            appState.hoverOverlayCard = group;
+            appState.overlayCardTargetScale = new THREE.Vector3(1, 1, 1);
+            appState.overlayCardTargetPosition = new THREE.Vector3(0, 0, 100);
+            appState.scene.add(group);
+        },
 
         initClock() {
             const clockEl = document.getElementById('clockHud');
@@ -354,72 +397,91 @@
         },
 
         init3DCardChamberListeners() {
-    // 样机风格切换监听
-    document.getElementById('cardStylePresetSelect')?.addEventListener('change', (e) => {
-        const presetId = e.target.value;
-        if (window.CardStyleManager) {
-            const p = window.CardStyleManager.getPreset(presetId);
-            if (p) {
-                const lightBrightRange = document.getElementById('cardLightBrightnessRange');
-                const lightColorInput = document.getElementById('cardLightColor');
-                const lightPosSelect = document.getElementById('cardLightPositionSelect');
-                const lightSpreadRange = document.getElementById('cardLightSpreadRange');
-                const textStyleSelect = document.getElementById('cardTextStyleSelect');
-                const fontColorInput = document.getElementById('sphereCardFontColor');
+            document.getElementById('cardStylePresetSelect')?.addEventListener('change', (e) => {
+                const presetId = e.target.value;
+                if (window.CardStyleManager) {
+                    const p = window.CardStyleManager.getPreset(presetId);
+                    if (p) {
+                        const lightBrightRange = document.getElementById('cardLightBrightnessRange');
+                        const lightColorInput = document.getElementById('cardLightColor');
+                        const lightPosSelect = document.getElementById('cardLightPositionSelect');
+                        const lightSpreadRange = document.getElementById('cardLightSpreadRange');
+                        const textStyleSelect = document.getElementById('cardTextStyleSelect');
+                        const fontColorInput = document.getElementById('sphereCardFontColor');
+                        const baseColorInput = document.getElementById('cardBaseColor');
+                        const depthRange = document.getElementById('cardChamberDepthRange');
 
-                if (lightBrightRange) lightBrightRange.value = p.defaultLightBrightness ?? 0.85;
-                if (lightColorInput) lightColorInput.value = p.defaultLightColor ?? '#00f0ff';
-                if (lightPosSelect) lightPosSelect.value = p.defaultLightPosition ?? 'center';
-                if (lightSpreadRange) lightSpreadRange.value = p.defaultLightSpread ?? 0.85;
-                if (textStyleSelect && p.textStyle) textStyleSelect.value = p.textStyle;
-                if (fontColorInput && p.textColor) fontColorInput.value = p.textColor;
+                        if (lightBrightRange) lightBrightRange.value = p.defaultLightBrightness ?? 0.85;
+                        if (lightColorInput) lightColorInput.value = p.defaultLightColor ?? '#00f0ff';
+                        if (lightPosSelect) lightPosSelect.value = p.defaultLightPosition ?? 'center';
+                        if (lightSpreadRange) lightSpreadRange.value = p.defaultLightSpread ?? 0.85;
+                        if (textStyleSelect && p.textStyle) textStyleSelect.value = p.textStyle;
+                        if (fontColorInput && p.textColor) fontColorInput.value = p.textColor;
+                        if (baseColorInput && p.baseColor) baseColorInput.value = p.baseColor;
+                        if (depthRange && p.defaultChamberDepth !== undefined) depthRange.value = p.defaultChamberDepth;
 
-                this.updateCardPresetDescription();
-                this.showToast(`🎴 已应用风格: ${p.name}`);
+                        this.updateCardPresetDescription();
+                        this.showToast('🎴 已应用风格: ' + p.name);
+                    }
+                }
+                scheduleSphereRebuild(10);
+                schedulePersist();
+            });
+
+            const opacityRange = document.getElementById('cardOpacityRange');
+            if (opacityRange) {
+                opacityRange.addEventListener('input', (e) => {
+                    const op = parseFloat(e.target.value);
+                    AppCardFactory.updateCardsMaterialsFast({ opacity: op });
+                    schedulePersist();
+                });
             }
-        }
-        scheduleSphereRebuild(10);
-        schedulePersist();
-    });
 
-    // ★ 卡片不透明度：0ms 即地更新，拖拽滑块立即透明化
-    const opacityRange = document.getElementById('cardOpacityRange');
-    if (opacityRange) {
-        opacityRange.addEventListener('input', (e) => {
-            const op = parseFloat(e.target.value);
-            AppCardFactory.updateCardsMaterialsFast({ opacity: op });
-            schedulePersist();
-        });
-    }
+            const sphereBrightRange = document.getElementById('sphereCardBrightnessRange');
+            if (sphereBrightRange) {
+                sphereBrightRange.addEventListener('input', (e) => {
+                    const br = parseFloat(e.target.value);
+                    AppCardFactory.updateCardsMaterialsFast({ brightness: br });
+                    schedulePersist();
+                });
+            }
 
-    // ★ 卡片所有外观参数全面无死角监听（底色、文字颜色、质感、字号、灯光位置与色彩等）
-    const cardSettingInputs = [
-        'sphereCardFontSize',
-        'cardBrightnessRange',
-        'sphereCardFontColor',
-        'cardTextStyleSelect',
-        'sphereCardFontFamily',
-        'cardBaseColor',
-        'cardChamberDepthRange',
-        'cardLightPositionSelect',
-        'cardLightBrightnessRange',
-        'cardLightSpreadRange',
-        'cardLightColor'
-    ];
+            const cardExposureRange = document.getElementById('cardExposureRange');
+            if (cardExposureRange) {
+                cardExposureRange.addEventListener('input', (e) => {
+                    const exp = parseFloat(e.target.value);
+                    AppCardFactory.updateCardsMaterialsFast({ exposure: exp });
+                    schedulePersist();
+                });
+            }
 
-    cardSettingInputs.forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('input', () => {
-            scheduleSphereRebuild(200);
-            schedulePersist();
-        });
-        el.addEventListener('change', () => {
-            scheduleSphereRebuild(10);
-            schedulePersist();
-        });
-    });
-},
+            const cardSettingInputs = [
+                'sphereCardFontSize',
+                'cardBrightnessRange',
+                'sphereCardFontColor',
+                'cardTextStyleSelect',
+                'sphereCardFontFamily',
+                'cardBaseColor',
+                'cardChamberDepthRange',
+                'cardLightPositionSelect',
+                'cardLightBrightnessRange',
+                'cardLightSpreadRange',
+                'cardLightColor'
+            ];
+
+            cardSettingInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', () => {
+                    scheduleSphereRebuild(60);
+                    schedulePersist();
+                });
+                el.addEventListener('change', () => {
+                    scheduleSphereRebuild(10);
+                    schedulePersist();
+                });
+            });
+        },
 
         updateCardPresetDescription() {
             const descLabel = document.getElementById('cardPresetDescLabel');
@@ -430,170 +492,185 @@
         },
 
         initDetailedSettingsListeners() {
-    // 语音发音人及参数监听
-    document.getElementById('voiceSelect')?.addEventListener('change', (e) => {
-        appState.ttsSettings.voice = e.target.value;
-        schedulePersist();
-    });
-    document.getElementById('rateInput')?.addEventListener('input', (e) => {
-        appState.ttsSettings.rate = safeParseFloat(e.target.value, 1.0);
-        schedulePersist();
-    });
-    document.getElementById('timesInput')?.addEventListener('input', (e) => {
-        appState.ttsSettings.times = safeParseInt(e.target.value, 1);
-        schedulePersist();
-    });
-    document.getElementById('volumeInput')?.addEventListener('input', (e) => {
-        appState.ttsSettings.volume = safeParseFloat(e.target.value, 1.0);
-        schedulePersist();
-    });
+            document.getElementById('voiceSelect')?.addEventListener('change', (e) => {
+                appState.ttsSettings.voice = e.target.value;
+                schedulePersist();
+            });
+            document.getElementById('rateInput')?.addEventListener('input', (e) => {
+                appState.ttsSettings.rate = safeParseFloat(e.target.value, 1.0);
+                schedulePersist();
+            });
+            document.getElementById('timesInput')?.addEventListener('input', (e) => {
+                appState.ttsSettings.times = safeParseInt(e.target.value, 1);
+                schedulePersist();
+            });
+            document.getElementById('volumeInput')?.addEventListener('input', (e) => {
+                appState.ttsSettings.volume = safeParseFloat(e.target.value, 1.0);
+                schedulePersist();
+            });
 
-    // ★ 悬浮查词卡全量颜色实时监听 (主单词、音标、释义、记忆法标题及正文)
-    const hoverColorInputs = [
-        'hoverCardMainWordColor',
-        'hoverCardPhoneticColor',
-        'hoverCardMeaningColor',
-        'hoverCardMethodTitleColor',
-        'hoverCardMethodContentColor'
-    ];
-    hoverColorInputs.forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('input', () => {
-            if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
-                AppUI.triggerCardDisplay(appState.hoveredObject);
+            // 监听旋臂粒子亮度与核心避让半径
+            const vortexBrightEl = document.getElementById('vortexBrightnessRange');
+            if (vortexBrightEl) {
+                vortexBrightEl.addEventListener('input', () => {
+                    AppParticles.updateVisualEffects();
+                    schedulePersist();
+                });
             }
-            schedulePersist();
-        });
-        el.addEventListener('change', () => schedulePersist());
-    });
-
-    // ★ 悬浮查词卡背景透明度实时调节
-    document.getElementById('hoverCardBgOpacity')?.addEventListener('input', (e) => {
-        const op = parseFloat(e.target.value || '0.78');
-        appState.rt.hoverBgOpacity = op;
-        if (appState.hoverOverlayCard) {
-            const backplate = appState.hoverOverlayCard.getObjectByName("backplate");
-            if (backplate) {
-                backplate.material.opacity = appState.overlayCardTargetOpacity * op;
+            const vortexCoreEl = document.getElementById('vortexCoreRadiusRange');
+            if (vortexCoreEl) {
+                vortexCoreEl.addEventListener('input', () => {
+                    AppParticles.initVortex();
+                    schedulePersist();
+                });
             }
-        }
-        appState.needsRender = true;
-        schedulePersist();
-    });
 
-    // ★ 悬浮查词卡缩放比例实时更新
-    document.getElementById('hoverOverlayCardScale')?.addEventListener('input', (e) => {
-        const scaleVal = parseFloat(e.target.value || '1.0');
-        if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
-            const screen = appState.hoverOverlayCard.getObjectByName("textScreen");
-            const tex = screen?.material?.map;
-            if (tex && tex.image) {
-                updateHoverCardPosition(tex.image.width, tex.image.height, scaleVal);
-                appState.hoverOverlayCard.scale.copy(appState.overlayCardTargetScale);
+            // 监听查词卡停留时长参数
+            const hoverDurEl = document.getElementById('hoverCardDurationRange');
+            if (hoverDurEl) {
+                hoverDurEl.addEventListener('input', () => {
+                    schedulePersist();
+                });
             }
-        }
-        appState.needsRender = true;
-        schedulePersist();
-    });
 
-    // ★ 悬浮查词卡光照亮度实时调节
-    document.getElementById('hoverCardBrightness')?.addEventListener('input', () => {
-        if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
-            AppUI.triggerCardDisplay(appState.hoveredObject);
-        }
-        appState.needsRender = true;
-        schedulePersist();
-    });
+            const hoverColorInputs = [
+                'hoverCardMainWordColor',
+                'hoverCardPhoneticColor',
+                'hoverCardMeaningColor',
+                'hoverCardMethodTitleColor',
+                'hoverCardMethodContentColor'
+            ];
+            hoverColorInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', () => {
+                    if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
+                        AppUI.triggerCardDisplay(appState.hoveredObject);
+                    }
+                    schedulePersist();
+                });
+                el.addEventListener('change', () => schedulePersist());
+            });
 
-    document.getElementById('hoverCardStyleModeSelect')?.addEventListener('change', () => {
-        if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
-            AppUI.triggerCardDisplay(appState.hoveredObject);
-        }
-        appState.needsRender = true;
-        schedulePersist();
-    });
+            document.getElementById('hoverCardBgOpacity')?.addEventListener('input', (e) => {
+                const op = parseFloat(e.target.value || '0.78');
+                appState.rt.hoverBgOpacity = op;
+                if (appState.hoverOverlayCard) {
+                    const backplate = appState.hoverOverlayCard.getObjectByName("backplate");
+                    if (backplate) {
+                        backplate.material.opacity = appState.overlayCardTargetOpacity * op;
+                    }
+                }
+                appState.needsRender = true;
+                schedulePersist();
+            });
 
-    // 旋转速度与轴向
-    document.getElementById('rotationSpeed')?.addEventListener('input', (e) => {
-        appState.actualDisplayRotationSpeed = safeParseFloat(e.target.value, 1.0) * appState.currentRotationSpeedBase;
-        appState.needsRender = true;
-        schedulePersist();
-    });
+            document.getElementById('hoverOverlayCardScale')?.addEventListener('input', (e) => {
+                const scaleVal = parseFloat(e.target.value || '1.0');
+                if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
+                    const screen = appState.hoverOverlayCard.getObjectByName("textScreen");
+                    const tex = screen?.material?.map;
+                    if (tex && tex.image) {
+                        updateHoverCardPosition(tex.image.width, tex.image.height, scaleVal);
+                        appState.hoverOverlayCard.scale.copy(appState.overlayCardTargetScale);
+                    }
+                }
+                appState.needsRender = true;
+                schedulePersist();
+            });
 
-    ['rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation'].forEach(id => {
-        document.getElementById(id)?.addEventListener('change', () => {
-            this.refreshRuntimeCache();
-            appState.needsRender = true;
-            schedulePersist();
-        });
-    });
+            document.getElementById('hoverCardBrightness')?.addEventListener('input', () => {
+                if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
+                    AppUI.triggerCardDisplay(appState.hoveredObject);
+                }
+                appState.needsRender = true;
+                schedulePersist();
+            });
 
-    // 核心能量球体
-    ['coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const updateFn = () => { AppParticles.updateCoreSphereSettings(); schedulePersist(); };
-        el.addEventListener('input', updateFn);
-        el.addEventListener('change', updateFn);
-    });
+            document.getElementById('hoverCardStyleModeSelect')?.addEventListener('change', () => {
+                if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
+                    AppUI.triggerCardDisplay(appState.hoveredObject);
+                }
+                appState.needsRender = true;
+                schedulePersist();
+            });
 
-    // 视觉增强系统（Vortex）全参数实时响应
-    document.getElementById('visualEffectsEnabled')?.addEventListener('change', (e) => {
-        appState.rt.visualFxEnabled = e.target.checked;
-        AppParticles.updateVisualEffects();
-        schedulePersist();
-    });
+            document.getElementById('rotationSpeed')?.addEventListener('input', (e) => {
+                appState.actualDisplayRotationSpeed = safeParseFloat(e.target.value, 1.0) * appState.currentRotationSpeedBase;
+                appState.needsRender = true;
+                schedulePersist();
+            });
 
-    document.getElementById('vortexSpeed')?.addEventListener('input', (e) => {
-        const spd = safeParseFloat(e.target.value, 0.003);
-        appState.rt.vortexSpeed = Math.max(0.001, Math.min(0.01, spd));
-        appState.needsRender = true;
-        schedulePersist();
-    });
+            ['rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation'].forEach(id => {
+                document.getElementById(id)?.addEventListener('change', () => {
+                    this.refreshRuntimeCache();
+                    appState.needsRender = true;
+                    schedulePersist();
+                });
+            });
 
-    document.getElementById('vortexSize')?.addEventListener('input', () => {
-        AppParticles.updateVisualEffects();
-        schedulePersist();
-    });
+            ['coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const updateFn = () => { AppParticles.updateCoreSphereSettings(); schedulePersist(); };
+                el.addEventListener('input', updateFn);
+                el.addEventListener('change', updateFn);
+            });
 
-    document.getElementById('vortexColor')?.addEventListener('input', () => {
-        AppParticles.updateVisualEffects();
-        schedulePersist();
-    });
+            document.getElementById('visualEffectsEnabled')?.addEventListener('change', (e) => {
+                appState.rt.visualFxEnabled = e.target.checked;
+                AppParticles.updateVisualEffects();
+                schedulePersist();
+            });
 
-    ['vortexTightness', 'vortexParticleCount'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('change', () => {
-            AppParticles.initVortex();
-            schedulePersist();
-        });
-    });
+            document.getElementById('vortexSpeed')?.addEventListener('input', (e) => {
+                const spd = safeParseFloat(e.target.value, 0.003);
+                appState.rt.vortexSpeed = Math.max(0.001, Math.min(0.01, spd));
+                appState.needsRender = true;
+                schedulePersist();
+            });
 
-    ['bloomThreshold', 'bloomStrength', 'bloomRadius'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('input', () => {
-            AppParticles.updateBloomSettings();
-            appState.needsRender = true;
-            schedulePersist();
-        });
-    });
+            document.getElementById('vortexSize')?.addEventListener('input', () => {
+                AppParticles.updateVisualEffects();
+                schedulePersist();
+            });
 
-    // 星空背景设置实时响应
-    const starInputs = ['starfieldEnabled', 'starCount', 'starColor', 'starSize'];
-    starInputs.forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const triggerStarUpdate = () => {
-            AppParticles.initStarfield();
-            schedulePersist();
-        };
-        el.addEventListener('input', triggerStarUpdate);
-        el.addEventListener('change', triggerStarUpdate);
-    });
-},
+            document.getElementById('vortexColor')?.addEventListener('input', () => {
+                AppParticles.updateVisualEffects();
+                schedulePersist();
+            });
+
+            ['vortexTightness', 'vortexParticleCount'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('change', () => {
+                    AppParticles.initVortex();
+                    schedulePersist();
+                });
+            });
+
+            ['bloomThreshold', 'bloomStrength', 'bloomRadius'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', () => {
+                    AppParticles.updateBloomSettings();
+                    appState.needsRender = true;
+                    schedulePersist();
+                });
+            });
+
+            const starInputs = ['starfieldEnabled', 'starCount', 'starColor', 'starSize'];
+            starInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const triggerStarUpdate = () => {
+                    AppParticles.initStarfield();
+                    schedulePersist();
+                };
+                el.addEventListener('input', triggerStarUpdate);
+                el.addEventListener('change', triggerStarUpdate);
+            });
+        },
 
         refreshRuntimeCache() {
             const rt = appState.rt;
@@ -648,20 +725,17 @@
             document.getElementById('speedUpBtn')?.addEventListener('click', () => this.changeViewAwareSpeed(1.25));
             document.getElementById('speedDownBtn')?.addEventListener('click', () => this.changeViewAwareSpeed(0.80));
 
-            // 🎮 四向平移按钮事件绑定
             document.getElementById('panUpBtn')?.addEventListener('click', () => AppScene.panSphere(0, -15));
             document.getElementById('panDownBtn')?.addEventListener('click', () => AppScene.panSphere(0, 15));
             document.getElementById('panLeftBtn')?.addEventListener('click', () => AppScene.panSphere(-15, 0));
             document.getElementById('panRightBtn')?.addEventListener('click', () => AppScene.panSphere(15, 0));
             document.getElementById('panCenterResetBtn')?.addEventListener('click', () => AppScene.resetSpherePan());
 
-            // 视角与面板管理
             document.getElementById('viewsBtn')?.addEventListener('click', () => this.toggleManagementPanel('views'));
             this.bindSystemViewButton(document.getElementById('viewInsideBtn'), 'inside');
             this.bindSystemViewButton(document.getElementById('viewSurfaceBtn'), 'surface');
             this.bindSystemViewButton(document.getElementById('viewOverallBtn'), 'overall');
 
-            // 详情面板事件
             document.getElementById('closeDetailBtn')?.addEventListener('click', () => this.hideImmersiveDetailPanel());
             document.getElementById('togglePanelSideBtn')?.addEventListener('click', () => {
                 document.getElementById('immersiveDetailPanel')?.classList.toggle('left-aligned');
@@ -750,7 +824,7 @@
             setTimeout(() => { inputEl.focus(); inputEl.select(); }, 100);
         },
 
-        // ==================== 📝 备注 CRUD 全套逻辑 ====================
+        // ==================== 📝 备注 CRUD 与智能静止 1 秒自动复制到剪贴板 ====================
         initNoteModalHandlers() {
             const modal = document.getElementById('wordNoteModalBackdrop');
             const titleInput = document.getElementById('noteInputTitle');
@@ -758,10 +832,76 @@
             const submitBtn = document.getElementById('saveNoteSubmitBtn');
             const cancelBtn = document.getElementById('closeNoteModalBtn');
 
+            let titleDebounceTimer = null;
+            let isComposing = false;
+            let lastAutoCopiedTitle = "";
+
+            const doAutoCopyTitle = () => {
+                if (!titleInput) return;
+                const text = titleInput.value.trim();
+                if (!text || text === lastAutoCopiedTitle) return;
+
+                AppUI.copyToClipboard(text).then((ok) => {
+                    if (ok) {
+                        lastAutoCopiedTitle = text;
+                        AppUI.showToast(`📋 备注标题已自动复制到剪贴板，可直接向 AI 提问！`, 2500);
+                    }
+                });
+            };
+
+            const scheduleAutoCopy = () => {
+                if (titleDebounceTimer) {
+                    clearTimeout(titleDebounceTimer);
+                    titleDebounceTimer = null;
+                }
+                if (isComposing) return;
+                titleDebounceTimer = setTimeout(() => {
+                    doAutoCopyTitle();
+                }, 1000);
+            };
+
+            titleInput?.addEventListener('compositionstart', () => { isComposing = true; });
+            titleInput?.addEventListener('compositionend', () => {
+                isComposing = false;
+                scheduleAutoCopy();
+            });
+
+            titleInput?.addEventListener('input', () => {
+                scheduleAutoCopy();
+            });
+
+            titleInput?.addEventListener('blur', () => {
+                if (titleDebounceTimer) {
+                    clearTimeout(titleDebounceTimer);
+                    titleDebounceTimer = null;
+                }
+                doAutoCopyTitle();
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    if (modal && modal.classList.contains('visible')) {
+                        if (titleDebounceTimer) {
+                            clearTimeout(titleDebounceTimer);
+                            titleDebounceTimer = null;
+                        }
+                        doAutoCopyTitle();
+                    }
+                } else if (document.visibilityState === 'visible') {
+                    if (modal && modal.classList.contains('visible')) {
+                        if (contentInput && !contentInput.value.trim()) {
+                            setTimeout(() => contentInput.focus(), 150);
+                        }
+                    }
+                }
+            });
+
             cancelBtn?.addEventListener('click', () => {
                 modal.classList.remove('visible');
                 appState.activeNoteWord = null;
                 appState.editingNoteId = null;
+                lastAutoCopiedTitle = "";
+                if (titleDebounceTimer) clearTimeout(titleDebounceTimer);
             });
 
             submitBtn?.addEventListener('click', () => {
@@ -1104,323 +1244,343 @@
 
         // ==================== 触控与快速查词 ====================
         initMobileTouchHandlers() {
-    const canvasEl = appState.renderer?.domElement || document.getElementById('wordSphere');
-    if (!canvasEl) return;
+            const canvasEl = appState.renderer?.domElement || document.getElementById('wordSphere');
+            if (!canvasEl) return;
 
-    let hoverTimer = null;
-    let longPressTimer = null;
-    let didLongPress = false;
-    let downTime = 0;
-    let downPos = new THREE.Vector2();
-    let isMoving = false;
-    let currentHoverCard = null;
+            let hoverTimer = null;
+            let longPressTimer = null;
+            let didLongPress = false;
+            let downTime = 0;
+            let downPos = new THREE.Vector2();
+            let isMoving = false;
+            let currentHoverCard = null;
 
-    let lastClientX = -9999;
-    let lastClientY = -9999;
+            let lastClientX = -9999;
+            let lastClientY = -9999;
 
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
 
-    // 检测鼠标/触点是否在 3D 浮动查词卡范围内
-    const isPointerOverHoverCard = (clientX, clientY) => {
-        if (!appState.hoverOverlayCard || !appState.hoverOverlayCard.visible || appState.overlayCardTargetOpacity < 0.05) {
-            return false;
-        }
-        mouse.x = (clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(clientY / window.innerHeight) * 2 + 1;
-        raycaster.setFromCamera(mouse, appState.camera);
-        const hits = raycaster.intersectObjects([appState.hoverOverlayCard], true);
-        return hits.length > 0;
-    };
+            const isPointerOverHoverCard = (clientX, clientY) => {
+                if (!appState.hoverOverlayCard || !appState.hoverOverlayCard.visible || appState.overlayCardTargetOpacity < 0.05) {
+                    return false;
+                }
+                mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, appState.camera);
+                const hits = raycaster.intersectObjects([appState.hoverOverlayCard], true);
+                return hits.length > 0;
+            };
 
-    // 检测当前坐标命中的球面单词卡
-    const getRaycastCard = (clientX, clientY) => {
-        mouse.x = (clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(clientY / window.innerHeight) * 2 + 1;
-        raycaster.setFromCamera(mouse, appState.camera);
-        const hits = raycaster.intersectObjects(appState.wordObjects || [], false);
-        return hits.length > 0 ? hits[0].object : null;
-    };
+            const getRaycastCard = (clientX, clientY) => {
+                mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, appState.camera);
+                const hits = raycaster.intersectObjects(appState.wordObjects || [], false);
+                return hits.length > 0 ? hits[0].object : null;
+            };
 
-    // 查词卡 2 秒常驻与移出超过 200ms 自动关闭调度
-    const checkOrScheduleDismiss = () => {
-        if (appState.hoverCardDismissTimer) {
-            clearTimeout(appState.hoverCardDismissTimer);
-            appState.hoverCardDismissTimer = null;
-        }
-        if (!appState.hoverOverlayCard || !appState.hoverOverlayCard.visible || appState.overlayCardTargetOpacity < 0.05) {
-            return;
-        }
-
-        const now = performance.now();
-        const shownTime = appState.hoverCardShownTime || 0;
-        const timeSinceShow = now - shownTime;
-        const isOver = isPointerOverHoverCard(lastClientX, lastClientY);
-
-        if (isOver) {
-            return;
-        }
-
-        const remaining2sLock = Math.max(0, 2000 - timeSinceShow);
-        const delay = Math.max(200, remaining2sLock);
-
-        appState.hoverCardDismissTimer = setTimeout(() => {
-            if (!isPointerOverHoverCard(lastClientX, lastClientY)) {
-                appState.hoveredObject = null;
-                appState.overlayCardTargetOpacity = 0;
-                appState.needsRender = true;
-            }
-        }, delay);
-    };
-
-    appState.scheduleHoverCardAutoDismiss = checkOrScheduleDismiss;
-
-    window.addEventListener('pointermove', (e) => {
-        if (e.pointerType !== 'touch') {
-            lastClientX = e.clientX;
-            lastClientY = e.clientY;
-        }
-    }, { passive: true });
-
-    // 移动与拖动检测
-    canvasEl.addEventListener('pointermove', (e) => {
-        const curPos = new THREE.Vector2(e.clientX, e.clientY);
-        if (downPos.distanceTo(curPos) > 8) {
-            isMoving = true;
-            // 一旦发生手指滑动旋转球体，立即取消长按定时器
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-            }
-        }
-
-        // 仅在 PC 桌面端启用鼠标移动悬停 200ms 探测
-        if (e.pointerType !== 'touch') {
-            lastClientX = e.clientX;
-            lastClientY = e.clientY;
-
-            if (isPointerOverHoverCard(e.clientX, e.clientY)) {
-                if (hoverTimer) clearTimeout(hoverTimer);
+            const checkOrScheduleDismiss = () => {
                 if (appState.hoverCardDismissTimer) {
                     clearTimeout(appState.hoverCardDismissTimer);
                     appState.hoverCardDismissTimer = null;
                 }
-                return;
-            }
-
-            const hitCard = getRaycastCard(e.clientX, e.clientY);
-            if (hitCard) {
-                if (hitCard !== currentHoverCard) {
-                    currentHoverCard = hitCard;
-                    if (hoverTimer) clearTimeout(hoverTimer);
-                    hoverTimer = setTimeout(() => {
-                        AppUI.triggerCardDisplay(hitCard);
-                    }, 200);
+                if (!appState.hoverOverlayCard || !appState.hoverOverlayCard.visible || appState.overlayCardTargetOpacity < 0.05) {
+                    return;
                 }
-            } else {
-                currentHoverCard = null;
-                if (hoverTimer) clearTimeout(hoverTimer);
-            }
 
-            checkOrScheduleDismiss();
-        }
-    });
+                if (appState.isHoverCardPinned) {
+                    return;
+                }
 
-    // 手指/鼠标按下
-    canvasEl.addEventListener('pointerdown', (e) => {
-        downTime = performance.now();
-        downPos.set(e.clientX, e.clientY);
-        isMoving = false;
-        didLongPress = false;
+                const now = performance.now();
+                const shownTime = appState.hoverCardShownTime || 0;
+                const timeSinceShow = now - shownTime;
+                const isOver = isPointerOverHoverCard(lastClientX, lastClientY);
 
-        // ★ 核心修复：手机端长按精确判定（必须持续长按超过 750 毫秒且不晃动）
-        if (e.pointerType === 'touch') {
-            if (longPressTimer) clearTimeout(longPressTimer);
-            const touchedCard = getRaycastCard(e.clientX, e.clientY);
-            if (touchedCard) {
-                longPressTimer = setTimeout(() => {
-                    if (!isMoving && touchedCard.userData?.word) {
-                        didLongPress = true;
-                        if (navigator.vibrate) {
-                            navigator.vibrate([40, 30, 40]);
-                        }
-                        // 长按超过 750ms，触发右侧完整详情窗口
-                        AppUI.showImmersiveDetailPanel(touchedCard.userData.word);
+                if (isOver) {
+                    return;
+                }
+
+                // ★ 核心参数：根据用户设定的秒数动态决定自动停留时长，默认 5 秒
+                const stayDurationSec = parseFloat(document.getElementById('hoverCardDurationRange')?.value || '5.0');
+                const stayDurationMs = Math.max(800, stayDurationSec * 1000);
+
+                const remainingLock = Math.max(0, stayDurationMs - timeSinceShow);
+                const delay = Math.max(200, remainingLock);
+
+                appState.hoverCardDismissTimer = setTimeout(() => {
+                    if (!appState.isHoverCardPinned && !isPointerOverHoverCard(lastClientX, lastClientY)) {
+                        appState.hoveredObject = null;
+                        appState.overlayCardTargetOpacity = 0;
+                        appState.needsRender = true;
+                    }
+                }, delay);
+            };
+
+            appState.scheduleHoverCardAutoDismiss = checkOrScheduleDismiss;
+
+            window.addEventListener('pointermove', (e) => {
+                if (e.pointerType !== 'touch') {
+                    lastClientX = e.clientX;
+                    lastClientY = e.clientY;
+                }
+            }, { passive: true });
+
+            canvasEl.addEventListener('pointermove', (e) => {
+                const curPos = new THREE.Vector2(e.clientX, e.clientY);
+                if (downPos.distanceTo(curPos) > 8) {
+                    isMoving = true;
+                    if (longPressTimer) {
+                        clearTimeout(longPressTimer);
                         longPressTimer = null;
                     }
-                }, 750);
-            }
-        }
-    });
+                }
 
-    // 手指/鼠标抬起
-    canvasEl.addEventListener('pointerup', (e) => {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
+                if (e.pointerType !== 'touch') {
+                    lastClientX = e.clientX;
+                    lastClientY = e.clientY;
 
-        // 如果已经触发了长按展开完整面板，抬起时不触发单击
-        if (didLongPress) {
-            didLongPress = false;
-            return;
-        }
-
-        const duration = performance.now() - downTime;
-        const dist = downPos.distanceTo(new THREE.Vector2(e.clientX, e.clientY));
-
-        // 判定为未移动的单击
-        if (dist < 8 && duration < 750 && !isMoving) {
-            this.handleQuickTap(e);
-        }
-    });
-},
-
-        handleQuickTap(e) {
-    const mouse = new THREE.Vector2(
-        (e.clientX / window.innerWidth) * 2 - 1,
-        -(e.clientY / window.innerHeight) * 2 + 1
-    );
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, appState.camera);
-
-    // 1. 优先判定当前已经处于打开状态的 3D 悬浮查词卡及其功能按钮
-    if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
-        const intersectsCard = raycaster.intersectObjects([appState.hoverOverlayCard], true);
-        if (intersectsCard.length > 0) {
-            const intersect = intersectsCard[0];
-            const uv = intersect.uv;
-            const screenMesh = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
-            const texture = screenMesh?.material?.map;
-
-            if (texture && uv) {
-                const canvasWidth = texture.image.width;
-                const canvasHeight = texture.image.height;
-                const clickX = uv.x * canvasWidth;
-                const clickY = (1 - uv.y) * canvasHeight;
-
-                const wordData = appState.hoveredObject?.userData?.word;
-                const zones = wordData?.hover_click_zones || appState.hoverOverlayCard.userData.hover_click_zones || [];
-
-                if (wordData && zones.length > 0) {
-                    for (const zone of zones) {
-                        if (clickX >= zone.xMin && clickX <= zone.xMax && clickY >= zone.yMin && clickY <= zone.yMax) {
-                            if (zone.type === 'speak') {
-                                AppAudio.speakWord(wordData.words, 1);
-                                this.showToast(`🔊 朗读: ${wordData.words}`);
-                            } else if (zone.type === 'fontSizeDown') {
-                                const scaleInput = document.getElementById('hoverOverlayCardScale');
-                                let currentScale = Math.max(0.3, parseFloat(scaleInput?.value || 1.0) - 0.15);
-                                if (scaleInput) {
-                                    scaleInput.value = currentScale.toFixed(2);
-                                    scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                }
-                            } else if (zone.type === 'fontSizeUp') {
-                                const scaleInput = document.getElementById('hoverOverlayCardScale');
-                                let currentScale = Math.min(4.0, parseFloat(scaleInput?.value || 1.0) + 0.15);
-                                if (scaleInput) {
-                                    scaleInput.value = currentScale.toFixed(2);
-                                    scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                }
-                            } else if (zone.type === 'note') {
-                                this.openNoteEditModal(wordData, null);
-                            } else if (zone.type === 'shield') {
-                                if (confirm(`确定要将单词 "${wordData.words}" 移入屏蔽词库吗？`)) {
-                                    const key = getWordKey(wordData);
-                                    appState.shieldedWords.add(key);
-                                    AppStorage.saveShieldedWords(appState.shieldedWords);
-                                    appState.allWords = appState.allWords.filter(w => getWordKey(w) !== key);
-                                    appState.filteredWords = appState.filteredWords.filter(w => getWordKey(w) !== key);
-                                    appState.currentBatchWords = appState.currentBatchWords.filter(w => getWordKey(w) !== key);
-                                    this.displayCurrentBatch();
-                                    this.updateClearShieldedBtnLabel();
-                                    this.updateStats();
-
-                                    appState.hoveredObject = null;
-                                    appState.overlayCardTargetOpacity = 0;
-                                    this.showToast(`🛡️ 已屏蔽单词: ${wordData.words}`);
-                                }
-                            } else if (zone.type === 'card_body') {
-                                // 点击查词卡内部主体文字，打开右侧完整详情面板
-                                this.showImmersiveDetailPanel(wordData);
-                            }
-                            appState.needsRender = true;
-                            return;
+                    if (isPointerOverHoverCard(e.clientX, e.clientY)) {
+                        if (hoverTimer) clearTimeout(hoverTimer);
+                        if (appState.hoverCardDismissTimer) {
+                            clearTimeout(appState.hoverCardDismissTimer);
+                            appState.hoverCardDismissTimer = null;
                         }
+                        return;
+                    }
+
+                    if (appState.isHoverCardPinned) {
+                        return;
+                    }
+
+                    const hitCard = getRaycastCard(e.clientX, e.clientY);
+                    if (hitCard) {
+                        if (hitCard !== currentHoverCard) {
+                            currentHoverCard = hitCard;
+                            if (hoverTimer) clearTimeout(hoverTimer);
+                            hoverTimer = setTimeout(() => {
+                                AppUI.triggerCardDisplay(hitCard);
+                            }, 200);
+                        }
+                    } else {
+                        currentHoverCard = null;
+                        if (hoverTimer) clearTimeout(hoverTimer);
+                    }
+
+                    checkOrScheduleDismiss();
+                }
+            });
+
+            canvasEl.addEventListener('pointerdown', (e) => {
+                downTime = performance.now();
+                downPos.set(e.clientX, e.clientY);
+                isMoving = false;
+                didLongPress = false;
+
+                if (e.pointerType === 'touch') {
+                    if (longPressTimer) clearTimeout(longPressTimer);
+                    const touchedCard = getRaycastCard(e.clientX, e.clientY);
+                    if (touchedCard) {
+                        longPressTimer = setTimeout(() => {
+                            if (!isMoving && touchedCard.userData?.word) {
+                                didLongPress = true;
+                                if (navigator.vibrate) {
+                                    navigator.vibrate([40, 30, 40]);
+                                }
+                                AppUI.showImmersiveDetailPanel(touchedCard.userData.word);
+                                longPressTimer = null;
+                            }
+                        }, 750);
                     }
                 }
+            });
+
+            canvasEl.addEventListener('pointerup', (e) => {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+
+                if (didLongPress) {
+                    didLongPress = false;
+                    return;
+                }
+
+                const duration = performance.now() - downTime;
+                const dist = downPos.distanceTo(new THREE.Vector2(e.clientX, e.clientY));
+
+                if (dist < 8 && duration < 750 && !isMoving) {
+                    this.handleQuickTap(e);
+                }
+            });
+        },
+
+        handleQuickTap(e) {
+            const mouse = new THREE.Vector2(
+                (e.clientX / window.innerWidth) * 2 - 1,
+                -(e.clientY / window.innerHeight) * 2 + 1
+            );
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, appState.camera);
+
+            if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
+                const intersectsCard = raycaster.intersectObjects([appState.hoverOverlayCard], true);
+                if (intersectsCard.length > 0) {
+                    const intersect = intersectsCard[0];
+                    const uv = intersect.uv;
+                    const screenMesh = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
+                    const texture = screenMesh?.material?.map;
+
+                    if (texture && uv) {
+                        const canvasWidth = texture.image.width;
+                        const canvasHeight = texture.image.height;
+                        const clickX = uv.x * canvasWidth;
+                        const clickY = (1 - uv.y) * canvasHeight;
+
+                        const wordData = appState.hoveredObject?.userData?.word;
+                        const zones = wordData?.hover_click_zones || appState.hoverOverlayCard.userData.hover_click_zones || [];
+
+                        if (wordData && zones.length > 0) {
+                            for (const zone of zones) {
+                                if (clickX >= zone.xMin && clickX <= zone.xMax && clickY >= zone.yMin && clickY <= zone.yMax) {
+                                    if (zone.type === 'speak') {
+                                        AppAudio.speakWord(wordData.words, 1);
+                                        this.showToast('🔊 朗读: ' + wordData.words);
+                                    } else if (zone.type === 'fontSizeDown') {
+                                        const scaleInput = document.getElementById('hoverOverlayCardScale');
+                                        let currentScale = Math.max(0.3, parseFloat(scaleInput?.value || 1.0) - 0.15);
+                                        if (scaleInput) {
+                                            scaleInput.value = currentScale.toFixed(2);
+                                            scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                        }
+                                    } else if (zone.type === 'fontSizeUp') {
+                                        const scaleInput = document.getElementById('hoverOverlayCardScale');
+                                        let currentScale = Math.min(4.0, parseFloat(scaleInput?.value || 1.0) + 0.15);
+                                        if (scaleInput) {
+                                            scaleInput.value = currentScale.toFixed(2);
+                                            scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                        }
+                                    } else if (zone.type === 'togglePin') {
+                                        if (!appState.isHoverCardPinned) {
+                                            appState.isHoverCardPinned = true;
+                                            const wordText = (wordData.words || '').trim();
+                                            this.copyToClipboard(wordText).then((ok) => {
+                                                if (ok) {
+                                                    this.showToast('📌 已锁定常驻，单词已复制至剪贴板', 2500);
+                                                } else {
+                                                    this.showToast('📌 已锁定卡片常驻', 2000);
+                                                }
+                                            });
+                                            this.triggerCardDisplay(appState.hoveredObject);
+                                        } else {
+                                            appState.isHoverCardPinned = false;
+                                            appState.hoveredObject = null;
+                                            appState.overlayCardTargetOpacity = 0;
+                                            appState.needsRender = true;
+                                            this.showToast('📝 卡片已关闭，正在打开 AI 备忘录...', 2000);
+                                            setTimeout(() => {
+                                                this.openNoteEditModal(wordData, null);
+                                            }, 150);
+                                        }
+                                    } else if (zone.type === 'note') {
+                                        this.openNoteEditModal(wordData, null);
+                                    } else if (zone.type === 'shield') {
+                                        if (confirm('确定要将单词 "' + wordData.words + '" 移入屏蔽词库吗？')) {
+                                            const key = getWordKey(wordData);
+                                            appState.shieldedWords.add(key);
+                                            AppStorage.saveShieldedWords(appState.shieldedWords);
+                                            appState.allWords = appState.allWords.filter(w => getWordKey(w) !== key);
+                                            appState.filteredWords = appState.filteredWords.filter(w => getWordKey(w) !== key);
+                                            appState.currentBatchWords = appState.currentBatchWords.filter(w => getWordKey(w) !== key);
+                                            this.displayCurrentBatch();
+                                            this.updateClearShieldedBtnLabel();
+                                            this.updateStats();
+
+                                            appState.isHoverCardPinned = false;
+                                            appState.hoveredObject = null;
+                                            appState.overlayCardTargetOpacity = 0;
+                                            this.showToast('🛡️ 已屏蔽单词: ' + wordData.words);
+                                        }
+                                    } else if (zone.type === 'card_body') {
+                                        this.showImmersiveDetailPanel(wordData);
+                                    }
+                                    appState.needsRender = true;
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    return;
+                }
             }
-            return;
-        }
-    }
 
-    // 2. 判定球面单词卡片的单击行为
-    const intersects = raycaster.intersectObjects(appState.wordObjects || [], false);
-    if (intersects.length > 0) {
-        const card = intersects[0].object;
-        const wordData = card.userData.word;
+            const intersects = raycaster.intersectObjects(appState.wordObjects || [], false);
+            if (intersects.length > 0) {
+                const card = intersects[0].object;
+                const wordData = card.userData.word;
 
-        // ★ 核心修复：手机端或电脑端单击卡片，统一弹出“快速查词卡窗口”！
-        // 只有长按超过 750 毫秒或点击查词卡内部，才会展开右侧完整详情面板
-        if (appState.hoveredObject === card && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
-            appState.hoveredObject = null;
-            appState.overlayCardTargetOpacity = 0;
-        } else {
-            this.triggerCardDisplay(card);
-        }
+                if (appState.hoveredObject === card && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
+                    if (!appState.isHoverCardPinned) {
+                        appState.hoveredObject = null;
+                        appState.overlayCardTargetOpacity = 0;
+                    }
+                } else {
+                    appState.isHoverCardPinned = false;
+                    this.triggerCardDisplay(card);
+                }
 
-        const result = AppStorage.recordStudyClick(wordData);
-        this.updateStudyCounterDisplay();
-        if (result.justReached) {
-            this.triggerDailyGoalAchievedToast();
-        }
-    } else {
-        // 点击太空空白处：平滑关闭悬浮查词卡
-        appState.hoveredObject = null;
-        appState.overlayCardTargetOpacity = 0;
-    }
-    appState.needsRender = true;
-},
+                const result = AppStorage.recordStudyClick(wordData);
+                this.updateStudyCounterDisplay();
+                if (result.justReached) {
+                    this.triggerDailyGoalAchievedToast();
+                }
+            } else {
+                if (!appState.isHoverCardPinned) {
+                    appState.hoveredObject = null;
+                    appState.overlayCardTargetOpacity = 0;
+                }
+            }
+            appState.needsRender = true;
+        },
 
         triggerCardDisplay(card) {
-    if (!card) return;
-    const word = card.userData.word;
-    appState.hoveredObject = card;
+            if (!card) return;
+            const word = card.userData.word;
+            appState.hoveredObject = card;
 
-    const { texture, pxWidth, pxHeight } = AppCardFactory.createOverlayTexture(word);
-    const screen = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
-    if (screen.material.map) screen.material.map.dispose();
-    screen.material.map = texture;
-    screen.material.needsUpdate = true;
+            const { texture, pxWidth, pxHeight } = AppCardFactory.createOverlayTexture(word);
+            const screen = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
+            if (screen.material.map) screen.material.map.dispose();
+            screen.material.map = texture;
+            screen.material.needsUpdate = true;
 
-    appState.hoverOverlayCard.userData.word = word;
-    appState.hoverOverlayCard.visible = true;
-    appState.overlayCardTargetOpacity = 1;
+            appState.hoverOverlayCard.userData.word = word;
+            appState.hoverOverlayCard.visible = true;
+            appState.overlayCardTargetOpacity = 1;
 
-    const scaleVal = parseFloat(document.getElementById('hoverOverlayCardScale')?.value || 1.0);
-    updateHoverCardPosition(pxWidth, pxHeight, scaleVal);
+            const scaleVal = parseFloat(document.getElementById('hoverOverlayCardScale')?.value || 1.0);
+            updateHoverCardPosition(pxWidth, pxHeight, scaleVal);
 
-    appState.hoverOverlayCard.position.copy(appState.overlayCardTargetPosition);
-    appState.hoverOverlayCard.quaternion.copy(appState.camera.quaternion);
-    appState.hoverOverlayCard.scale.copy(appState.overlayCardTargetScale);
+            appState.hoverOverlayCard.position.copy(appState.overlayCardTargetPosition);
+            appState.hoverOverlayCard.quaternion.copy(appState.camera.quaternion);
+            appState.hoverOverlayCard.scale.copy(appState.overlayCardTargetScale);
 
-    if (word && word.words) {
-        AppAudio.speakWord(word.words, 1);
-    }
-    appState.needsRender = true;
+            if (word && word.words) {
+                AppAudio.speakWord(word.words, 1);
+            }
+            appState.needsRender = true;
 
-    // ★ 核心逻辑：记录出现时刻，确立至少 2000ms 保护期，除非有新卡片替换
-    appState.hoverCardShownTime = performance.now();
-    if (appState.hoverCardDismissTimer) {
-        clearTimeout(appState.hoverCardDismissTimer);
-        appState.hoverCardDismissTimer = null;
-    }
+            appState.hoverCardShownTime = performance.now();
+            if (appState.hoverCardDismissTimer) {
+                clearTimeout(appState.hoverCardDismissTimer);
+                appState.hoverCardDismissTimer = null;
+            }
 
-    // 触发自动关闭判定调度
-    if (typeof appState.scheduleHoverCardAutoDismiss === 'function') {
-        appState.scheduleHoverCardAutoDismiss();
-    }
-},
+            if (typeof appState.scheduleHoverCardAutoDismiss === 'function') {
+                appState.scheduleHoverCardAutoDismiss();
+            }
+        },
 
         showImmersiveDetailPanel(word) {
             if (!word) return;
@@ -1457,6 +1617,7 @@
 
             document.getElementById('immersiveDetailPanel')?.classList.add('visible');
             appState.rotationMultiplier = 0.0;
+            this.adjustSphereViewForPanel();
             appState.needsRender = true;
         },
 
@@ -1546,14 +1707,12 @@
             const scalePill = document.getElementById('focusCruiseScalePill');
             if (!hud) return;
 
-            // 点击左侧触发按钮收起/展开
             trigger?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 hud.classList.toggle('expanded');
                 hud.classList.toggle('collapsed');
             });
 
-            // 点击状态标签开/关
             statusTag?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 appState.focusCruise.enabled = !appState.focusCruise.enabled;
@@ -1565,7 +1724,6 @@
                 schedulePersist();
             });
 
-            // ★ 修复：给轮换周期、抽取比例、放大倍数绑定点击弹出数字修改窗口
             intervalPill?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.showNumberPromptModal({
@@ -1617,7 +1775,6 @@
                 });
             });
 
-            // 点击空白处折叠
             document.addEventListener('pointerdown', (e) => {
                 const modal = document.getElementById('numberPromptModalBackdrop');
                 if (modal && modal.classList.contains('visible')) return;
@@ -1655,7 +1812,6 @@
             const goalValEl = document.getElementById('studyGoalValue');
             const settleModal = document.getElementById('studySettleModalBackdrop');
 
-            // ★ 修复：点击今日复习数弹出修改或清零窗口
             counterValEl?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const curCount = AppStorage.getTodayStudiedCount();
@@ -1691,7 +1847,6 @@
                 });
             });
 
-            // ★ 修复：点击目标数弹出修改窗口
             goalValEl?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const curGoal = AppStorage.getStudyGoal();
@@ -1708,7 +1863,6 @@
                 });
             });
 
-            // 点击外框打开学习结算列表
             counterHud?.addEventListener('click', () => {
                 this.renderStudySettlement();
                 settleModal?.classList.add('visible');
@@ -1755,7 +1909,6 @@
             `;
         },
 
-        // ==================== 词库与数据导入导出 (深度支持 Notes) ====================
         handleFileUpload() {
             selectLocalFile('application/json,.json', async (file) => {
                 const reader = new FileReader();
@@ -1829,96 +1982,83 @@
         },
 
         exportSettings() {
-    const fullBackup = {
-        exportedAt: new Date().toISOString(),
-        version: "V8.6"
-    };
+            const fullBackup = {
+                exportedAt: new Date().toISOString(),
+                version: "V8.6"
+            };
 
-    // 1. 系统核心设置 (含查词卡所有颜色、亮度及外观参数)
-    this.saveSettings();
-    const settingsRaw = localStorage.getItem(APP_CONFIG.SETTINGS_STORAGE_KEY);
-    if (settingsRaw) fullBackup[APP_CONFIG.SETTINGS_STORAGE_KEY] = safeJSONParse(settingsRaw, {});
+            this.saveSettings();
+            const settingsRaw = localStorage.getItem(APP_CONFIG.SETTINGS_STORAGE_KEY);
+            if (settingsRaw) fullBackup[APP_CONFIG.SETTINGS_STORAGE_KEY] = safeJSONParse(settingsRaw, {});
 
-    // 2. 最后视角与摄像机状态
-    this.saveLastState();
-    const lastStateRaw = localStorage.getItem(APP_CONFIG.LAST_STATE_STORAGE_KEY);
-    if (lastStateRaw) fullBackup[APP_CONFIG.LAST_STATE_STORAGE_KEY] = safeJSONParse(lastStateRaw, {});
+            this.saveLastState();
+            const lastStateRaw = localStorage.getItem(APP_CONFIG.LAST_STATE_STORAGE_KEY);
+            if (lastStateRaw) fullBackup[APP_CONFIG.LAST_STATE_STORAGE_KEY] = safeJSONParse(lastStateRaw, {});
 
-    // 3. 右侧管理面板自定义视角列表
-    fullBackup[APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY] = appState.customViews || [];
+            fullBackup[APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY] = appState.customViews || [];
+            fullBackup[APP_CONFIG.STUDY_GOAL_STORAGE_KEY] = AppStorage.getStudyGoal();
+            fullBackup[APP_CONFIG.STUDY_LOG_STORAGE_KEY] = AppStorage.loadStudyLog();
+            fullBackup[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY] = Array.from(AppStorage.loadViewedWords());
+            fullBackup['shieldedWordsV8'] = Array.from(AppStorage.loadShieldedWords());
 
-    // 4. 每日学习目标与学习日志
-    fullBackup[APP_CONFIG.STUDY_GOAL_STORAGE_KEY] = AppStorage.getStudyGoal();
-    fullBackup[APP_CONFIG.STUDY_LOG_STORAGE_KEY] = AppStorage.loadStudyLog();
-
-    // 5. 已查看单词集合与屏蔽词库
-    fullBackup[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY] = Array.from(AppStorage.loadViewedWords());
-    fullBackup['shieldedWordsV8'] = Array.from(AppStorage.loadShieldedWords());
-
-    const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `WordUniverse_FullConfigBackup_${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    this.showToast('⚙️ 系统全量配置(含查词卡色彩与视角预设)已成功导出！');
-},
+            const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `WordUniverse_FullConfigBackup_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.showToast('⚙️ 系统全量配置(含查词卡色彩与视角预设)已成功导出！');
+        },
 
         importSettings() {
-    selectLocalFile('application/json,.json', (file) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const imported = JSON.parse(e.target.result);
-                if (!imported || typeof imported !== 'object') {
-                    throw new Error('导入文件内容不是合法的 JSON 对象');
-                }
+            selectLocalFile('application/json,.json', (file) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const imported = JSON.parse(e.target.result);
+                        if (!imported || typeof imported !== 'object') {
+                            throw new Error('导入文件内容不是合法的 JSON 对象');
+                        }
 
-                // 还原系统设置项
-                if (imported[APP_CONFIG.SETTINGS_STORAGE_KEY]) {
-                    localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(imported[APP_CONFIG.SETTINGS_STORAGE_KEY]));
-                }
+                        if (imported[APP_CONFIG.SETTINGS_STORAGE_KEY]) {
+                            localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(imported[APP_CONFIG.SETTINGS_STORAGE_KEY]));
+                        }
 
-                // 还原上次状态
-                if (imported[APP_CONFIG.LAST_STATE_STORAGE_KEY]) {
-                    localStorage.setItem(APP_CONFIG.LAST_STATE_STORAGE_KEY, JSON.stringify(imported[APP_CONFIG.LAST_STATE_STORAGE_KEY]));
-                }
+                        if (imported[APP_CONFIG.LAST_STATE_STORAGE_KEY]) {
+                            localStorage.setItem(APP_CONFIG.LAST_STATE_STORAGE_KEY, JSON.stringify(imported[APP_CONFIG.LAST_STATE_STORAGE_KEY]));
+                        }
 
-                // 还原右侧管理面板自定义视角预设
-                if (imported[APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY]) {
-                    appState.customViews = imported[APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY];
-                    localStorage.setItem(APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY, JSON.stringify(appState.customViews));
-                }
+                        if (imported[APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY]) {
+                            appState.customViews = imported[APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY];
+                            localStorage.setItem(APP_CONFIG.CUSTOM_VIEWS_STORAGE_KEY, JSON.stringify(appState.customViews));
+                        }
 
-                // 还原每日学习目标与打卡日志
-                if (imported[APP_CONFIG.STUDY_GOAL_STORAGE_KEY]) {
-                    AppStorage.setStudyGoal(imported[APP_CONFIG.STUDY_GOAL_STORAGE_KEY]);
-                }
-                if (imported[APP_CONFIG.STUDY_LOG_STORAGE_KEY]) {
-                    AppStorage.saveStudyLog(imported[APP_CONFIG.STUDY_LOG_STORAGE_KEY]);
-                }
+                        if (imported[APP_CONFIG.STUDY_GOAL_STORAGE_KEY]) {
+                            AppStorage.setStudyGoal(imported[APP_CONFIG.STUDY_GOAL_STORAGE_KEY]);
+                        }
+                        if (imported[APP_CONFIG.STUDY_LOG_STORAGE_KEY]) {
+                            AppStorage.saveStudyLog(imported[APP_CONFIG.STUDY_LOG_STORAGE_KEY]);
+                        }
 
-                // 还原已查词汇与屏蔽词库
-                if (imported[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY]) {
-                    AppStorage.saveViewedWords(new Set(imported[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY]));
-                }
-                if (imported['shieldedWordsV8']) {
-                    AppStorage.saveShieldedWords(new Set(imported['shieldedWordsV8']));
-                }
+                        if (imported[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY]) {
+                            AppStorage.saveViewedWords(new Set(imported[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY]));
+                        }
+                        if (imported['shieldedWordsV8']) {
+                            AppStorage.saveShieldedWords(new Set(imported['shieldedWordsV8']));
+                        }
 
-                alert('全量系统配置已成功恢复导入！即将刷新页面以应用所有新参数。');
-                location.reload();
-            } catch (err) {
-                alert('设置解析失败: ' + err.message);
-            }
-        };
-        reader.readAsText(file);
-    });
-},
-
+                        alert('全量系统配置已成功恢复导入！即将刷新页面以应用所有新参数。');
+                        location.reload();
+                    } catch (err) {
+                        alert('设置解析失败: ' + err.message);
+                    }
+                };
+                reader.readAsText(file);
+            });
+        },
 
         loadAllPersistentStates() {
             const lastStateJSON = localStorage.getItem(APP_CONFIG.LAST_STATE_STORAGE_KEY);
@@ -1939,71 +2079,35 @@
         },
 
         saveSettings() {
-    if (appState.isInitializing) return;
-    const settings = {};
-    const settingIds = [
-        'rotationSpeed', 'cardRotationSpeed', 'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'batchSize',
-        'focusCruiseEnabled', 'focusCruiseIntervalRange', 'focusCruiseRatioRange', 'focusCruiseScaleRange',
-        'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
-        'visualEffectsEnabled', 'vortexParticleCount', 'vortexColor', 'vortexSize', 'vortexSpeed', 'vortexTightness',
-        'bloomThreshold', 'bloomStrength', 'bloomRadius',
-        'starfieldEnabled', 'starCount', 'starColor', 'starSize',
-        'cardStylePresetSelect', 'sphereCardFontSize', 'cardBrightnessRange', 'sphereCardFontColor', 'cardTextStyleSelect', 'sphereCardFontFamily',
-        'cardBaseColor', 'cardChamberDepthRange', 'cardOpacityRange',
-        'cardLightPositionSelect', 'cardLightBrightnessRange', 'cardLightSpreadRange', 'cardLightColor',
-        // ★ 查词卡完整外观与色彩设置持久化字段
-        'hoverCardStyleModeSelect', 'hoverOverlayCardScale', 'hoverCardBrightness', 'hoverCardBgOpacity',
-        'hoverCardMainWordColor', 'hoverCardPhoneticColor', 'hoverCardMeaningColor', 'hoverCardMethodTitleColor', 'hoverCardMethodContentColor',
-        'voiceSelect', 'rateInput', 'timesInput', 'volumeInput'
-    ];
+            if (appState.isInitializing) return;
+            const settings = {};
+            const settingIds = [
+                'rotationSpeed', 'cardRotationSpeed', 'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'batchSize',
+                'focusCruiseEnabled', 'focusCruiseIntervalRange', 'focusCruiseRatioRange', 'focusCruiseScaleRange',
+                'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
+                'visualEffectsEnabled', 'vortexParticleCount', 'vortexColor', 'vortexSize', 'vortexSpeed', 'vortexTightness',
+                'vortexBrightnessRange', 'vortexCoreRadiusRange',
+                'bloomThreshold', 'bloomStrength', 'bloomRadius',
+                'starfieldEnabled', 'starCount', 'starColor', 'starSize',
+                'cardStylePresetSelect', 'sphereCardFontSize', 'cardExposureRange', 'sphereCardBrightnessRange', 'cardBrightnessRange', 'sphereCardFontColor', 'cardTextStyleSelect', 'sphereCardFontFamily',
+                'cardBaseColor', 'cardChamberDepthRange', 'cardOpacityRange',
+                'cardLightPositionSelect', 'cardLightBrightnessRange', 'cardLightSpreadRange', 'cardLightColor',
+                'hoverCardStyleModeSelect', 'hoverCardDurationRange', 'hoverOverlayCardScale', 'hoverCardBrightness', 'hoverCardBgOpacity',
+                'hoverCardMainWordColor', 'hoverCardPhoneticColor', 'hoverCardMeaningColor', 'hoverCardMethodTitleColor', 'hoverCardMethodContentColor',
+                'voiceSelect', 'rateInput', 'timesInput', 'volumeInput'
+            ];
 
-    settingIds.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            settings[id] = (el.type === 'checkbox') ? el.checked : el.value;
-        }
-    });
+            settingIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    settings[id] = (el.type === 'checkbox') ? el.checked : el.value;
+                }
+            });
 
-    settings.showEnglish = appState.showEnglish;
-    settings.cardScaleMultiplier = appState.cardScaleMultiplier;
-    localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-},
-
-loadSettings() {
-    const raw = localStorage.getItem(APP_CONFIG.SETTINGS_STORAGE_KEY);
-    if (!raw) return;
-    const settings = safeJSONParse(raw, null);
-    if (!settings) return;
-
-    for (const key in settings) {
-        const el = document.getElementById(key);
-        if (el) {
-            if (el.type === 'checkbox') el.checked = !!settings[key];
-            else el.value = settings[key];
-        }
-    }
-
-    if (settings.cardScaleMultiplier) appState.cardScaleMultiplier = settings.cardScaleMultiplier;
-    if (settings.showEnglish !== undefined) {
-        appState.showEnglish = !!settings.showEnglish;
-        const toggleLang = document.getElementById('toggleLanguage');
-        if (toggleLang) toggleLang.textContent = appState.showEnglish ? '中' : '英';
-    }
-
-    if (settings.hoverCardBgOpacity !== undefined) {
-        appState.rt.hoverBgOpacity = parseFloat(settings.hoverCardBgOpacity);
-    }
-
-    if (settings.voiceSelect) appState.ttsSettings.voice = settings.voiceSelect;
-    if (settings.rateInput) appState.ttsSettings.rate = safeParseFloat(settings.rateInput, 1.0);
-    if (settings.timesInput) appState.ttsSettings.times = safeParseInt(settings.timesInput, 1);
-    if (settings.volumeInput) appState.ttsSettings.volume = safeParseFloat(settings.volumeInput, 1.0);
-
-    AppParticles.updateCoreSphereSettings();
-    AppParticles.updateVisualEffects();
-    AppParticles.initStarfield();
-    this.updateCardPresetDescription();
-},
+            settings.showEnglish = appState.showEnglish;
+            settings.cardScaleMultiplier = appState.cardScaleMultiplier;
+            localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+        },
 
         loadSettings() {
             const raw = localStorage.getItem(APP_CONFIG.SETTINGS_STORAGE_KEY);
@@ -2024,6 +2128,16 @@ loadSettings() {
                 appState.showEnglish = !!settings.showEnglish;
                 const toggleLang = document.getElementById('toggleLanguage');
                 if (toggleLang) toggleLang.textContent = appState.showEnglish ? '中' : '英';
+            }
+
+            if (settings.hoverCardBgOpacity !== undefined) {
+                appState.rt.hoverBgOpacity = parseFloat(settings.hoverCardBgOpacity);
+            }
+
+            if (window.AppCardFactory) {
+                const br = settings.sphereCardBrightnessRange !== undefined ? parseFloat(settings.sphereCardBrightnessRange) : 0.50;
+                const exp = settings.cardExposureRange !== undefined ? parseFloat(settings.cardExposureRange) : 0.35;
+                AppCardFactory.updateCardsMaterialsFast({ brightness: br, exposure: exp });
             }
 
             if (settings.voiceSelect) appState.ttsSettings.voice = settings.voiceSelect;
@@ -2051,7 +2165,6 @@ loadSettings() {
     };
 
     window.AppUI = AppUI;
-
     window.addEventListener('DOMContentLoaded', () => {
         AppUI.init().catch(err => console.error('引导异常:', err));
     });

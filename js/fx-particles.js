@@ -1,9 +1,12 @@
 /**
  * 3D单词宇宙 - 空间粒子特效体系
- * 修复：全面打通视觉增强系统各项参数实时响应，并设立圆心安全禁区，消除中心白光爆炸
+ * 1. 旋臂粒子圆心避让空心化：彻底消除原先圆心数万粒子重叠堆积产生的过曝耀眼白斑
+ * 2. 引入旋臂亮度专用参数：支持任意调低或直接调至0彻底熄灭
  */
 (function() {
+    let _burstVelocities = null;
     const AppParticles = {
+        // ==================== 1. 核心能量球体 ====================
         initCoreSphere() {
             if (appState.coreSphere) {
                 appState.scene.remove(appState.coreSphere);
@@ -16,10 +19,10 @@
             if (isNaN(radius) || radius <= 0.1) radius = 0.1;
 
             const geometry = new THREE.SphereGeometry(radius, 48, 48);
-            const opacity = safeParseFloat(document.getElementById('coreSphereOpacity')?.value, 0.5);
+            const opacity = safeParseFloat(document.getElementById('coreSphereOpacity')?.value, 0.35);
             const color = getColor(document.getElementById('coreSphereColor')?.value || '#80D0FF', 'three');
             const emissive = getColor(document.getElementById('coreSphereEmissive')?.value || '#30A0FF', 'three');
-            const emissiveIntensity = safeParseFloat(document.getElementById('coreSphereEmissiveIntensity')?.value, 0.5);
+            const emissiveIntensity = safeParseFloat(document.getElementById('coreSphereEmissiveIntensity')?.value, 0.25);
 
             const material = new THREE.MeshStandardMaterial({
                 color: color,
@@ -29,7 +32,7 @@
                 transparent: true,
                 roughness: 0.8,
                 metalness: 0.1,
-                blending: THREE.NormalBlending, // 自然半透明混色，彻底杜绝过曝闪光弹
+                blending: THREE.AdditiveBlending,
                 depthWrite: false,
             });
 
@@ -52,8 +55,8 @@
 
             const color = getColor(document.getElementById('coreSphereColor')?.value || '#80D0FF', 'three');
             const emissive = getColor(document.getElementById('coreSphereEmissive')?.value || '#30A0FF', 'three');
-            const emissiveIntensity = safeParseFloat(document.getElementById('coreSphereEmissiveIntensity')?.value, 0.5);
-            const opacity = safeParseFloat(document.getElementById('coreSphereOpacity')?.value, 0.5);
+            const emissiveIntensity = safeParseFloat(document.getElementById('coreSphereEmissiveIntensity')?.value, 0.25);
+            const opacity = safeParseFloat(document.getElementById('coreSphereOpacity')?.value, 0.35);
 
             appState.coreSphere.material.color.set(color);
             appState.coreSphere.material.emissive.set(emissive);
@@ -64,6 +67,7 @@
             appState.needsRender = true;
         },
 
+        // ==================== 2. 宇宙涡旋 (Vortex) 与 辉光 (Bloom) ====================
         initVortex() {
             const enabled = document.getElementById('visualEffectsEnabled')?.checked || false;
 
@@ -79,74 +83,76 @@
                 return;
             }
 
-            const defaultCount = IS_MOBILE_DEVICE ? 6000 : 50000;
+            const brightness = safeParseFloat(document.getElementById('vortexBrightnessRange')?.value, 0.55);
+            if (brightness <= 0.001) {
+                appState.needsRender = true;
+                return; // 用户已将亮度调至 0，彻底不生成或渲染旋臂光芒
+            }
+
+            const coreRadius = safeParseFloat(document.getElementById('vortexCoreRadiusRange')?.value, 70);
+            const defaultCount = IS_MOBILE_DEVICE ? 6000 : 40000;
             let particleCount = safeParseInt(document.getElementById('vortexParticleCount')?.value, defaultCount);
+            if (isNaN(particleCount) || particleCount <= 0) particleCount = defaultCount;
 
             const positions = new Float32Array(particleCount * 3);
             const colors = new Float32Array(particleCount * 3);
+            const randoms = new Float32Array(particleCount);
 
             const numArms = 4;
+            const radius = 800;
             let tightness = safeParseFloat(document.getElementById('vortexTightness')?.value, 1.5);
-            const colorHex = document.getElementById('vortexColor')?.value || '#5588ff';
-            const color = AppMath.color.set(colorHex);
+            if (isNaN(tightness)) tightness = 1.5;
 
-            // 设立圆心安全禁区，杜绝中心过曝
-            const innerRadius = 88;
-            const outerRadius = 850;
+            const color = AppMath.color.set(document.getElementById('vortexColor')?.value || '#5588ff');
 
             for (let i = 0; i < particleCount; i++) {
                 const armIndex = i % numArms;
                 const spinAngle = (i / particleCount) * tightness * 2 * Math.PI;
                 const armAngle = (armIndex / numArms) * 2 * Math.PI;
 
-                const radNorm = Math.sqrt(Math.random());
-                const randomRadius = innerRadius + radNorm * (outerRadius - innerRadius);
+                // ★ 核心修复：引入 coreRadius 避开圆心区域，且粒子按 1.35 次方发散，绝不在 (0,0) 堆积白斑
+                const randomRadius = coreRadius + Math.pow(Math.random(), 1.35) * (radius - coreRadius);
                 const angle = spinAngle + armAngle;
 
                 positions[i * 3] = Math.cos(angle) * randomRadius;
-                positions[i * 3 + 1] = (Math.random() - 0.5) * 85;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 80;
                 positions[i * 3 + 2] = Math.sin(angle) * randomRadius;
 
-                const variation = (Math.random() * 0.4 + 0.6) * 0.7;
+                const variation = (Math.random() * 0.4 + 0.6) * Math.min(1.0, brightness);
                 colors[i * 3] = color.r * variation;
                 colors[i * 3 + 1] = color.g * variation;
                 colors[i * 3 + 2] = color.b * variation;
+                randoms[i] = Math.random();
             }
 
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 1));
 
-            const size = safeParseFloat(document.getElementById('vortexSize')?.value, 1.5);
+            const size = safeParseFloat(document.getElementById('vortexSize')?.value, 1.2);
             const material = new THREE.PointsMaterial({
                 size: size,
                 vertexColors: true,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false,
                 transparent: true,
-                opacity: 0.38
+                opacity: Math.max(0.0, Math.min(1.0, brightness))
             });
 
             appState.vortexParticles = new THREE.Points(geometry, material);
             appState.scene.add(appState.vortexParticles);
-            appState.vortexParticles.visible = true;
-
-            const spd = safeParseFloat(document.getElementById('vortexSpeed')?.value, 0.003);
-            appState.rt.vortexSpeed = Math.max(0.001, Math.min(0.01, spd));
-
+            appState.vortexParticles.visible = (brightness > 0.005);
             this.updateBloomSettings();
             appState.needsRender = true;
         },
 
         updateBloomSettings() {
             const enabled = document.getElementById('visualEffectsEnabled')?.checked || false;
-            const strength = safeParseFloat(document.getElementById('bloomStrength')?.value, 0.5);
-
             if (appState.bloomPass) {
-                // 彻底熄灭：强度归零时彻底停用 Pass 通道
-                appState.bloomPass.enabled = (enabled && strength > 0.001);
-                appState.bloomPass.threshold = safeParseFloat(document.getElementById('bloomThreshold')?.value, 0.85);
-                appState.bloomPass.strength = Math.max(0, strength);
+                appState.bloomPass.enabled = enabled;
+                appState.bloomPass.threshold = safeParseFloat(document.getElementById('bloomThreshold')?.value, 0.88);
+                appState.bloomPass.strength = safeParseFloat(document.getElementById('bloomStrength')?.value, 0.25);
                 appState.bloomPass.radius = safeParseFloat(document.getElementById('bloomRadius')?.value, 0.2);
             }
         },
@@ -158,32 +164,36 @@
             if (enabled && !appState.vortexParticles) {
                 this.initVortex();
             } else if (appState.vortexParticles) {
-                appState.vortexParticles.visible = enabled;
-            }
-
-            const spd = safeParseFloat(document.getElementById('vortexSpeed')?.value, 0.003);
-            appState.rt.vortexSpeed = Math.max(0.001, Math.min(0.01, spd));
-
-            // 实时更新已有粒子的大小与色彩
-            if (appState.vortexParticles && enabled) {
-                const size = safeParseFloat(document.getElementById('vortexSize')?.value, 1.5);
-                appState.vortexParticles.material.size = size;
-                const colorHex = document.getElementById('vortexColor')?.value || '#5588ff';
-                const color = AppMath.color.set(colorHex);
-                const colors = appState.vortexParticles.geometry.attributes.color;
-                if (colors) {
-                    for (let i = 0; i < colors.count; i++) {
-                        const variation = (Math.random() * 0.4 + 0.6) * 0.7;
-                        colors.setXYZ(i, color.r * variation, color.g * variation, color.b * variation);
-                    }
-                    colors.needsUpdate = true;
+                const brightness = safeParseFloat(document.getElementById('vortexBrightnessRange')?.value, 0.55);
+                appState.vortexParticles.visible = enabled && (brightness > 0.005);
+                if (appState.vortexParticles.material) {
+                    appState.vortexParticles.material.opacity = Math.max(0.0, Math.min(1.0, brightness));
+                    appState.vortexParticles.material.needsUpdate = true;
                 }
             }
 
             this.updateBloomSettings();
+
+            if (appState.vortexParticles && enabled) {
+                const colorHex = document.getElementById('vortexColor')?.value || '#5588ff';
+                const brightness = safeParseFloat(document.getElementById('vortexBrightnessRange')?.value, 0.55);
+                const color = new THREE.Color(colorHex);
+                const colors = appState.vortexParticles.geometry.attributes.color;
+                if (colors) {
+                    for (let i = 0; i < colors.count; i++) {
+                        const variation = (Math.random() * 0.4 + 0.6) * Math.min(1.0, brightness);
+                        colors.setXYZ(i, color.r * variation, color.g * variation, color.b * variation);
+                    }
+                    colors.needsUpdate = true;
+                }
+                const vSize = safeParseFloat(document.getElementById('vortexSize')?.value, 1.2);
+                appState.vortexParticles.material.size = vSize;
+                appState.vortexParticles.material.needsUpdate = true;
+            }
             appState.needsRender = true;
         },
 
+        // ==================== 3. 星空背景 ====================
         initStarfield() {
             if (appState.starfield) {
                 appState.scene.remove(appState.starfield);
@@ -211,7 +221,8 @@
                 const distance = Math.cbrt(Math.random()) * 3000;
                 const theta = Math.random() * Math.PI * 2;
                 const rawVal = (Math.random() * 2) - 1;
-                const phi = Math.acos(Math.min(Math.max(rawVal, -1), 1));
+                const acosVal = Math.min(Math.max(rawVal, -1), 1);
+                const phi = Math.acos(acosVal);
 
                 positions[i * 3] = distance * Math.sin(phi) * Math.cos(theta);
                 positions[i * 3 + 1] = distance * Math.sin(phi) * Math.sin(theta);
@@ -229,12 +240,166 @@
 
             const size = safeParseFloat(document.getElementById('starSize')?.value, 0.8);
             const material = new THREE.PointsMaterial({
-                size: size, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true
+                size: size,
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                transparent: true
             });
 
             appState.starfield = new THREE.Points(geometry, material);
+            appState.starfield.matrixAutoUpdate = false;
             appState.scene.add(appState.starfield);
             appState.needsRender = true;
+        },
+
+        // ==================== 4. 动态背景粒子与 CSS 渐变 ====================
+        initDynamicBackground() {
+            if (appState.dynamicBgParticles) {
+                appState.scene.remove(appState.dynamicBgParticles);
+                if (appState.dynamicBgParticles.geometry) appState.dynamicBgParticles.geometry.dispose();
+                if (appState.dynamicBgParticles.material) appState.dynamicBgParticles.material.dispose();
+                appState.dynamicBgParticles = null;
+            }
+
+            const defaultCount = IS_MOBILE_DEVICE ? 40 : 300;
+            let particleCount = safeParseInt(document.getElementById('dynamicBgParticleCount')?.value, defaultCount);
+            if (isNaN(particleCount) || particleCount <= 0) return;
+
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            const sizes = new Float32Array(particleCount);
+
+            const c = AppMath.color;
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = THREE.MathUtils.randFloatSpread(3000);
+                positions[i * 3 + 1] = THREE.MathUtils.randFloatSpread(3000);
+                positions[i * 3 + 2] = THREE.MathUtils.randFloatSpread(3000) - 1500;
+
+                c.setHSL(Math.random() * 0.3 + 0.55, 0.8, Math.random() * 0.3 + 0.4);
+                colors[i * 3] = c.r;
+                colors[i * 3 + 1] = c.g;
+                colors[i * 3 + 2] = c.b;
+                sizes[i] = Math.random() * 3 + 1;
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            const material = new THREE.PointsMaterial({
+                size: 15,
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                opacity: 0.6,
+                depthTest: false,
+                depthWrite: false,
+                sizeAttenuation: true
+            });
+
+            appState.dynamicBgParticles = new THREE.Points(geometry, material);
+            appState.dynamicBgParticles.renderOrder = -2;
+            if (IS_MOBILE_DEVICE) {
+                appState.dynamicBgParticles.matrixAutoUpdate = false;
+            }
+
+            appState.scene.add(appState.dynamicBgParticles);
+            this.updateDynamicBackgroundCSS();
+            appState.needsRender = true;
+        },
+
+        updateDynamicBackgroundCSS() {
+            const hueStart = document.getElementById('dynamicBgHueStart')?.value || '230';
+            const hueEnd = document.getElementById('dynamicBgHueEnd')?.value || '270';
+            const lightness = document.getElementById('dynamicBgLightness')?.value || '10';
+            document.documentElement.style.setProperty('--dynamic-bg-hue-start', hueStart);
+            document.documentElement.style.setProperty('--dynamic-bg-hue-end', hueEnd);
+            document.documentElement.style.setProperty('--dynamic-bg-lightness', `${lightness}%`);
+        },
+
+        // ==================== 5. 点击爆发粒子 ====================
+        initClickBurstParticles() {
+            const count = 80;
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+            const baseSizes = new Float32Array(count);
+            for (let i = 0; i < count; i++) {
+                const c = new THREE.Color();
+                c.setHSL(Math.random() * 0.23 + 0.47, 0.9, 0.8);
+                colors[i * 3] = c.r;
+                colors[i * 3 + 1] = c.g;
+                colors[i * 3 + 2] = c.b;
+                baseSizes[i] = Math.random() * 1.7 + 0.7;
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.setAttribute('baseSize', new THREE.Float32BufferAttribute(baseSizes, 1));
+
+            const material = new THREE.PointsMaterial({
+                vertexColors: true, size: 1, transparent: true,
+                opacity: 0.94, blending: THREE.AdditiveBlending, depthWrite: false
+            });
+
+            appState.clickBurstParticles = new THREE.Points(geometry, material);
+            appState.clickBurstParticles.visible = false;
+            appState.scene.add(appState.clickBurstParticles);
+        },
+
+        triggerClickBurst(position, customColorHSL = null) {
+            if (!appState.clickBurstParticles) return;
+
+            const geometry = appState.clickBurstParticles.geometry;
+            const particles = geometry.attributes.position;
+            const colorsAttr = geometry.attributes.color;
+            const count = particles.count;
+
+            if (!_burstVelocities || _burstVelocities.length < count * 3) {
+                _burstVelocities = new Float32Array(count * 3);
+            }
+
+            const c = AppMath.color;
+            for (let i = 0; i < count; i++) {
+                particles.setXYZ(i, position.x, position.y, position.z);
+                _burstVelocities[i * 3] = (Math.random() - 0.5) * 0.7;
+                _burstVelocities[i * 3 + 1] = (Math.random() - 0.13) * 0.7;
+                _burstVelocities[i * 3 + 2] = (Math.random() - 0.5) * 0.7;
+
+                if (customColorHSL) {
+                    c.setHSL(customColorHSL.h, customColorHSL.s, customColorHSL.l + (Math.random() * 0.15 - 0.07));
+                    colorsAttr.setXYZ(i, c.r, c.g, c.b);
+                }
+            }
+
+            particles.needsUpdate = true;
+            if (customColorHSL) colorsAttr.needsUpdate = true;
+            appState.clickBurstParticles.visible = true;
+            let startTime = performance.now();
+
+            function run() {
+                const elapsed = (performance.now() - startTime) / 1000;
+                if (elapsed > 1.4) {
+                    appState.clickBurstParticles.visible = false;
+                    appState.needsRender = true;
+                    return;
+                }
+
+                const posArray = particles.array;
+                for (let i = 0; i < count; i++) {
+                    const idx = i * 3;
+                    posArray[idx] += _burstVelocities[idx];
+                    posArray[idx + 1] += _burstVelocities[idx + 1];
+                    posArray[idx + 2] += _burstVelocities[idx + 2];
+                }
+
+                particles.needsUpdate = true;
+                appState.clickBurstParticles.material.opacity = 0.97 - (elapsed / 1.4);
+                appState.needsRender = true;
+                requestAnimationFrame(run);
+            }
+            run();
         },
 
         initNebulaColors() {
@@ -246,11 +411,11 @@
                 h2 = (h2 + 0.055) % 360;
                 if (neb1) neb1.style.background = `radial-gradient(circle, hsla(${h1}, 80%, 60%, 0.8) 0%, transparent 70%)`;
                 if (neb2) neb2.style.background = `radial-gradient(circle, hsla(${h2}, 70%, 65%, 0.7) 0%, transparent 70%)`;
+                appState.needsRender = true;
                 requestAnimationFrame(update);
             }
             requestAnimationFrame(update);
         }
     };
-
     window.AppParticles = AppParticles;
 })();

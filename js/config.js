@@ -1,5 +1,5 @@
 /**
- * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量 (V8.5 增强版)
+ * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量 (V8.6 增强版)
  */
 const IS_MOBILE_DEVICE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
 
@@ -116,6 +116,9 @@ const appState = {
     activeNoteWord: null,
     editingNoteId: null,
     needsRender: true,
+
+    // ★ 查词卡常驻保持状态 (锁定不自动淡出)
+    isHoverCardPinned: false,
     
     rt: {
         rotateX: true, rotateY: true, rotateZ: false,
