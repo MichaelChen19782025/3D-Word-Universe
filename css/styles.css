@@ -152,22 +152,102 @@ body {
     position: fixed; top: 0; right: 0; width: var(--immersive-panel-width); height: 100%;
     background: var(--panel-bg); backdrop-filter: blur(24px); border-left: 3px solid var(--border-color);
     box-shadow: -13px 0 75px rgba(0,0,0,0.8), inset 11px 0 20px rgba(var(--panel-bg-rgb),0.6);
-    transform: translateX(100%); transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 1);
+    transform: translateX(100%); 
+    visibility: hidden; /* ★ 核心修复：未呼出时彻底隐藏，杜绝关闭按钮露头 */
+    pointer-events: none;
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 1), opacity 0.3s ease, visibility 0.4s;
     z-index: 99; display: flex; flex-direction: column; color: #EAF0FF;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-.immersive-detail-panel.visible { transform: translateX(0); }
+.immersive-detail-panel.visible { 
+    transform: translateX(0); 
+    visibility: visible !important;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+}
 .immersive-detail-panel.left-aligned {
     right: auto; left: 0; transform: translateX(-100%); border-left: none; border-right: 3px solid var(--border-color);
     box-shadow: 13px 0 75px rgba(0, 0, 0, 0.8), inset -11px 0 20px rgba(var(--panel-bg-rgb),0.6);
 }
 .immersive-detail-panel.left-aligned.visible { transform: translateX(0); }
 
+/* ★ 核心升级：详情面板大号关闭按钮，固定在垂直50%居中，仅在面板呼出时出现 */
+#closeDetailBtn {
+    position: absolute;
+    top: 50%;
+    left: -48px;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 120px;
+    background: linear-gradient(180deg, rgba(16, 44, 96, 0.98), rgba(6, 18, 44, 0.98));
+    border: 2px solid var(--accent-color-2);
+    border-right: none;
+    border-radius: 20px 0 0 20px;
+    color: #00f0ff;
+    cursor: pointer;
+    z-index: 105;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: -8px 0 32px rgba(0, 240, 255, 0.6);
+    backdrop-filter: blur(12px);
+    transition: all 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    padding: 0;
+    user-select: none;
+}
+#closeDetailBtn:hover {
+    background: linear-gradient(180deg, rgba(30, 85, 180, 0.98), rgba(12, 34, 80, 0.98));
+    color: #ffffff;
+    width: 56px;
+    left: -56px;
+    box-shadow: -10px 0 40px rgba(0, 240, 255, 0.85);
+}
+#closeDetailBtn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+#closeDetailBtn .close-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+    font-weight: 900;
+}
+#closeDetailBtn .close-text {
+    writing-mode: vertical-rl;
+    font-size: 0.82rem;
+    letter-spacing: 3px;
+    color: #b9f6ff;
+    font-weight: 700;
+}
+
+/* 详情面板未呼出时，关闭按钮绝对不显示 */
+.immersive-detail-panel:not(.visible) #closeDetailBtn {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+}
+
+/* 当详情面板切换到左侧对齐时，关闭按钮自适应挂在右侧垂直正中 */
+.immersive-detail-panel.left-aligned #closeDetailBtn {
+    left: auto;
+    right: -48px;
+    border-radius: 0 20px 20px 0;
+    border-left: none;
+    border-right: 2px solid var(--accent-color-2);
+    box-shadow: 8px 0 32px rgba(0, 240, 255, 0.6);
+}
+.immersive-detail-panel.left-aligned #closeDetailBtn:hover {
+    right: -56px;
+    width: 56px;
+    box-shadow: 10px 0 40px rgba(0, 240, 255, 0.85);
+}
+
 .immersive-detail-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border-color); gap: 15px; }
 .immersive-detail-header h2 { font-size: 1.35rem; color: var(--accent-color-1); flex-shrink: 0; }
-#closeDetailBtn { background: transparent; border: none; color: white; font-size: 1.8rem; cursor: pointer; transition: color 0.3s, transform 0.3s; }
-#closeDetailBtn:hover { color: var(--accent-color-2); transform: rotate(90deg); }
+.header-controls { display: flex; align-items: center; gap: 8px; }
 
 .immersive-detail-content {
     padding: 20px; overflow-y: auto; flex-grow: 1;
@@ -366,47 +446,145 @@ body {
     border-color: #68FFC0 !important; background: rgba(104, 255, 192, 0.25) !important;
 }
 
+/* ==================== 左右上角 HUD 控件：1.5倍强化与常驻50%半透明/激活100% ==================== */
 #clockHud {
-    position: fixed; top: 18px; left: 20px; z-index: 45;
-    font-size: 1.45rem; font-weight: 700; color: #eaf6ff;
-    text-shadow: 0 0 12px rgba(0, 200, 255, 0.75);
-    opacity: 0.62; pointer-events: none; user-select: none;
-    padding: 5px 12px; border-radius: 9px;
-    background: rgba(10, 20, 48, 0.28); backdrop-filter: blur(3px);
-    border: 1px solid rgba(135, 205, 255, 0.22);
+    position: fixed; 
+    top: 20px; 
+    left: 22px; 
+    z-index: 45;
+    font-size: 2.15rem; /* 1.5倍特大字号 */
+    font-weight: 800; 
+    color: #eaf6ff;
+    letter-spacing: 1.5px;
+    text-shadow: 0 0 15px rgba(0, 200, 255, 0.75);
+    opacity: 0.50; /* 平时 50% 半透明 */
+    pointer-events: auto; 
+    user-select: none;
+    padding: 8px 18px; 
+    border-radius: 14px;
+    background: rgba(10, 20, 48, 0.42); 
+    backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(135, 205, 255, 0.35);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+#clockHud:hover, #clockHud:active {
+    opacity: 1.0 !important; /* 激活时完全显示 */
+    transform: scale(1.03);
+    border-color: var(--accent-color-2);
+    box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
 }
 
 #topRightHudBar {
-    position: fixed; top: 16px; right: 16px; z-index: 46;
-    display: flex; align-items: center; gap: 8px; pointer-events: auto;
-}
-#studyCounterHud {
-    display: flex; align-items: center; gap: 7px; font-size: 1.35rem; font-weight: 700;
-    color: #b9f6ff; opacity: 0.88; cursor: pointer; user-select: none;
-    padding: 5px 12px; border-radius: 11px;
-    background: rgba(10, 20, 48, 0.35); backdrop-filter: blur(4px);
-    border: 1px solid rgba(135, 205, 255, 0.25);
+    position: fixed; 
+    top: 18px; 
+    right: 20px; 
+    z-index: 46;
+    display: flex; 
+    align-items: center; 
+    gap: 12px; 
+    pointer-events: auto;
 }
 
-/* 巡航 HUD 样式：默认折叠状态 */
+#studyCounterHud {
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    font-size: 1.95rem; /* 1.5倍特大字号 */
+    font-weight: 800;
+    color: #b9f6ff; 
+    opacity: 0.50; /* 平时 50% 半透明 */
+    cursor: pointer; 
+    user-select: none;
+    padding: 8px 18px; 
+    border-radius: 16px;
+    min-height: 48px;
+    background: rgba(10, 20, 48, 0.45); 
+    backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(135, 205, 255, 0.35);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+#studyCounterHud:hover, #studyCounterHud:active {
+    opacity: 1.0 !important; /* 激活时完全显示 */
+    transform: scale(1.03);
+    border-color: var(--accent-color-2);
+    box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
+}
+.study-counter-icon { font-size: 1.85rem; }
+.study-goal-sep { font-size: 1.55rem; opacity: 0.6; }
+
+/* 巡航 HUD 控件 */
 #focusCruiseHud {
-    display: flex; align-items: center; font-size: 0.85rem; font-weight: 700;
-    user-select: none; padding: 5px 9px; border-radius: 11px;
-    backdrop-filter: blur(5px); cursor: pointer; white-space: nowrap;
+    display: flex; 
+    align-items: center; 
+    font-size: 1.25rem; /* 1.5倍尺寸 */
+    font-weight: 800;
+    user-select: none; 
+    padding: 8px 14px; 
+    border-radius: 16px;
+    min-height: 48px;
+    backdrop-filter: blur(8px); 
+    cursor: pointer; 
+    white-space: nowrap;
+    opacity: 0.50; /* 平时 50% 半透明 */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+#focusCruiseHud:hover, 
+#focusCruiseHud:active, 
+#focusCruiseHud.expanded {
+    opacity: 1.0 !important; /* 鼠标移入、点击或展开时完全高亮 */
+    transform: scale(1.02);
 }
 #focusCruiseHud.enabled {
-    color: #ffd875; border: 1px solid rgba(255, 216, 117, 0.55);
-    background: rgba(14, 28, 60, 0.88); opacity: 0.95;
+    color: #ffd875; 
+    border: 1.5px solid rgba(255, 216, 117, 0.65);
+    background: rgba(14, 28, 60, 0.88);
 }
 #focusCruiseHud.disabled {
-    color: #8fa0b5; border: 1px dashed rgba(140, 160, 190, 0.3);
-    background: rgba(10, 20, 48, 0.35); opacity: 0.55;
+    color: #8fa0b5; 
+    border: 1.5px dashed rgba(140, 160, 190, 0.35);
+    background: rgba(10, 20, 48, 0.45);
 }
-.focus-cruise-trigger { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 6px; }
-.focus-cruise-expand-panel { display: none; align-items: center; gap: 5px; margin-left: 6px; padding-left: 6px; border-left: 1px solid rgba(255, 255, 255, 0.22); }
+.focus-cruise-trigger { 
+    display: flex; 
+    align-items: center; 
+    gap: 6px; 
+    padding: 2px 6px; 
+    border-radius: 8px; 
+    font-size: 1.25rem;
+}
+.focus-cruise-expand-panel { 
+    display: none; 
+    align-items: center; 
+    gap: 8px; 
+    margin-left: 8px; 
+    padding-left: 8px; 
+    border-left: 1.5px solid rgba(255, 255, 255, 0.28); 
+}
 #focusCruiseHud.expanded .focus-cruise-expand-panel { display: flex; }
-.focus-pill { cursor: pointer; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px; padding: 2px 6px; font-family: 'Consolas', monospace; font-size: 0.82rem; }
-.focus-pill:hover { background: rgba(0, 240, 255, 0.25); border-color: var(--accent-color-2); color: #fff; }
+.focus-pill { 
+    cursor: pointer; 
+    background: rgba(255, 255, 255, 0.12); 
+    border: 1px solid rgba(255, 255, 255, 0.28); 
+    border-radius: 8px; 
+    padding: 3px 8px; 
+    font-family: 'Consolas', monospace; 
+    font-size: 1.12rem; 
+}
+.focus-pill:hover { 
+    background: rgba(0, 240, 255, 0.30); 
+    border-color: var(--accent-color-2); 
+    color: #fff; 
+}
+.hud-status-tag {
+    font-size: 1.15rem;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 216, 117, 0.22);
+    border: 1px solid rgba(255, 216, 117, 0.55);
+}
 
 .hidden { display: none !important; }
 
@@ -415,7 +593,28 @@ body {
         --immersive-panel-width: 100%;
     }
 
-    /* ★ 修复 1：左侧设置中心抽屉在手机端宽度由 52vw 放大至 86vw，字号全面放大 */
+    /* 移动端详情面板关闭按钮：贴合屏幕边缘垂直正中，保持超大触控热区 */
+    #closeDetailBtn {
+        left: 0 !important;
+        width: 44px !important;
+        height: 120px !important;
+        border-radius: 0 18px 18px 0 !important;
+        border-left: none !important;
+        border-right: 2px solid var(--accent-color-2) !important;
+        box-shadow: 6px 0 25px rgba(0, 240, 255, 0.6) !important;
+    }
+    .immersive-detail-panel.left-aligned #closeDetailBtn {
+        left: auto !important;
+        right: 0 !important;
+        border-radius: 18px 0 0 18px !important;
+        border-right: none !important;
+        border-left: 2px solid var(--accent-color-2) !important;
+        box-shadow: -6px 0 25px rgba(0, 240, 255, 0.6) !important;
+    }
+    .immersive-detail-content {
+        padding-left: 54px !important;
+    }
+
     .controls-overlay {
         width: min(390px, 86vw) !important;
         font-size: 0.95rem !important;
@@ -443,30 +642,38 @@ body {
         font-size: 0.85rem !important;
     }
 
-    /* ★ 修复 2：右上角学习数字与巡航按钮在手机端显著放大，易于辨识与轻触 */
+    #clockHud {
+        top: 12px !important;
+        left: 12px !important;
+        font-size: 1.65rem !important;
+        padding: 6px 12px !important;
+    }
+
     #topRightHudBar {
-        top: 10px !important;
-        right: 10px !important;
+        top: 12px !important;
+        right: 12px !important;
         gap: 8px !important;
     }
     #studyCounterHud {
-        font-size: 1.45rem !important;
-        padding: 6px 14px !important;
-        min-height: 40px !important;
-        border-radius: 12px !important;
+        font-size: 1.55rem !important;
+        padding: 6px 12px !important;
+        min-height: 42px !important;
+        border-radius: 14px !important;
     }
+    .study-counter-icon { font-size: 1.45rem !important; }
+    .study-goal-sep { font-size: 1.25rem !important; }
     #focusCruiseHud {
-        font-size: 0.92rem !important;
+        font-size: 1.05rem !important;
         padding: 6px 10px !important;
-        min-height: 40px !important;
-        border-radius: 12px !important;
+        min-height: 42px !important;
+        border-radius: 14px !important;
     }
+    .focus-cruise-trigger { font-size: 1.05rem !important; }
     .focus-pill {
-        font-size: 0.85rem !important;
-        padding: 3px 7px !important;
+        font-size: 0.95rem !important;
+        padding: 2px 6px !important;
     }
 
-    /* ★ 修复 3：右侧浮动操作栏与平移摇杆放大为大拇指黄金触控尺寸 */
     .view-controls {
         bottom: 18px !important;
         right: 14px !important;
@@ -486,7 +693,6 @@ body {
         padding: 6px !important;
     }
 
-    /* 视角管理面板在手机端全宽适配 */
     #managementPanel {
         width: calc(100% - 24px) !important;
         right: 12px !important;
