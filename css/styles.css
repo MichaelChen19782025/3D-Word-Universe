@@ -10,7 +10,7 @@
     --info-text-color: rgba(240, 250, 255, 0.98);
     --hover-text-color: #00f2ff;
 
-    --sphere-card-font-size: 30px;
+    --sphere-card-font-size: 36px;
     --sphere-card-font-color: #ffffff;
     --sphere-card-font-family: 'Microsoft YaHei', sans-serif;
     --sphere-card-bg-opacity: 0.8;
@@ -39,14 +39,18 @@
     -moz-osx-font-smoothing: grayscale; 
 }
 
-body {
+/* ★ 核心修复：移动端锁定全屏 touch-action，彻底阻断原生网页缩放，手势完全归属于 3D 画布 */
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
     background-color: #000000;
     color: #ffffff;
-    height: 100vh;
-    overflow: hidden;
-    position: relative;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
 }
 
 .universe-background {
@@ -70,8 +74,11 @@ body {
     to { transform: translate(105px, -65px) scale(1.38); opacity: 0.22; } 
 }
 
-.main-content { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-#wordSphere { width: 100%; height: 100%; cursor: grab; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 1); }
+.main-content, #wordSphere, #wordSphere canvas { 
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; 
+    touch-action: none;
+}
+#wordSphere { cursor: grab; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 1); }
 #wordSphere:active { cursor: grabbing; }
 
 /* 选项设置抽屉面板 */
@@ -84,6 +91,7 @@ body {
     transform: translateX(-100%); transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     z-index: 100; overflow: hidden; display: flex; flex-direction: column;
     font-size: 0.85rem;
+    touch-action: pan-y;
 }
 .controls-overlay.visible { transform: translateX(0); }
 
@@ -96,6 +104,7 @@ body {
     padding-bottom: calc(env(safe-area-inset-bottom, 15px) + 20px); 
     scrollbar-width: thin; 
     scrollbar-color: rgba(0, 240, 255, 0.5) rgba(10, 20, 48, 0.4);
+    touch-action: pan-y;
 }
 .panel-content::-webkit-scrollbar { width: 6px; height: 6px; }
 .panel-content::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.55); border-radius: 3px; }
@@ -153,7 +162,7 @@ body {
     background: var(--panel-bg); backdrop-filter: blur(24px); border-left: 3px solid var(--border-color);
     box-shadow: -13px 0 75px rgba(0,0,0,0.8), inset 11px 0 20px rgba(var(--panel-bg-rgb),0.6);
     transform: translateX(100%); 
-    visibility: hidden; /* ★ 核心修复：未呼出时彻底隐藏，杜绝关闭按钮露头 */
+    visibility: hidden;
     pointer-events: none;
     opacity: 0;
     transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 1), opacity 0.3s ease, visibility 0.4s;
@@ -173,7 +182,7 @@ body {
 }
 .immersive-detail-panel.left-aligned.visible { transform: translateX(0); }
 
-/* ★ 核心升级：详情面板大号关闭按钮，固定在垂直50%居中，仅在面板呼出时出现 */
+/* 详情面板大号关闭按钮，固定在垂直50%居中，仅在面板呼出时出现 */
 #closeDetailBtn {
     position: absolute;
     top: 50%;
@@ -222,7 +231,6 @@ body {
     font-weight: 700;
 }
 
-/* 详情面板未呼出时，关闭按钮绝对不显示 */
 .immersive-detail-panel:not(.visible) #closeDetailBtn {
     display: none !important;
     opacity: 0 !important;
@@ -230,7 +238,6 @@ body {
     visibility: hidden !important;
 }
 
-/* 当详情面板切换到左侧对齐时，关闭按钮自适应挂在右侧垂直正中 */
 .immersive-detail-panel.left-aligned #closeDetailBtn {
     left: auto;
     right: -48px;
@@ -362,15 +369,170 @@ body {
     pointer-events: auto;
 }
 
-/* 右侧悬浮垂直操作栏 */
+/* ==================== 左右上角 HUD 控件：硬件层加速、恒定尺寸与透明度 ==================== */
+#clockHud {
+    position: fixed; 
+    top: calc(18px + env(safe-area-inset-top, 0px)); 
+    left: calc(20px + env(safe-area-inset-left, 0px)); 
+    z-index: 45;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    touch-action: manipulation;
+    font-size: 2.15rem;
+    font-weight: 800; 
+    color: #eaf6ff;
+    letter-spacing: 1.5px;
+    text-shadow: 0 0 15px rgba(0, 200, 255, 0.75);
+    opacity: 0.50;
+    pointer-events: auto; 
+    user-select: none;
+    padding: 8px 18px; 
+    border-radius: 14px;
+    background: rgba(10, 20, 48, 0.42); 
+    backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(135, 205, 255, 0.35);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+#clockHud:hover, #clockHud:active {
+    opacity: 1.0 !important;
+    transform: translateZ(0) scale(1.03);
+    border-color: var(--accent-color-2);
+    box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
+}
+
+#topRightHudBar {
+    position: fixed; 
+    top: calc(16px + env(safe-area-inset-top, 0px)); 
+    right: calc(16px + env(safe-area-inset-right, 0px)); 
+    z-index: 46;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    touch-action: manipulation;
+    display: flex; 
+    align-items: center; 
+    gap: 12px; 
+    pointer-events: auto;
+}
+
+#studyCounterHud {
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    font-size: 1.95rem;
+    font-weight: 800;
+    color: #b9f6ff; 
+    opacity: 0.50;
+    cursor: pointer; 
+    user-select: none;
+    padding: 8px 18px; 
+    border-radius: 16px;
+    min-height: 48px;
+    background: rgba(10, 20, 48, 0.45); 
+    backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(135, 205, 255, 0.35);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+#studyCounterHud:hover, #studyCounterHud:active {
+    opacity: 1.0 !important;
+    transform: scale(1.03);
+    border-color: var(--accent-color-2);
+    box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
+}
+.study-counter-icon { font-size: 1.85rem; }
+.study-goal-sep { font-size: 1.55rem; opacity: 0.6; }
+
+#focusCruiseHud {
+    display: flex; 
+    align-items: center; 
+    font-size: 1.25rem;
+    font-weight: 800;
+    user-select: none; 
+    padding: 8px 14px; 
+    border-radius: 16px;
+    min-height: 48px;
+    backdrop-filter: blur(8px); 
+    cursor: pointer; 
+    white-space: nowrap;
+    opacity: 0.50;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+#focusCruiseHud:hover, 
+#focusCruiseHud:active, 
+#focusCruiseHud.expanded {
+    opacity: 1.0 !important;
+    transform: scale(1.02);
+}
+#focusCruiseHud.enabled {
+    color: #ffd875; 
+    border: 1.5px solid rgba(255, 216, 117, 0.65);
+    background: rgba(14, 28, 60, 0.88);
+}
+#focusCruiseHud.disabled {
+    color: #8fa0b5; 
+    border: 1.5px dashed rgba(140, 160, 190, 0.35);
+    background: rgba(10, 20, 48, 0.45);
+}
+.focus-cruise-trigger { 
+    display: flex; 
+    align-items: center; 
+    gap: 6px; 
+    padding: 2px 6px; 
+    border-radius: 8px; 
+    font-size: 1.25rem;
+}
+.focus-cruise-expand-panel { 
+    display: none; 
+    align-items: center; 
+    gap: 8px; 
+    margin-left: 8px; 
+    padding-left: 8px; 
+    border-left: 1.5px solid rgba(255, 255, 255, 0.28); 
+}
+#focusCruiseHud.expanded .focus-cruise-expand-panel { display: flex; }
+.focus-pill { 
+    cursor: pointer; 
+    background: rgba(255, 255, 255, 0.12); 
+    border: 1px solid rgba(255, 255, 255, 0.28); 
+    border-radius: 8px; 
+    padding: 3px 8px; 
+    font-family: 'Consolas', monospace; 
+    font-size: 1.12rem; 
+}
+.focus-pill:hover { 
+    background: rgba(0, 240, 255, 0.30); 
+    border-color: var(--accent-color-2); 
+    color: #fff; 
+}
+.hud-status-tag {
+    font-size: 1.15rem;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255, 216, 117, 0.22);
+    border: 1px solid rgba(255, 216, 117, 0.55);
+}
+
+/* 右侧悬浮垂直操作栏：GPU 合成层加速，防止被移动端触摸事件剥离 */
 .view-controls {
-    position: fixed; bottom: 25px; right: 25px; display: flex;
-    flex-direction: column-reverse; align-items: flex-end; gap: 10px; z-index: 50;
+    position: fixed; 
+    bottom: calc(25px + env(safe-area-inset-bottom, 0px)); 
+    right: calc(25px + env(safe-area-inset-right, 0px)); 
+    display: flex;
+    flex-direction: column-reverse; 
+    align-items: flex-end; 
+    gap: 10px; 
+    z-index: 50;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    touch-action: manipulation;
 }
 .view-controls-child-group { 
     display: none; flex-direction: column; gap: 8px; align-items: flex-end; 
     max-height: calc(100vh - 110px); overflow-y: auto; overflow-x: hidden;
     padding: 6px; scrollbar-width: none;
+    touch-action: pan-y;
 }
 .view-controls-child-group::-webkit-scrollbar { display: none; }
 .view-controls.expanded .view-controls-child-group { display: flex; }
@@ -423,6 +585,7 @@ body {
     border: 1.5px solid var(--accent-color-2); border-radius: 14px; padding: 14px;
     z-index: 52; max-height: calc(100vh - 120px); overflow-y: auto; width: 340px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.75), 0 0 25px rgba(0, 240, 255, 0.25);
+    touch-action: pan-y;
 }
 .mgmt-banner-tip {
     font-size: 0.74rem; color: #ffd875; background: rgba(255, 216, 117, 0.12);
@@ -446,146 +609,6 @@ body {
     border-color: #68FFC0 !important; background: rgba(104, 255, 192, 0.25) !important;
 }
 
-/* ==================== 左右上角 HUD 控件：1.5倍强化与常驻50%半透明/激活100% ==================== */
-#clockHud {
-    position: fixed; 
-    top: 20px; 
-    left: 22px; 
-    z-index: 45;
-    font-size: 2.15rem; /* 1.5倍特大字号 */
-    font-weight: 800; 
-    color: #eaf6ff;
-    letter-spacing: 1.5px;
-    text-shadow: 0 0 15px rgba(0, 200, 255, 0.75);
-    opacity: 0.50; /* 平时 50% 半透明 */
-    pointer-events: auto; 
-    user-select: none;
-    padding: 8px 18px; 
-    border-radius: 14px;
-    background: rgba(10, 20, 48, 0.42); 
-    backdrop-filter: blur(8px);
-    border: 1.5px solid rgba(135, 205, 255, 0.35);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-}
-#clockHud:hover, #clockHud:active {
-    opacity: 1.0 !important; /* 激活时完全显示 */
-    transform: scale(1.03);
-    border-color: var(--accent-color-2);
-    box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
-}
-
-#topRightHudBar {
-    position: fixed; 
-    top: 18px; 
-    right: 20px; 
-    z-index: 46;
-    display: flex; 
-    align-items: center; 
-    gap: 12px; 
-    pointer-events: auto;
-}
-
-#studyCounterHud {
-    display: flex; 
-    align-items: center; 
-    gap: 10px; 
-    font-size: 1.95rem; /* 1.5倍特大字号 */
-    font-weight: 800;
-    color: #b9f6ff; 
-    opacity: 0.50; /* 平时 50% 半透明 */
-    cursor: pointer; 
-    user-select: none;
-    padding: 8px 18px; 
-    border-radius: 16px;
-    min-height: 48px;
-    background: rgba(10, 20, 48, 0.45); 
-    backdrop-filter: blur(8px);
-    border: 1.5px solid rgba(135, 205, 255, 0.35);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-}
-#studyCounterHud:hover, #studyCounterHud:active {
-    opacity: 1.0 !important; /* 激活时完全显示 */
-    transform: scale(1.03);
-    border-color: var(--accent-color-2);
-    box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
-}
-.study-counter-icon { font-size: 1.85rem; }
-.study-goal-sep { font-size: 1.55rem; opacity: 0.6; }
-
-/* 巡航 HUD 控件 */
-#focusCruiseHud {
-    display: flex; 
-    align-items: center; 
-    font-size: 1.25rem; /* 1.5倍尺寸 */
-    font-weight: 800;
-    user-select: none; 
-    padding: 8px 14px; 
-    border-radius: 16px;
-    min-height: 48px;
-    backdrop-filter: blur(8px); 
-    cursor: pointer; 
-    white-space: nowrap;
-    opacity: 0.50; /* 平时 50% 半透明 */
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
-}
-#focusCruiseHud:hover, 
-#focusCruiseHud:active, 
-#focusCruiseHud.expanded {
-    opacity: 1.0 !important; /* 鼠标移入、点击或展开时完全高亮 */
-    transform: scale(1.02);
-}
-#focusCruiseHud.enabled {
-    color: #ffd875; 
-    border: 1.5px solid rgba(255, 216, 117, 0.65);
-    background: rgba(14, 28, 60, 0.88);
-}
-#focusCruiseHud.disabled {
-    color: #8fa0b5; 
-    border: 1.5px dashed rgba(140, 160, 190, 0.35);
-    background: rgba(10, 20, 48, 0.45);
-}
-.focus-cruise-trigger { 
-    display: flex; 
-    align-items: center; 
-    gap: 6px; 
-    padding: 2px 6px; 
-    border-radius: 8px; 
-    font-size: 1.25rem;
-}
-.focus-cruise-expand-panel { 
-    display: none; 
-    align-items: center; 
-    gap: 8px; 
-    margin-left: 8px; 
-    padding-left: 8px; 
-    border-left: 1.5px solid rgba(255, 255, 255, 0.28); 
-}
-#focusCruiseHud.expanded .focus-cruise-expand-panel { display: flex; }
-.focus-pill { 
-    cursor: pointer; 
-    background: rgba(255, 255, 255, 0.12); 
-    border: 1px solid rgba(255, 255, 255, 0.28); 
-    border-radius: 8px; 
-    padding: 3px 8px; 
-    font-family: 'Consolas', monospace; 
-    font-size: 1.12rem; 
-}
-.focus-pill:hover { 
-    background: rgba(0, 240, 255, 0.30); 
-    border-color: var(--accent-color-2); 
-    color: #fff; 
-}
-.hud-status-tag {
-    font-size: 1.15rem;
-    padding: 2px 8px;
-    border-radius: 6px;
-    background: rgba(255, 216, 117, 0.22);
-    border: 1px solid rgba(255, 216, 117, 0.55);
-}
-
 .hidden { display: none !important; }
 
 @media (max-width: 768px) {
@@ -593,7 +616,6 @@ body {
         --immersive-panel-width: 100%;
     }
 
-    /* 移动端详情面板关闭按钮：贴合屏幕边缘垂直正中，保持超大触控热区 */
     #closeDetailBtn {
         left: 0 !important;
         width: 44px !important;
@@ -643,15 +665,15 @@ body {
     }
 
     #clockHud {
-        top: 12px !important;
-        left: 12px !important;
+        top: calc(12px + env(safe-area-inset-top, 0px)) !important;
+        left: calc(12px + env(safe-area-inset-left, 0px)) !important;
         font-size: 1.65rem !important;
         padding: 6px 12px !important;
     }
 
     #topRightHudBar {
-        top: 12px !important;
-        right: 12px !important;
+        top: calc(12px + env(safe-area-inset-top, 0px)) !important;
+        right: calc(12px + env(safe-area-inset-right, 0px)) !important;
         gap: 8px !important;
     }
     #studyCounterHud {
@@ -675,8 +697,8 @@ body {
     }
 
     .view-controls {
-        bottom: 18px !important;
-        right: 14px !important;
+        bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
+        right: calc(14px + env(safe-area-inset-right, 0px)) !important;
         gap: 8px !important;
     }
     .control-btn {
