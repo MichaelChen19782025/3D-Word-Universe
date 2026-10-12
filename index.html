@@ -2,6 +2,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<!-- ★ 核心视口修复：锁定移动端视口与安全边距，彻底杜绝手机双指缩放导致的 HUD 控件移出屏幕消失 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="HandheldFriendly" content="true">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -80,8 +83,8 @@
 <button id="clearShieldedBtn" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #7c3aed, #4f46e5);">清除屏蔽词库 (0)</button>
 <button id="exportJSONBtn" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #059669, #10b981);">导出词库数据 (含备注 JSON)</button>
 <button id="filterBtn" class="action-btn secondary-btn" style="margin-top: 8px;">筛选与学习模式</button>
-<button id="exportSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导出系统设置</button>
-<button id="importSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导入系统设置</button>
+<button id="exportSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导出系统全量设置 (JSON)</button>
+<button id="importSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导入系统全量设置 (JSON)</button>
 </div>
 
 <!-- 3D立体卡片与内腔泛光引擎 -->
@@ -174,7 +177,6 @@
                 <option value="sync_sphere">联动球体样机</option>
             </select>
         </div>
-        <!-- ★ 新增：查词卡在屏幕上的自动停留显示时长调节 -->
         <div class="setting-item">
             <label for="hoverCardDurationRange" title="设置悬浮查词卡呼出后在屏幕上的自动停留显示时长 (秒)，超时后自动淡出">查词卡停留时长 (秒)</label>
             <input type="range" id="hoverCardDurationRange" min="1.0" max="30.0" value="5.0" step="0.5">
@@ -263,7 +265,6 @@
     </div>
     <div class="appearance-group">
         <h4>宇宙涡旋旋臂 (Vortex)</h4>
-        <!-- ★ 新增：旋臂粒子亮度（支持调至0完全熄灭）与圆心空心避让半径（彻底去除圆心白斑） -->
         <div class="setting-item">
             <label for="vortexBrightnessRange" title="调节旋臂粒子的整体亮度，支持调节到0彻底熄灭中央与旋臂光芒">旋臂粒子亮度 (可调至0)</label>
             <input type="range" id="vortexBrightnessRange" min="0.0" max="2.0" value="0.55" step="0.05">
