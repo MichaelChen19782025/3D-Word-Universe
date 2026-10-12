@@ -6,14 +6,26 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a1430">
-<title>3D单词宇宙 (V8.6 完美修复版)</title>
+<title>3D单词宇宙 (V8.6 极速联动版)</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230a1c3d' stroke='%2300f0ff' stroke-width='6'/><text x='50' y='58' font-size='32' text-anchor='middle' fill='%2368d0ff' font-family='sans-serif'>🪐</text></svg>">
-<link rel="manifest" href="./manifest.json">
+
+<!-- 安全按需载入 PWA Manifest：避免在 file:/// 协议下触发浏览器跨域安全拦截错误 -->
+<script>
+    if (window.location.protocol.startsWith('http')) {
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = './manifest.json';
+        document.head.appendChild(link);
+    }
+</script>
+
 <link rel="stylesheet" href="./css/styles.css">
 
 <!-- 核心三维引擎及控件 (CDN) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lights/RectAreaLightUniformsLib.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
@@ -94,10 +106,18 @@
         <h4>🔤 卡片文字与清晰度调节</h4>
         <div class="setting-item">
             <label for="sphereCardFontSize" title="卡片内部单独字号大小 (不改变卡片几何尺寸)">卡片文字大小</label>
-            <input type="range" id="sphereCardFontSize" min="16" max="64" value="30" step="1">
+            <input type="range" id="sphereCardFontSize" min="16" max="72" value="36" step="1">
         </div>
         <div class="setting-item">
-            <label for="cardBrightnessRange" title="提升文字自发光亮度，防止在阴影下变暗">文字发光清晰度</label>
+            <label for="cardExposureRange" title="调节卡片表面对环境灯光的反射强度，设低(如0.15~0.35)可杜绝泛白反光，设高则反射环境光">卡片受光强弱</label>
+            <input type="range" id="cardExposureRange" min="0.0" max="1.5" value="0.35" step="0.02">
+        </div>
+        <div class="setting-item">
+            <label for="sphereCardBrightnessRange" title="调节球面上所有卡片的整体自发光亮度，防止过暗或过亮">卡片发光亮度</label>
+            <input type="range" id="sphereCardBrightnessRange" min="0.0" max="2.0" value="0.50" step="0.02">
+        </div>
+        <div class="setting-item">
+            <label for="cardBrightnessRange" title="提升文字自发光对比度，防止在阴影下变暗">文字清晰对比度</label>
             <input type="range" id="cardBrightnessRange" min="0.2" max="3.0" value="1.0" step="0.05">
         </div>
         <div class="setting-item">
@@ -153,6 +173,11 @@
                 <option value="classic_hud">经典星云赛博</option>
                 <option value="sync_sphere">联动球体样机</option>
             </select>
+        </div>
+        <!-- ★ 新增：查词卡在屏幕上的自动停留显示时长调节 -->
+        <div class="setting-item">
+            <label for="hoverCardDurationRange" title="设置悬浮查词卡呼出后在屏幕上的自动停留显示时长 (秒)，超时后自动淡出">查词卡停留时长 (秒)</label>
+            <input type="range" id="hoverCardDurationRange" min="1.0" max="30.0" value="5.0" step="0.5">
         </div>
         <div class="setting-item">
             <label for="hoverCardBrightness">查词卡光照亮度</label>
@@ -226,8 +251,8 @@
     <div class="setting-item"><label for="coreSphereRadius">半径 (%外球)</label><input type="range" id="coreSphereRadius" min="0" max="400" value="80" step="2"></div>
     <div class="setting-item"><label for="coreSphereColor">基础颜色</label><input type="color" id="coreSphereColor" value="#80D0FF"></div>
     <div class="setting-item"><label for="coreSphereEmissive">发光颜色</label><input type="color" id="coreSphereEmissive" value="#30A0FF"></div>
-    <div class="setting-item"><label for="coreSphereEmissiveIntensity">发光强度</label><input type="range" id="coreSphereEmissiveIntensity" min="0" max="4.0" value="0.5" step="0.05"></div>
-    <div class="setting-item"><label for="coreSphereOpacity">透明度</label><input type="range" id="coreSphereOpacity" min="0" max="1" value="0.5" step="0.01"></div>
+    <div class="setting-item"><label for="coreSphereEmissiveIntensity">发光强度</label><input type="range" id="coreSphereEmissiveIntensity" min="0" max="4.0" value="0.25" step="0.05"></div>
+    <div class="setting-item"><label for="coreSphereOpacity">透明度</label><input type="range" id="coreSphereOpacity" min="0" max="1" value="0.35" step="0.01"></div>
 </div>
 
 <div class="control-section" id="visualEffectsSettingsSection">
@@ -238,19 +263,28 @@
     </div>
     <div class="appearance-group">
         <h4>宇宙涡旋旋臂 (Vortex)</h4>
+        <!-- ★ 新增：旋臂粒子亮度（支持调至0完全熄灭）与圆心空心避让半径（彻底去除圆心白斑） -->
+        <div class="setting-item">
+            <label for="vortexBrightnessRange" title="调节旋臂粒子的整体亮度，支持调节到0彻底熄灭中央与旋臂光芒">旋臂粒子亮度 (可调至0)</label>
+            <input type="range" id="vortexBrightnessRange" min="0.0" max="2.0" value="0.55" step="0.05">
+        </div>
+        <div class="setting-item">
+            <label for="vortexCoreRadiusRange" title="增加圆心避让半径，让粒子向外展开，杜绝圆心过度密集暴晒">旋臂圆心空心半径</label>
+            <input type="range" id="vortexCoreRadiusRange" min="0" max="250" value="70" step="5">
+        </div>
         <div class="setting-item">
             <label for="vortexSpeed" title="范围0.001~0.01，无复数">旋臂旋转速度</label>
             <input type="range" id="vortexSpeed" min="0.001" max="0.01" value="0.003" step="0.0005">
         </div>
         <div class="setting-item"><label for="vortexTightness">旋臂弯曲度</label><input type="range" id="vortexTightness" min="0.1" max="10.0" value="1.5" step="0.1"></div>
-        <div class="setting-item"><label for="vortexParticleCount">粒子数量</label><input type="number" id="vortexParticleCount" value="50000" min="100" max="400000" step="1000"></div>
+        <div class="setting-item"><label for="vortexParticleCount">粒子数量</label><input type="number" id="vortexParticleCount" value="40000" min="100" max="400000" step="1000"></div>
         <div class="setting-item"><label for="vortexColor">粒子颜色</label><input type="color" id="vortexColor" value="#5588ff"></div>
-        <div class="setting-item"><label for="vortexSize">粒子大小</label><input type="range" id="vortexSize" min="0.01" max="10.0" value="1.5" step="0.05"></div>
+        <div class="setting-item"><label for="vortexSize">粒子大小</label><input type="range" id="vortexSize" min="0.01" max="10.0" value="1.2" step="0.05"></div>
     </div>
     <div class="appearance-group">
         <h4>旋臂星光发光强度 (Bloom - 0即完全熄灭)</h4>
-        <div class="setting-item"><label for="bloomThreshold">层阈值 (防卡片过曝)</label><input type="range" id="bloomThreshold" min="0" max="1" value="0.85" step="0.01"></div>
-        <div class="setting-item"><label for="bloomStrength">星光发光强度</label><input type="range" id="bloomStrength" min="0" max="3.0" value="0.5" step="0.02"></div>
+        <div class="setting-item"><label for="bloomThreshold">层阈值 (防卡片过曝)</label><input type="range" id="bloomThreshold" min="0" max="1" value="0.88" step="0.01"></div>
+        <div class="setting-item"><label for="bloomStrength">星光发光强度</label><input type="range" id="bloomStrength" min="0" max="3.0" value="0.25" step="0.02"></div>
         <div class="setting-item"><label for="bloomRadius">发光半径</label><input type="range" id="bloomRadius" min="0" max="3.0" value="0.2" step="0.02"></div>
     </div>
 </div>
@@ -290,13 +324,17 @@
 
 <!-- 单词沉浸式详情面板 -->
 <div id="immersiveDetailPanel" class="immersive-detail-panel">
+<button id="closeDetailBtn" class="detail-panel-dock-close-btn" title="关闭详情面板 (Esc)">
+    <span class="close-icon">✕</span>
+    <span class="close-text">关闭</span>
+</button>
+
 <div class="immersive-detail-header">
 <h2>单词详情</h2>
 <div class="header-controls">
 <button id="detailFontDownBtn" title="缩小字体" style="background: transparent; border: 1px solid var(--border-color); color: #a2d8ff; padding: 3px 6px; border-radius: 5px; font-weight: bold; cursor: pointer;">A-</button>
 <button id="detailFontUpBtn" title="放大字体" style="background: transparent; border: 1px solid var(--border-color); color: #a2d8ff; padding: 3px 6px; border-radius: 5px; font-weight: bold; cursor: pointer;">A+</button>
 <button id="togglePanelSideBtn" title="切换左右位置">↔️</button>
-<button id="closeDetailBtn" title="关闭 (Esc)">×</button>
 </div>
 </div>
 <div class="immersive-detail-content">
@@ -333,7 +371,7 @@
 <h2 id="noteModalHeaderTitle" style="color: #ffd875;">添加/编辑 AI 知识备注</h2>
 <div style="margin-top: 10px;">
     <label style="display:block; font-size:0.85rem; color:#87cdff; margin-bottom:5px;">第一步：输入备注主题/标题 (如: AI构词联想 / 近义辨析)</label>
-    <input type="text" id="noteInputTitle" placeholder="输入简明扼要的主题或标题..." style="width:100%; height:38px; background:rgba(10,20,50,0.85); border:1px solid var(--border-color); color:#fff; padding:6px 12px; border-radius:8px; font-size:0.9rem; margin-bottom:14px;">
+    <input type="text" id="noteInputTitle" placeholder="输入简明扼要的主题或提问 (静止1秒自动复制至剪贴板)..." style="width:100%; height:38px; background:rgba(10,20,50,0.85); border:1px solid var(--border-color); color:#fff; padding:6px 12px; border-radius:8px; font-size:0.9rem; margin-bottom:14px;">
     
     <label style="display:block; font-size:0.85rem; color:#87cdff; margin-bottom:5px;">第二步：粘贴或输入 AI 生成的详细知识点内容</label>
     <textarea id="noteInputContent" placeholder="在此粘贴 ChatGPT/Claude 针对该词的详细解析、例句或知识拓展..." style="width:100%; height:180px; background:rgba(10,20,50,0.85); border:1px solid var(--border-color); color:#fff; padding:10px; border-radius:8px; font-size:0.9rem; resize:vertical;"></textarea>
@@ -445,7 +483,6 @@
 <button class="control-btn" id="zoomOutBtn" title="整体缩小卡片 (➖)">➖</button>
 <button class="control-btn active-toggle" id="focusCruiseToggleBtn" title="局部焦点巡航模式 (✨)">✨</button>
 
-<!-- 🎮 四向平移控制聚合组件 (带清晰快捷键提示) -->
 <div class="pan-joystick-wrap" title="移动球体（快捷键：Ctrl + 鼠标左键平移）">
     <div class="pan-joystick-row">
         <button class="pan-btn" id="panUpBtn" title="向上移动球体 (Ctrl+鼠标上拖)">▲</button>
