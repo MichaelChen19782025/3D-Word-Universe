@@ -2,9 +2,59 @@
  * 3D单词宇宙 - Three.js 核心场景管理与渲染管线
  * 1. 局部焦点巡航：平滑 Lerp 呼吸放大插值，并设立硬性绝对上限天花板，杜绝放大卡片递归膨胀
  * 2. 查词窗口居中面对镜头，屏幕边缘自适应防溢出
- * 3. 前后景深尺寸收敛平衡，让近处卡片体量自然优雅
+ * 3. 查词暂停刹停与窗口消失后三阶段平滑阶梯渐快加速恢复引擎
  */
 (function() {
+    function computeHoverMotionMultiplier(time) {
+        const hm = appState.hoverMotion;
+        if (!hm || !hm.pauseEnabled) {
+            return 1.0;
+        }
+
+        // 1. 如果处于查词暂停状态，速度乘数直接刹停为 0
+        if (hm.isPaused) {
+            hm.currentMultiplier = 0.0;
+            hm.isResuming = false;
+            return 0.0;
+        }
+
+        // 2. 如果处于卡片消失后的平缓渐进恢复阶段
+        if (hm.isResuming) {
+            const elapsed = (time - hm.resumeStartTime) / 1000;
+            const totalDuration = Math.max(0.1, hm.resumeDuration || 2.0);
+
+            if (elapsed >= totalDuration) {
+                hm.isResuming = false;
+                hm.currentMultiplier = 1.0;
+                return 1.0;
+            }
+
+            const t1 = totalDuration * 0.25;
+            const t2 = totalDuration * 0.50;
+            const v1 = Math.max(0.01, Math.min(1.0, (hm.p1Percent || 20) / 100));
+            const v2 = Math.max(v1, Math.min(1.0, (hm.p2Percent || 70) / 100));
+
+            if (elapsed <= t1) {
+                // 阶段一：0 -> 1/4 总时长，速度从 0 线性渐进至 v1
+                const progress = elapsed / t1;
+                hm.currentMultiplier = v1 * progress;
+            } else if (elapsed <= t2) {
+                // 阶段二：1/4 -> 1/2 总时长，速度从 v1 线性渐进至 v2
+                const progress = (elapsed - t1) / (t2 - t1);
+                hm.currentMultiplier = v1 + (v2 - v1) * progress;
+            } else {
+                // 阶段三：1/2 -> 总时长结束，速度从 v2 线性渐进至 1.0 (原速)
+                const progress = (elapsed - t2) / (totalDuration - t2);
+                hm.currentMultiplier = v2 + (1.0 - v2) * progress;
+            }
+
+            return hm.currentMultiplier;
+        }
+
+        hm.currentMultiplier = 1.0;
+        return 1.0;
+    }
+
     const AppScene = {
         init() {
             appState.scene = new THREE.Scene();
@@ -488,10 +538,14 @@
                 appState.lastRenderTime = time - (delta % 33.33);
             }
 
+            // ★ 计算查词静止与渐快加速恢复因子
+            const hoverMotionFactor = computeHoverMotionMultiplier(time);
+
             const controlsChanged = appState.controls.update();
             let mustRender = controlsChanged || appState.needsRender;
 
-            if (appState.autoRotate && appState.actualDisplayRotationSpeed > 0 && appState.rotationMultiplier > 0.001) mustRender = true;
+            if (appState.autoRotate && appState.actualDisplayRotationSpeed > 0 && appState.rotationMultiplier > 0.001 && hoverMotionFactor > 0.0001) mustRender = true;
+            if (appState.hoverMotion && appState.hoverMotion.isResuming) mustRender = true;
             if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) mustRender = true;
             if (appState.vortexParticles && appState.vortexParticles.visible) mustRender = true;
             if (appState.clickBurstParticles && appState.clickBurstParticles.visible) mustRender = true;
@@ -506,7 +560,7 @@
             const distRange = 2 * radius;
 
             // 局部焦点巡航算法：严格限定只在面向镜头正面 (t < 0.42) 区域随机抽取放大
-            if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0) {
+            if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0 && hoverMotionFactor > 0.001) {
                 const fc = appState.focusCruise;
                 if (time - fc.lastSwitchTime >= fc.interval * 1000) {
                     fc.lastSwitchTime = time;
@@ -601,7 +655,8 @@
                 }
             }
 
-            const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.0058 * appState.rotationMultiplier * appState.rotationMultiplierTemporary;
+            // ★ 核心受控旋转：乘入 hoverMotionFactor（暂停为0，恢复时0->0.2->0.7->1.0平滑升速）
+            const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.0058 * appState.rotationMultiplier * appState.rotationMultiplierTemporary * hoverMotionFactor;
 
             if (appState.autoRotate && baseRotationSpeed > 0 && appState.wordSphereGroup && !appState.isFlowMode) {
                 const rx = appState.rt.rotateX !== undefined ? appState.rt.rotateX : true;
@@ -612,8 +667,9 @@
                 if (rz) appState.wordSphereGroup.rotation.z += baseRotationSpeed;
             }
 
+            // ★ 卡片自转同样受控刹停与平滑加速
             const shouldCardsRotate = appState.rt.cardSelfRotation !== undefined ? appState.rt.cardSelfRotation : true;
-            const cardMasterSpeed = (appState.rt.cardRotationSpeed !== undefined ? appState.rt.cardRotationSpeed : 2) * 0.00115;
+            const cardMasterSpeed = (appState.rt.cardRotationSpeed !== undefined ? appState.rt.cardRotationSpeed : 2) * 0.00115 * hoverMotionFactor;
 
             if (appState.wordSphereGroup) {
                 appState.wordSphereGroup.updateMatrixWorld(true);
@@ -629,25 +685,19 @@
                     const dist = AppMath.vecCardWorld.distanceTo(AppMath.vecCamWorld);
                     const t = THREE.MathUtils.clamp((dist - minDist) / distRange, 0, 1);
 
-                    // ★ 修复：收敛 depthScale，原 1.4~0.32 过度拉大前后差距，现调为 1.12~0.72 柔和透视
                     const depthScale = THREE.MathUtils.lerp(1.12, 0.72, t);
                     const normalizedY = card.position.y / radius;
                     const latScale = 1.0 - 0.35 * (normalizedY * normalizedY);
 
-                    // ★ 巡航放大平滑插值与绝对上限保护：
-                    // 确保每次放大的基数恒定为 1.0，绝不叠乘累加，并在帧间平滑呼吸缩放
                     if (!card.userData.spotlightLerp) card.userData.spotlightLerp = 1.0;
                     const isSpotlightTarget = (appState.focusCruise && appState.focusCruise.enabled && appState.focusCruise.currentSpotlightIndices.has(idx) && t < 0.48);
                     const targetSpotlightMult = isSpotlightTarget ? (appState.focusCruise.scaleFactor || 1.5) : 1.0;
                     
-                    // 帧间平滑呼吸缩放 (lerp)
                     card.userData.spotlightLerp = THREE.MathUtils.lerp(card.userData.spotlightLerp, targetSpotlightMult, 0.08);
 
-                    // 边缘防跳变消隐：离开正面视野时平滑衰减
                     const frontFade = THREE.MathUtils.clamp((0.50 - t) / 0.10, 0, 1);
                     const effectiveSpotlightScale = 1.0 + (card.userData.spotlightLerp - 1.0) * frontFade;
 
-                    // ★ 绝对尺寸天花板封顶保护：即使离镜头极近，也绝不超过基准上限，杜绝巨无霸大卡片
                     const maxAllowedScale = cardMult * (appState.focusCruise.scaleFactor || 1.5) * 1.25;
                     const rawCalculatedScale = latScale * depthScale * cardMult * effectiveSpotlightScale;
                     const finalScale = Math.min(maxAllowedScale, rawCalculatedScale);

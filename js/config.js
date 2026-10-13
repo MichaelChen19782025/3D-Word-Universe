@@ -82,7 +82,13 @@ const APP_CONFIG = {
     DEFAULT_FOCUS_CRUISE_ENABLED: true,
     DEFAULT_FOCUS_CRUISE_INTERVAL: 50,
     DEFAULT_FOCUS_CRUISE_RATIO_PERCENT: 8,
-    DEFAULT_FOCUS_CRUISE_SCALE: 1.5
+    DEFAULT_FOCUS_CRUISE_SCALE: 1.5,
+
+    // ★ 查词静止与渐快恢复参数默认值
+    DEFAULT_CARD_PAUSE_ON_HOVER: true,
+    DEFAULT_HOVER_RESUME_DURATION: 2.0,   // 总恢复时长 (秒)
+    DEFAULT_HOVER_RESUME_P1: 20,          // 前 1/4 时长恢复至速度百分比 (%)
+    DEFAULT_HOVER_RESUME_P2: 70           // 前 1/2 时长恢复至速度百分比 (%)
 };
 
 const appState = {
@@ -119,6 +125,18 @@ const appState = {
 
     // ★ 查词卡常驻保持状态 (锁定不自动淡出)
     isHoverCardPinned: false,
+
+    // ★ 查词卡弹出暂停与阶梯平滑恢复运动控制器
+    hoverMotion: {
+        pauseEnabled: true,
+        resumeDuration: 2.0, // 总时长 (秒)
+        p1Percent: 20,       // 前 1/4 恢复百分比
+        p2Percent: 70,       // 前 1/2 恢复百分比
+        isPaused: false,     // 当前是否因查词卡处于静止状态
+        isResuming: false,   // 是否处于查词卡消失后的缓和加速过程
+        resumeStartTime: 0,  // 恢复开始的时间戳 (ms)
+        currentMultiplier: 1.0 // 当前计算得出的平滑系数 (0.0 ~ 1.0)
+    },
     
     rt: {
         rotateX: true, rotateY: true, rotateZ: false,

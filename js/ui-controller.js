@@ -2,7 +2,8 @@
  * 3D单词宇宙 - 全功能 UI 交互控制器与生命周期调度中心
  * 1. 移动端触摸手势全面隔离保护：防止手机原生缩放触发 HUD / 控件漂移丢失
  * 2. 旋转速度调整 100% 写入持久化存储，下次启动默认生效
- * 3. 导入/导出系统设置包含全部 50+ 个参数的全量备份与恢复
+ * 3. 查词窗口呼出即时彻底刹停，窗口关闭/淡出后多阶段平缓渐进加速恢复旋转
+ * 4. 窗口自适应宽度限制彻底忽略外部突出拐角距离，手机端正文饱满撑满视口
  */
 (function() {
     let _persistTimer = null;
@@ -42,6 +43,7 @@
         input.click();
     }
 
+    // ★ 核心优化：彻底忽略 4 个外突拐角的距离占用，窗口本体宽度最大化贴合屏幕两端
     function updateHoverCardPosition(pxWidth, pxHeight, scaleFactor) {
         if (!appState.overlayCardTargetPosition) {
             appState.overlayCardTargetPosition = new THREE.Vector3();
@@ -62,10 +64,13 @@
         const cardAspect = (pxHeight > 0) ? (pxWidth / pxHeight) : 2.0;
 
         const userScale = Math.max(0.2, Math.min(5.0, scaleFactor || 1.0));
-        let targetWidth3D = viewWidth3D * (IS_MOBILE_DEVICE ? 0.88 : 0.65) * userScale;
+        
+        // 手机屏幕极窄时，直接给予高达 96% 视口基准宽度；PC 端则给予 72% 优雅基准
+        let targetWidth3D = viewWidth3D * (IS_MOBILE_DEVICE ? 0.96 : 0.72) * userScale;
 
-        const maxAllowedWidth = viewWidth3D * 0.90;
-        const maxAllowedHeight = viewHeight3D * 0.85;
+        // ★ 忽略装饰拐角：主卡片本体在手机端最大允许达到 98.5% 视口宽 (仅保留约 1.5% 极窄缓冲)
+        const maxAllowedWidth = viewWidth3D * (IS_MOBILE_DEVICE ? 0.985 : 0.96);
+        const maxAllowedHeight = viewHeight3D * 0.88;
 
         if (targetWidth3D > maxAllowedWidth) {
             targetWidth3D = maxAllowedWidth;
@@ -126,7 +131,6 @@
             }, 300);
         },
 
-        // ★ 核心修复：全局拦截 iOS/Android 网页级手势缩放，确保仅 3D 摄像机缩放，四角 HUD 绝对不被挪移丢失
         initPreventBrowserZoom() {
             const prevent = (e) => {
                 if (e.touches && e.touches.length > 1) {
@@ -138,6 +142,29 @@
             window.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
             window.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
             window.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+        },
+
+        pauseMotionOnHover() {
+            if (!appState.hoverMotion) return;
+            appState.hoverMotion.isPaused = true;
+            appState.hoverMotion.isResuming = false;
+            appState.hoverMotion.currentMultiplier = 0.0;
+            appState.needsRender = true;
+        },
+
+        resumeMotionAfterHover() {
+            if (!appState.hoverMotion) return;
+            if (!appState.hoverMotion.isPaused && !appState.hoverMotion.isResuming) return;
+            appState.hoverMotion.isPaused = false;
+            if (appState.hoverMotion.pauseEnabled) {
+                appState.hoverMotion.isResuming = true;
+                appState.hoverMotion.resumeStartTime = performance.now();
+                appState.hoverMotion.currentMultiplier = 0.0;
+            } else {
+                appState.hoverMotion.isResuming = false;
+                appState.hoverMotion.currentMultiplier = 1.0;
+            }
+            appState.needsRender = true;
         },
 
         copyToClipboard(text) {
@@ -521,6 +548,24 @@
                 schedulePersist();
             });
 
+            document.getElementById('cardPauseOnHoverEnabled')?.addEventListener('change', (e) => {
+                appState.hoverMotion.pauseEnabled = !!e.target.checked;
+                schedulePersist();
+                this.showToast(appState.hoverMotion.pauseEnabled ? '⏸️ 查词暂停已开启' : '▶️ 查词暂停已关闭');
+            });
+            document.getElementById('hoverResumeDurationRange')?.addEventListener('input', (e) => {
+                appState.hoverMotion.resumeDuration = safeParseFloat(e.target.value, 2.0);
+                schedulePersist();
+            });
+            document.getElementById('hoverResumeP1Range')?.addEventListener('input', (e) => {
+                appState.hoverMotion.p1Percent = safeParseFloat(e.target.value, 20);
+                schedulePersist();
+            });
+            document.getElementById('hoverResumeP2Range')?.addEventListener('input', (e) => {
+                appState.hoverMotion.p2Percent = safeParseFloat(e.target.value, 70);
+                schedulePersist();
+            });
+
             const vortexBrightEl = document.getElementById('vortexBrightnessRange');
             if (vortexBrightEl) {
                 vortexBrightEl.addEventListener('input', () => {
@@ -605,7 +650,6 @@
                 schedulePersist();
             });
 
-            // ★ 核心修复：旋转速度滑块变动立即保存为下次默认值
             document.getElementById('rotationSpeed')?.addEventListener('input', (e) => {
                 const sliderVal = safeParseFloat(e.target.value, 1.0);
                 appState.actualDisplayRotationSpeed = sliderVal * appState.currentRotationSpeedBase;
@@ -1311,7 +1355,6 @@
                     return;
                 }
 
-                // ★ 动态读取用户自定义设置的悬浮查词卡停留时长 (秒)
                 const stayDurationSec = parseFloat(document.getElementById('hoverCardDurationRange')?.value || '5.0');
                 const stayDurationMs = Math.max(800, stayDurationSec * 1000);
 
@@ -1322,6 +1365,7 @@
                     if (!appState.isHoverCardPinned && !isPointerOverHoverCard(lastClientX, lastClientY)) {
                         appState.hoveredObject = null;
                         appState.overlayCardTargetOpacity = 0;
+                        AppUI.resumeMotionAfterHover();
                         appState.needsRender = true;
                     }
                 }, delay);
@@ -1486,6 +1530,7 @@
                                             appState.isHoverCardPinned = false;
                                             appState.hoveredObject = null;
                                             appState.overlayCardTargetOpacity = 0;
+                                            AppUI.resumeMotionAfterHover();
                                             appState.needsRender = true;
                                             this.showToast('📝 卡片已关闭，正在打开 AI 备忘录...', 2000);
                                             setTimeout(() => {
@@ -1509,6 +1554,7 @@
                                             appState.isHoverCardPinned = false;
                                             appState.hoveredObject = null;
                                             appState.overlayCardTargetOpacity = 0;
+                                            AppUI.resumeMotionAfterHover();
                                             this.showToast('🛡️ 已屏蔽单词: ' + wordData.words);
                                         }
                                     } else if (zone.type === 'card_body') {
@@ -1533,6 +1579,7 @@
                     if (!appState.isHoverCardPinned) {
                         appState.hoveredObject = null;
                         appState.overlayCardTargetOpacity = 0;
+                        AppUI.resumeMotionAfterHover();
                     }
                 } else {
                     appState.isHoverCardPinned = false;
@@ -1548,6 +1595,7 @@
                 if (!appState.isHoverCardPinned) {
                     appState.hoveredObject = null;
                     appState.overlayCardTargetOpacity = 0;
+                    AppUI.resumeMotionAfterHover();
                 }
             }
             appState.needsRender = true;
@@ -1557,6 +1605,8 @@
             if (!card) return;
             const word = card.userData.word;
             appState.hoveredObject = card;
+
+            this.pauseMotionOnHover();
 
             const { texture, pxWidth, pxHeight } = AppCardFactory.createOverlayTexture(word);
             const screen = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
@@ -1594,6 +1644,8 @@
         showImmersiveDetailPanel(word) {
             if (!word) return;
             appState.currentDetailWord = word;
+
+            this.pauseMotionOnHover();
 
             const result = AppStorage.recordStudyClick(word);
             this.updateStudyCounterDisplay();
@@ -1633,6 +1685,7 @@
         hideImmersiveDetailPanel() {
             document.getElementById('immersiveDetailPanel')?.classList.remove('visible');
             appState.rotationMultiplier = 1.0;
+            this.resumeMotionAfterHover();
             this.adjustSphereViewForPanel();
             appState.needsRender = true;
         },
@@ -1684,7 +1737,6 @@
             }, duration);
         },
 
-        // ★ 核心修复：更新速度时连同基数实时持久化存储，下次启动 100% 还原
         changeViewAwareSpeed(multiplier) {
             appState.currentRotationSpeedBase *= multiplier;
             appState.currentRotationSpeedBase = Math.max(0.0001, Math.min(20.0, appState.currentRotationSpeedBase));
@@ -1988,7 +2040,6 @@
             this.showToast('📤 词库与 AI 知识备注已成功导出！');
         },
 
-        // ★ 核心升级：导出系统全量设置（囊括 50+ 项参数、自发光、受光度、运行速度基数与各层视觉配置）
         exportSettings() {
             const fullBackup = {
                 exportedAt: new Date().toISOString(),
@@ -2018,7 +2069,7 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            this.showToast('⚙️ 系统全量配置(含速度、受光度、查词卡与视角)已成功导出！');
+            this.showToast('⚙️ 系统全量配置(含暂停恢复、速度、受光度、查词卡与视角)已成功导出！');
         },
 
         importSettings() {
@@ -2031,7 +2082,6 @@
                             throw new Error('导入文件内容不是合法的 JSON 对象');
                         }
 
-                        // 支持标准打包模式及扁平模式无缝兼容
                         const settingsData = imported[APP_CONFIG.SETTINGS_STORAGE_KEY] || imported;
                         if (settingsData && typeof settingsData === 'object') {
                             localStorage.setItem(APP_CONFIG.SETTINGS_STORAGE_KEY, JSON.stringify(settingsData));
@@ -2096,6 +2146,7 @@
             const settings = {};
             const settingIds = [
                 'rotationSpeed', 'cardRotationSpeed', 'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'batchSize',
+                'cardPauseOnHoverEnabled', 'hoverResumeDurationRange', 'hoverResumeP1Range', 'hoverResumeP2Range',
                 'focusCruiseEnabled', 'focusCruiseIntervalRange', 'focusCruiseRatioRange', 'focusCruiseScaleRange',
                 'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
                 'visualEffectsEnabled', 'vortexParticleCount', 'vortexColor', 'vortexSize', 'vortexSpeed', 'vortexTightness',
@@ -2117,7 +2168,6 @@
                 }
             });
 
-            // ★ 重点持久化：将运动速度的核心倍率基数与运行速度存为永久默认值
             settings.currentRotationSpeedBase = appState.currentRotationSpeedBase;
             settings.actualDisplayRotationSpeed = appState.actualDisplayRotationSpeed;
             settings.autoRotate = appState.autoRotate;
@@ -2140,7 +2190,19 @@
                 }
             }
 
-            // ★ 重点恢复：载入上次保存的运动速度与倍率
+            if (settings.cardPauseOnHoverEnabled !== undefined) {
+                appState.hoverMotion.pauseEnabled = !!settings.cardPauseOnHoverEnabled;
+            }
+            if (settings.hoverResumeDurationRange !== undefined) {
+                appState.hoverMotion.resumeDuration = safeParseFloat(settings.hoverResumeDurationRange, 2.0);
+            }
+            if (settings.hoverResumeP1Range !== undefined) {
+                appState.hoverMotion.p1Percent = safeParseFloat(settings.hoverResumeP1Range, 20);
+            }
+            if (settings.hoverResumeP2Range !== undefined) {
+                appState.hoverMotion.p2Percent = safeParseFloat(settings.hoverResumeP2Range, 70);
+            }
+
             if (settings.currentRotationSpeedBase !== undefined) {
                 appState.currentRotationSpeedBase = safeParseFloat(settings.currentRotationSpeedBase, APP_CONFIG.DEFAULT_ROTATION_SPEED);
             }
