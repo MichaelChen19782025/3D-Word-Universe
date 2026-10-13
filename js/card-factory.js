@@ -2,8 +2,8 @@
  * 3D单词宇宙 - 卡片工坊 (Card Factory)
  * 1. 核心修复：注入精准全覆盖 UVGenerator，让底色、内腔、发光与文字100%平铺填满卡片全表面
  * 2. 侧边厚度与倒角材质全面联动底色与泛光色彩，营造物理立体微电子展板质感
- * 3. 悬浮查词卡边距极窄化（仅保留约2px缓冲），横向空间最大化利用
- * 4. 装饰拐角贴合收敛，计算屏幕限制时彻底忽略外延
+ * 3. 完整保留卡片正常美学比例与舒适留白（拒绝全局粗暴剃光头）
+ * 4. 记录核心内容安全比例，为超宽时智能放大裁剪提供精确参数
  */
 (function() {
     let _sharedTestCanvas = null;
@@ -364,7 +364,7 @@
             return card;
         },
 
-        // ★ 紧致化拐角：紧贴卡片主体四角，不再向外大幅凸出侵占视野
+        // 经典的科技感机甲外延四角拐角装饰
         createCornerBrackets() {
             const bracketGroup = new THREE.Group();
             const bracketCanvas = document.createElement('canvas');
@@ -403,14 +403,14 @@
                 depthTest: false
             });
 
-            const size = 0.16;
+            const size = 0.22;
             const bracketGeo = new THREE.PlaneGeometry(size, size);
 
             for (let i = 0; i < 4; i++) {
                 const bracket = new THREE.Mesh(bracketGeo, bracketMat.clone());
                 const signX = (i % 2 === 0) ? -1 : 1;
                 const signY = (i < 2) ? 1 : -1;
-                bracket.position.set(signX * (0.5 - size * 0.22), signY * (0.5 - size * 0.22), 0.01);
+                bracket.position.set(signX * 0.5, signY * 0.5, 0.01);
 
                 let rotation = 0;
                 if (signX === 1 && signY === 1) rotation = -Math.PI / 2;
@@ -422,7 +422,7 @@
             return bracketGroup;
         },
 
-        // ★ 核心优化：去除原先夸张的内边距，左右只保留相当于 2 个屏幕像素的极微小缓冲
+        // ★ 保留正常美学边距与优雅留白，并精确计算内容区安全占比（供超宽时智能放大裁剪）
         createOverlayTexture(word) {
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
@@ -442,10 +442,13 @@
             const canvasWidth = Math.round(1240 * scale);
             const baseSize = 1240 * 0.038 * scale;
 
-            // ★ 边距几乎忽略：只留约 2 个像素 (在 1240 canvas 比例下仅约 4~8px) 作为缓冲
-            const paddingX = Math.max(4, Math.round(4 * scale));
-            const paddingY = Math.max(14, Math.round(18 * scale));
+            // ★ 正常状态下保有优雅大方的留白边距 (绝不盲目贴边剃光头)
+            const paddingX = Math.round(52 * scale);
+            const paddingY = Math.round(36 * scale);
             const wrapWidth = canvasWidth - paddingX * 2;
+
+            // 记录核心内容安全宽度比例（供超宽裁剪算法动态使用）
+            const contentSafeRatio = wrapWidth / canvasWidth;
 
             const englishWord = (word.words || 'N/A').trim();
             const phoneticSymbol = word.phonetic ? `/${word.phonetic.replace(/^\/+|\/+$/g, '')}/` : '';
@@ -479,7 +482,7 @@
             const fontMethod = `bold ${Math.round(baseSize * 1.15)}px ${fontFamily}`;
             const fontButton = `bold ${Math.round(baseSize * 0.76)}px ${fontFamily}`;
 
-            // 计算右上角胶囊布局参数
+            // 右上角功能胶囊纯图标化
             const btnHeight = baseSize * 0.95;
             const spacing = 5 * scale;
             const btnY = paddingY + (baseSize * 1.55 - btnHeight) / 2;
@@ -501,12 +504,12 @@
             const btnMinusX = btnPlusX - spacing - btnMinusW;
             const btnSpeakerX = btnMinusX - spacing - btnSpeakerW;
 
-            // 检测主词是否过长，若过长则适度紧凑字号防止与右上角胶囊冲突
+            // 超长单词自适应微调字号防止遮挡胶囊
             testCtx.font = `bold ${mainFontSize}px ${fontFamily}`;
             let testWordW = testCtx.measureText(englishWord).width;
-            const maxWordSpace = btnSpeakerX - paddingX - (16 * scale);
+            const maxWordSpace = btnSpeakerX - paddingX - (18 * scale);
             if (testWordW > maxWordSpace && maxWordSpace > 50) {
-                const shrink = Math.max(0.65, maxWordSpace / testWordW);
+                const shrink = Math.max(0.68, maxWordSpace / testWordW);
                 mainFontSize = Math.round(mainFontSize * shrink);
             }
             const fontMain = `bold ${mainFontSize}px ${fontFamily}`;
@@ -539,7 +542,7 @@
 
             context.textBaseline = 'top';
 
-            // 1. 主单词靠左对齐 (距左边界仅 2px 微缓冲)
+            // 1. 主单词
             context.textAlign = "left";
             context.font = fontMain;
             context.fillStyle = mainWordColor;
@@ -558,10 +561,10 @@
             context.save();
             context.shadowColor = phoneticColor;
             context.shadowBlur = Math.round(8 * scale * Math.min(2.0, rawBrightness));
-            context.fillText(phoneticSymbol, paddingX + wordWidth + 18 * scale, paddingY + (baseSize * 0.40));
+            context.fillText(phoneticSymbol, paddingX + wordWidth + 20 * scale, paddingY + (baseSize * 0.40));
             context.restore();
 
-            // 2. 右上角功能胶囊纯图标化靠右紧贴边缘
+            // 2. 右上角功能胶囊纯图标绘制
             const zones = [];
 
             function drawPillButton(label, x, y, w, h, variant = 'normal') {
@@ -640,7 +643,7 @@
 
             zones.push({ type: 'speak', xMin: paddingX - 10, xMax: btnSpeakerX - spacing, yMin: paddingY - 10, yMax: paddingY + mainWordHeight + 10 });
 
-            // 3. 中文释义 (铺满超宽 wrapWidth)
+            // 3. 中文释义
             let writeY = paddingY + mainWordHeight;
             context.font = fontMeaning;
             context.fillStyle = meaningColor;
@@ -672,7 +675,7 @@
             context.fillText("💡 记忆方法 / Memory Association", paddingX, writeY);
             context.restore();
 
-            // 6. 记忆方法正文 (铺满超宽 wrapWidth)
+            // 6. 记忆方法正文
             writeY += baseSize * 1.35;
             context.font = fontMethod;
             context.fillStyle = methodContentColor;
@@ -688,8 +691,10 @@
             zones.push({ type: 'card_body', xMin: 0, xMax: canvasWidth, yMin: 0, yMax: canvasHeight });
 
             word.hover_click_zones = zones;
+            word.contentSafeRatio = contentSafeRatio;
             if (appState.hoverOverlayCard) {
                 appState.hoverOverlayCard.userData.hover_click_zones = zones;
+                appState.hoverOverlayCard.userData.contentSafeRatio = contentSafeRatio;
             }
 
             return {

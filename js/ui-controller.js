@@ -3,7 +3,7 @@
  * 1. 移动端触摸手势全面隔离保护：防止手机原生缩放触发 HUD / 控件漂移丢失
  * 2. 旋转速度调整 100% 写入持久化存储，下次启动默认生效
  * 3. 查词窗口呼出即时彻底刹停，窗口关闭/淡出后多阶段平缓渐进加速恢复旋转
- * 4. 窗口自适应宽度限制彻底忽略外部突出拐角距离，手机端正文饱满撑满视口
+ * 4. 智能响应式超宽裁剪放大：正常屏幕保持完整美学边距与拐角；超宽受限时忽略拐角外延，正文贴近2px屏幕缓冲放大展现
  */
 (function() {
     let _persistTimer = null;
@@ -43,7 +43,9 @@
         input.click();
     }
 
-    // ★ 核心优化：彻底忽略 4 个外突拐角的距离占用，窗口本体宽度最大化贴合屏幕两端
+    // ★ 核心优化：智能响应式视口自适应机制
+    // 未超宽（如电脑宽屏）：完整保留原本优雅的留白、边距和 4 个拐角，绝不粗暴裁剪；
+    // 超宽（如手机窄屏或大倍率缩放）：忽略外凸拐角，自动将卡片边缘边距延伸裁剪在屏幕外，使有效文字内容两端仅隔 2px 视口缓冲放大展现！
     function updateHoverCardPosition(pxWidth, pxHeight, scaleFactor) {
         if (!appState.overlayCardTargetPosition) {
             appState.overlayCardTargetPosition = new THREE.Vector3();
@@ -64,21 +66,45 @@
         const cardAspect = (pxHeight > 0) ? (pxWidth / pxHeight) : 2.0;
 
         const userScale = Math.max(0.2, Math.min(5.0, scaleFactor || 1.0));
-        
-        // 手机屏幕极窄时，直接给予高达 96% 视口基准宽度；PC 端则给予 72% 优雅基准
-        let targetWidth3D = viewWidth3D * (IS_MOBILE_DEVICE ? 0.96 : 0.72) * userScale;
 
-        // ★ 忽略装饰拐角：主卡片本体在手机端最大允许达到 98.5% 视口宽 (仅保留约 1.5% 极窄缓冲)
-        const maxAllowedWidth = viewWidth3D * (IS_MOBILE_DEVICE ? 0.985 : 0.96);
-        const maxAllowedHeight = viewHeight3D * 0.88;
+        // 计算屏幕两侧留出 2 个物理像素缓冲对应的 3D 尺寸
+        const screenPxW = window.innerWidth || 390;
+        const pad2pxIn3D = (2 / screenPxW) * viewWidth3D;
+        const maxContentUsableWidth3D = Math.max(1, viewWidth3D - pad2pxIn3D * 2);
+        const maxAllowedHeight3D = viewHeight3D * 0.88;
 
-        if (targetWidth3D > maxAllowedWidth) {
-            targetWidth3D = maxAllowedWidth;
+        // 获取卡片内部正文安全宽度占比（未设置时默认约 91.6%）
+        const wordData = appState.hoveredObject?.userData?.word;
+        const contentSafeRatio = wordData?.contentSafeRatio || appState.hoverOverlayCard?.userData?.contentSafeRatio || 0.916;
+
+        // 拐角向外扩展的系数（四个外凸拐角突出卡片主体边缘约 12%）
+        const cornerOuterRatio = 1.12;
+
+        // 1. 计算未裁剪时，整张卡片（含留白与拐角）的理想自然呈现宽度
+        const normalIdealWidth = viewWidth3D * (IS_MOBILE_DEVICE ? 0.88 : 0.65) * userScale;
+
+        let targetWidth3D = normalIdealWidth;
+
+        // 2. 超宽判定：如果自然宽度连同拐角超出了屏幕可用宽度，或者当前属于极窄手机屏导致文字过小
+        const isOverflowing = (normalIdealWidth * cornerOuterRatio > maxContentUsableWidth3D) || (IS_MOBILE_DEVICE && normalIdealWidth > maxContentUsableWidth3D * 0.82);
+
+        if (isOverflowing) {
+            // ★ 触发超宽特写放大裁剪：
+            // 彻底忽略 4 个外突拐角的距离占用，并将两边多余的外围空白边距延伸裁剪在屏幕外，
+            // 使得正文内容区（contentSafeRatio 部分）正好贴近屏幕两端 2px 极微缓冲，文字大而饱满！
+            const cropZoomWidth = maxContentUsableWidth3D / contentSafeRatio;
+            targetWidth3D = cropZoomWidth;
+        } else {
+            // ★ 未超宽（如电脑宽屏）：完整呈现原本的美学设计！
+            // 边框、边距留白、4个机甲拐角全部完好展现，绝不粗暴裁头剃光
+            targetWidth3D = Math.min(normalIdealWidth, maxContentUsableWidth3D / cornerOuterRatio);
         }
+
         let targetHeight3D = targetWidth3D / cardAspect;
 
-        if (targetHeight3D > maxAllowedHeight) {
-            targetHeight3D = maxAllowedHeight;
+        // 高度安全边界保护：防止垂直方向溢出视口
+        if (targetHeight3D > maxAllowedHeight3D) {
+            targetHeight3D = maxAllowedHeight3D;
             targetWidth3D = targetHeight3D * cardAspect;
         }
 
