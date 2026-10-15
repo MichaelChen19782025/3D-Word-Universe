@@ -182,7 +182,6 @@ html, body {
 }
 .immersive-detail-panel.left-aligned.visible { transform: translateX(0); }
 
-/* 详情面板大号关闭按钮，固定在垂直50%居中，仅在面板呼出时出现 */
 #closeDetailBtn {
     position: absolute;
     top: 50%;
@@ -236,20 +235,6 @@ html, body {
     opacity: 0 !important;
     pointer-events: none !important;
     visibility: hidden !important;
-}
-
-.immersive-detail-panel.left-aligned #closeDetailBtn {
-    left: auto;
-    right: -48px;
-    border-radius: 0 20px 20px 0;
-    border-left: none;
-    border-right: 2px solid var(--accent-color-2);
-    box-shadow: 8px 0 32px rgba(0, 240, 255, 0.6);
-}
-.immersive-detail-panel.left-aligned #closeDetailBtn:hover {
-    right: -56px;
-    width: 56px;
-    box-shadow: 10px 0 40px rgba(0, 240, 255, 0.85);
 }
 
 .immersive-detail-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border-color); gap: 15px; }
@@ -319,15 +304,110 @@ html, body {
 }
 .note-item-card.expanded .note-item-content { display: block; }
 
-/* 模态弹窗系统 */
-.modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(7px); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+/* 模态弹窗系统通用 */
+.modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.82); backdrop-filter: blur(8px); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
 .modal-backdrop.visible { opacity: 1; pointer-events: all; }
-.modal-content-box { background: var(--panel-bg); padding: 25px; border-radius: 18px; border: 1px solid var(--border-color); width: 90%; box-shadow: 0 13px 38px rgba(0,0,0,0.6); max-height: 80vh; display: flex; flex-direction: column; }
-.filter-modal { max-width: 480px; }
-.help-modal { max-width: 680px; }
-.note-modal-box { max-width: 580px; }
+.modal-content-box { background: var(--panel-bg); padding: 22px; border-radius: 18px; border: 1px solid var(--border-color); width: 90%; box-shadow: 0 13px 45px rgba(0,0,0,0.7); max-height: 86vh; display: flex; flex-direction: column; }
+.panel-close-x-btn { background: transparent; border: none; color: #a2d8ff; font-size: 2rem; cursor: pointer; line-height: 1; padding: 0 6px; }
 
-/* 数字调节弹窗样式 */
+/* 🧠 智能多词关联备注录入专用样式 */
+.smart-note-modal-box { max-width: 720px; }
+.smart-note-flow-container { overflow-y: auto; max-height: 70vh; padding-right: 6px; }
+.smart-tokens-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.smart-token-pill { font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(0, 240, 255, 0.15); border: 1px solid rgba(0, 240, 255, 0.4); color: #b9f6ff; }
+.smart-matched-section { margin-top: 10px; background: rgba(14, 28, 64, 0.55); border: 1px solid rgba(130, 200, 255, 0.3); border-radius: 10px; padding: 10px; }
+.smart-section-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #ffd875; font-weight: bold; margin-bottom: 8px; }
+.smart-select-ops { display: flex; gap: 6px; }
+.smart-mini-btn { background: rgba(30, 52, 98, 0.8); border: 1px solid rgba(130, 200, 255, 0.5); color: #d6eaff; font-size: 0.72rem; padding: 2px 8px; border-radius: 5px; cursor: pointer; }
+.smart-mini-btn:hover { background: var(--accent-color-1); color: #000; }
+.smart-matched-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px; }
+.smart-word-card { display: flex; align-items: center; gap: 8px; background: rgba(22, 42, 85, 0.75); border: 1px solid rgba(135, 205, 255, 0.25); border-radius: 8px; padding: 6px 10px; cursor: pointer; transition: all 0.2s; }
+.smart-word-card.checked { border-color: #68FFC0; background: rgba(16, 56, 68, 0.85); box-shadow: 0 0 10px rgba(104, 255, 192, 0.2); }
+.smart-word-card input[type="checkbox"] { transform: scale(1.15); accent-color: #00f0ff; }
+.smart-word-info { display: flex; flex-direction: column; overflow: hidden; }
+.smart-word-title { font-weight: bold; color: #fff; font-size: 0.88rem; }
+.smart-word-sub { font-size: 0.74rem; color: #a2d8ff; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+
+/* 🌟 缺失匹配时的两条引导命令卡片 */
+.smart-fallback-action-group { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.smart-fallback-card { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: linear-gradient(135deg, rgba(30, 58, 110, 0.75), rgba(12, 28, 64, 0.85)); border: 1.5px solid var(--accent-color-2); border-radius: 12px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4); }
+.smart-fallback-card.secondary-card { border-color: #f59e0b; background: linear-gradient(135deg, rgba(60, 42, 14, 0.75), rgba(24, 18, 8, 0.85)); }
+.smart-fallback-card .card-icon { font-size: 1.8rem; }
+.smart-fallback-card .card-body { flex: 1; }
+.smart-fallback-card .card-body h4 { font-size: 0.92rem; color: #fff; margin-bottom: 3px; }
+.smart-fallback-card .card-body p { font-size: 0.76rem; color: #b9f6ff; line-height: 1.35; margin: 0; }
+.smart-fallback-card.secondary-card .card-body p { color: #fed7aa; }
+
+/* 📖 全景沉浸式备注阅读器 (50%透明度浮动控制条与全屏阅读腔室) */
+.note-reader-backdrop { z-index: 10005; background: rgba(3, 8, 20, 0.94); backdrop-filter: blur(16px); }
+.note-reader-container { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
+.reader-content-body { flex: 1; overflow-y: auto; display: flex; justify-content: center; padding: 75px 20px 85px 20px; -webkit-overflow-scrolling: touch; }
+.reader-paper-card { max-width: 860px; width: 100%; background: rgba(12, 24, 52, 0.85); border: 1px solid rgba(135, 205, 255, 0.35); border-radius: 20px; padding: 32px 36px; box-shadow: 0 15px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 240, 255, 0.15); color: #eaf0ff; height: fit-content; }
+.reader-card-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.reader-tag-cluster { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.reader-tag { font-size: 0.75rem; padding: 3px 9px; border-radius: 6px; font-weight: bold; }
+.reader-tag.category-tag { background: rgba(245, 158, 11, 0.22); color: #ffd875; border: 1px solid rgba(245, 158, 11, 0.45); }
+.reader-tag.date-tag { background: rgba(104, 255, 192, 0.15); color: #68FFC0; border: 1px solid rgba(104, 255, 192, 0.3); }
+.reader-tag.words-count-tag { background: rgba(0, 240, 255, 0.15); color: #00f0ff; border: 1px solid rgba(0, 240, 255, 0.3); }
+.reader-quick-actions { display: flex; gap: 6px; }
+.reader-mini-btn { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); color: #a2d8ff; padding: 3px 8px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+.reader-mini-btn:hover { background: rgba(0, 240, 255, 0.3); color: #fff; }
+.reader-mini-btn.del:hover { background: rgba(239, 68, 68, 0.4); color: #fff; }
+.reader-article-title { font-size: 1.85rem; color: #ffd875; margin-bottom: 16px; line-height: 1.35; text-shadow: 0 0 20px rgba(255, 216, 117, 0.4); }
+.reader-linked-words-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; background: rgba(8, 18, 42, 0.6); padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(130, 200, 255, 0.2); }
+.linked-words-label { font-size: 0.82rem; color: #87cdff; font-weight: bold; }
+.linked-words-pills-box { display: flex; gap: 8px; flex-wrap: wrap; }
+.linked-word-pill { background: linear-gradient(135deg, rgba(20, 180, 240, 0.25), rgba(10, 80, 160, 0.4)); border: 1px solid var(--accent-color-2); color: #e0f8ff; padding: 3px 10px; border-radius: 14px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+.linked-word-pill:hover { transform: scale(1.08); background: var(--accent-color-1); color: #000; box-shadow: 0 0 12px rgba(0, 240, 255, 0.6); }
+.reader-divider-line { height: 1px; background: linear-gradient(90deg, transparent, rgba(135, 205, 255, 0.4), transparent); margin-bottom: 22px; }
+.reader-article-content { font-size: 1.12rem; line-height: 1.85; color: #eaf0ff; white-space: pre-wrap; word-break: break-word; letter-spacing: 0.3px; }
+
+/* ★ 关键规则：必须使用 50% 透明度显示控制按钮，鼠标悬停或激活时恢复 100% 透明度，彻底避免遮挡干扰 */
+.reader-translucent-control {
+    opacity: 0.50 !important;
+    backdrop-filter: blur(14px);
+    transition: opacity 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.25s ease;
+}
+.reader-translucent-control:hover,
+.reader-translucent-control:active,
+.reader-translucent-control:focus-within {
+    opacity: 1.0 !important;
+}
+
+.reader-floating-header {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: min(1080px, 94vw); height: 50px;
+    background: rgba(10, 20, 48, 0.88); border: 1.5px solid var(--border-color);
+    border-radius: 14px; padding: 0 16px; display: flex; justify-content: space-between; align-items: center;
+    z-index: 10010; box-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+}
+.reader-logo-icon { font-size: 1.4rem; }
+.reader-main-title { font-size: 1.05rem; color: #ffd875; margin: 0; white-space: nowrap; }
+.reader-counter-tag { font-size: 0.82rem; background: rgba(0, 240, 255, 0.18); border: 1px solid var(--accent-color-2); color: #b9f6ff; padding: 2px 8px; border-radius: 10px; font-family: 'Consolas', monospace; }
+.reader-category-dropdown, .reader-search-input { height: 32px; background: rgba(14, 28, 64, 0.8); border: 1px solid rgba(135, 205, 255, 0.4); color: #fff; border-radius: 6px; padding: 0 8px; font-size: 0.82rem; }
+.reader-search-input { width: 140px; }
+.reader-btn { height: 32px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(135, 205, 255, 0.4); background: rgba(24, 48, 92, 0.7); color: #d6eaff; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.reader-btn:hover { background: var(--accent-color-1); color: #000; }
+.reader-btn.highlight-btn { background: linear-gradient(45deg, #0284c7, #0284c7); border-color: var(--accent-color-2); color: #fff; font-weight: bold; }
+.reader-close-btn { background: none; border: none; color: #a2d8ff; font-size: 2rem; cursor: pointer; line-height: 1; }
+
+.reader-floating-dock {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    width: min(860px, 92vw); height: 56px;
+    background: rgba(10, 20, 48, 0.88); border: 1.5px solid var(--border-color);
+    border-radius: 28px; padding: 0 18px; display: flex; justify-content: space-between; align-items: center;
+    z-index: 10010; box-shadow: 0 8px 35px rgba(0, 0, 0, 0.7); gap: 10px;
+}
+.dock-btn { height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid rgba(130, 200, 255, 0.4); background: rgba(20, 42, 85, 0.8); color: #eaf0ff; font-weight: bold; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.dock-btn:hover { background: var(--accent-color-2); color: #000; box-shadow: 0 0 15px rgba(0, 240, 255, 0.6); }
+.dock-btn.highlight-btn { background: linear-gradient(45deg, #f59e0b, #d97706); border-color: #ffd875; color: #1e1b4b; }
+.dock-cruise-widget { display: flex; align-items: center; gap: 8px; position: relative; background: rgba(6, 14, 34, 0.6); padding: 4px 12px; border-radius: 16px; border: 1px solid rgba(255, 216, 117, 0.3); }
+.dock-cruise-btn { background: none; border: none; color: #ffd875; font-size: 0.82rem; font-weight: bold; cursor: pointer; }
+.dock-cruise-select { height: 24px; background: rgba(14, 28, 64, 0.8); border: 1px solid rgba(255, 216, 117, 0.4); color: #ffd875; border-radius: 4px; font-size: 0.75rem; }
+.dock-progress-bar { position: absolute; bottom: 0; left: 10px; right: 10px; height: 3px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
+.dock-progress-fill { width: 0%; height: 100%; background: #68FFC0; transition: width 0.1s linear; }
+
+/* 模态弹窗系统 */
 .prompt-modal-box {
     background: linear-gradient(145deg, rgba(16, 32, 70, 0.98), rgba(8, 18, 44, 0.98));
     border: 1px solid var(--accent-color-2);
@@ -369,15 +449,13 @@ html, body {
     pointer-events: auto;
 }
 
-/* ==================== 左右上角 HUD 控件：硬件层加速、恒定尺寸与透明度 ==================== */
+/* ==================== 左右上角 HUD 控件 ==================== */
 #clockHud {
     position: fixed; 
     top: calc(18px + env(safe-area-inset-top, 0px)); 
     left: calc(20px + env(safe-area-inset-left, 0px)); 
     z-index: 45;
     transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    touch-action: manipulation;
     font-size: 2.15rem;
     font-weight: 800; 
     color: #eaf6ff;
@@ -392,13 +470,12 @@ html, body {
     backdrop-filter: blur(8px);
     border: 1.5px solid rgba(135, 205, 255, 0.35);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    transition: opacity 0.25s ease, transform 0.25s ease;
 }
 #clockHud:hover, #clockHud:active {
     opacity: 1.0 !important;
     transform: translateZ(0) scale(1.03);
     border-color: var(--accent-color-2);
-    box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
 }
 
 #topRightHudBar {
@@ -406,9 +483,6 @@ html, body {
     top: calc(16px + env(safe-area-inset-top, 0px)); 
     right: calc(16px + env(safe-area-inset-right, 0px)); 
     z-index: 46;
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    touch-action: manipulation;
     display: flex; 
     align-items: center; 
     gap: 12px; 
@@ -432,13 +506,12 @@ html, body {
     backdrop-filter: blur(8px);
     border: 1.5px solid rgba(135, 205, 255, 0.35);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    transition: opacity 0.25s ease, transform 0.25s ease;
 }
 #studyCounterHud:hover, #studyCounterHud:active {
     opacity: 1.0 !important;
     transform: scale(1.03);
     border-color: var(--accent-color-2);
-    box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
 }
 .study-counter-icon { font-size: 1.85rem; }
 .study-goal-sep { font-size: 1.55rem; opacity: 0.6; }
@@ -457,7 +530,7 @@ html, body {
     white-space: nowrap;
     opacity: 0.50;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-    transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+    transition: opacity 0.25s ease, transform 0.25s ease;
 }
 #focusCruiseHud:hover, 
 #focusCruiseHud:active, 
@@ -475,46 +548,14 @@ html, body {
     border: 1.5px dashed rgba(140, 160, 190, 0.35);
     background: rgba(10, 20, 48, 0.45);
 }
-.focus-cruise-trigger { 
-    display: flex; 
-    align-items: center; 
-    gap: 6px; 
-    padding: 2px 6px; 
-    border-radius: 8px; 
-    font-size: 1.25rem;
-}
-.focus-cruise-expand-panel { 
-    display: none; 
-    align-items: center; 
-    gap: 8px; 
-    margin-left: 8px; 
-    padding-left: 8px; 
-    border-left: 1.5px solid rgba(255, 255, 255, 0.28); 
-}
+.focus-cruise-trigger { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 8px; font-size: 1.25rem; }
+.focus-cruise-expand-panel { display: none; align-items: center; gap: 8px; margin-left: 8px; padding-left: 8px; border-left: 1.5px solid rgba(255, 255, 255, 0.28); }
 #focusCruiseHud.expanded .focus-cruise-expand-panel { display: flex; }
-.focus-pill { 
-    cursor: pointer; 
-    background: rgba(255, 255, 255, 0.12); 
-    border: 1px solid rgba(255, 255, 255, 0.28); 
-    border-radius: 8px; 
-    padding: 3px 8px; 
-    font-family: 'Consolas', monospace; 
-    font-size: 1.12rem; 
-}
-.focus-pill:hover { 
-    background: rgba(0, 240, 255, 0.30); 
-    border-color: var(--accent-color-2); 
-    color: #fff; 
-}
-.hud-status-tag {
-    font-size: 1.15rem;
-    padding: 2px 8px;
-    border-radius: 6px;
-    background: rgba(255, 216, 117, 0.22);
-    border: 1px solid rgba(255, 216, 117, 0.55);
-}
+.focus-pill { cursor: pointer; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 8px; padding: 3px 8px; font-family: 'Consolas', monospace; font-size: 1.12rem; }
+.focus-pill:hover { background: rgba(0, 240, 255, 0.30); border-color: var(--accent-color-2); color: #fff; }
+.hud-status-tag { font-size: 1.15rem; padding: 2px 8px; border-radius: 6px; background: rgba(255, 216, 117, 0.22); border: 1px solid rgba(255, 216, 117, 0.55); }
 
-/* 右侧悬浮垂直操作栏：GPU 合成层加速，防止被移动端触摸事件剥离 */
+/* 右侧悬浮垂直操作栏 */
 .view-controls {
     position: fixed; 
     bottom: calc(25px + env(safe-area-inset-bottom, 0px)); 
@@ -525,7 +566,6 @@ html, body {
     gap: 10px; 
     z-index: 50;
     transform: translateZ(0);
-    -webkit-transform: translateZ(0);
     touch-action: manipulation;
 }
 .view-controls-child-group { 
@@ -615,110 +655,11 @@ html, body {
     :root {
         --immersive-panel-width: 100%;
     }
-
-    #closeDetailBtn {
-        left: 0 !important;
-        width: 44px !important;
-        height: 120px !important;
-        border-radius: 0 18px 18px 0 !important;
-        border-left: none !important;
-        border-right: 2px solid var(--accent-color-2) !important;
-        box-shadow: 6px 0 25px rgba(0, 240, 255, 0.6) !important;
-    }
-    .immersive-detail-panel.left-aligned #closeDetailBtn {
-        left: auto !important;
-        right: 0 !important;
-        border-radius: 18px 0 0 18px !important;
-        border-right: none !important;
-        border-left: 2px solid var(--accent-color-2) !important;
-        box-shadow: -6px 0 25px rgba(0, 240, 255, 0.6) !important;
-    }
-    .immersive-detail-content {
-        padding-left: 54px !important;
-    }
-
-    .controls-overlay {
-        width: min(390px, 86vw) !important;
-        font-size: 0.95rem !important;
-    }
-    .panel-content {
-        padding: 16px 14px !important;
-    }
-    .panel-header h1 {
-        font-size: 1.45rem !important;
-    }
-    .setting-item label {
-        font-size: 0.92rem !important;
-    }
-    .action-btn {
-        padding: 11px 8px !important;
-        font-size: 0.92rem !important;
-    }
-    .stepper-btn {
-        width: 28px !important;
-        height: 28px !important;
-        font-size: 0.85rem !important;
-    }
-    .stepper-num-input {
-        width: 58px !important;
-        font-size: 0.85rem !important;
-    }
-
-    #clockHud {
-        top: calc(12px + env(safe-area-inset-top, 0px)) !important;
-        left: calc(12px + env(safe-area-inset-left, 0px)) !important;
-        font-size: 1.65rem !important;
-        padding: 6px 12px !important;
-    }
-
-    #topRightHudBar {
-        top: calc(12px + env(safe-area-inset-top, 0px)) !important;
-        right: calc(12px + env(safe-area-inset-right, 0px)) !important;
-        gap: 8px !important;
-    }
-    #studyCounterHud {
-        font-size: 1.55rem !important;
-        padding: 6px 12px !important;
-        min-height: 42px !important;
-        border-radius: 14px !important;
-    }
-    .study-counter-icon { font-size: 1.45rem !important; }
-    .study-goal-sep { font-size: 1.25rem !important; }
-    #focusCruiseHud {
-        font-size: 1.05rem !important;
-        padding: 6px 10px !important;
-        min-height: 42px !important;
-        border-radius: 14px !important;
-    }
-    .focus-cruise-trigger { font-size: 1.05rem !important; }
-    .focus-pill {
-        font-size: 0.95rem !important;
-        padding: 2px 6px !important;
-    }
-
-    .view-controls {
-        bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important;
-        right: calc(14px + env(safe-area-inset-right, 0px)) !important;
-        gap: 8px !important;
-    }
-    .control-btn {
-        width: 48px !important;
-        height: 48px !important;
-        font-size: 1.25rem !important;
-    }
-    .pan-btn {
-        width: 36px !important;
-        height: 36px !important;
-        font-size: 1.05rem !important;
-    }
-    .pan-joystick-wrap {
-        padding: 6px !important;
-    }
-
-    #managementPanel {
-        width: calc(100% - 24px) !important;
-        right: 12px !important;
-        left: 12px !important;
-        bottom: 80px !important;
-    }
+    .reader-paper-card { padding: 22px 18px !important; }
+    .reader-article-title { font-size: 1.35rem !important; }
+    .reader-article-content { font-size: 0.98rem !important; }
+    .reader-floating-header { height: auto !important; padding: 8px 12px !important; flex-wrap: wrap !important; gap: 6px !important; }
+    .reader-search-input { width: 90px !important; }
+    .reader-floating-dock { height: auto !important; padding: 8px 12px !important; flex-wrap: wrap !important; justify-content: center !important; }
+    .dock-btn { height: 32px !important; font-size: 0.76rem !important; padding: 0 10px !important; }
 }
