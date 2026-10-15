@@ -1,5 +1,5 @@
 /**
- * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量 (V8.6 增强版)
+ * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量 (V8.6 智能共享备注与沉浸阅读版)
  */
 const IS_MOBILE_DEVICE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
 
@@ -57,6 +57,7 @@ const APP_CONFIG = {
     CUSTOM_VIEWS_STORAGE_KEY: '3DWordUniverseCustomViewsV8',
     STUDY_LOG_STORAGE_KEY: '3DWordUniverseStudyLogV8',
     STUDY_GOAL_STORAGE_KEY: '3DWordUniverseStudyGoal',
+    SHARED_NOTES_STORAGE_KEY: '3DWordUniverseSharedNotesV8',
 
     CORE_SPHERE_DEFAULT_RADIUS_FACTOR: 0.8,
     DYNAMIC_BG_DEFAULT_HUE_START: 230,
@@ -84,7 +85,7 @@ const APP_CONFIG = {
     DEFAULT_FOCUS_CRUISE_RATIO_PERCENT: 8,
     DEFAULT_FOCUS_CRUISE_SCALE: 1.5,
 
-    // ★ 查词静止与渐快恢复参数默认值
+    // 查词静止与渐快恢复参数默认值
     DEFAULT_CARD_PAUSE_ON_HOVER: true,
     DEFAULT_HOVER_RESUME_DURATION: 2.0,   // 总恢复时长 (秒)
     DEFAULT_HOVER_RESUME_P1: 20,          // 前 1/4 时长恢复至速度百分比 (%)
@@ -123,10 +124,10 @@ const appState = {
     editingNoteId: null,
     needsRender: true,
 
-    // ★ 查词卡常驻保持状态 (锁定不自动淡出)
+    // 查词卡常驻保持状态 (锁定不自动淡出)
     isHoverCardPinned: false,
 
-    // ★ 查词卡弹出暂停与阶梯平滑恢复运动控制器
+    // 查词卡弹出暂停与阶梯平滑恢复运动控制器
     hoverMotion: {
         pauseEnabled: true,
         resumeDuration: 2.0, // 总时长 (秒)
@@ -154,6 +155,17 @@ const appState = {
         visitedIndices: new Set(),
         currentSpotlightIndices: new Set(),
         lastSwitchTime: 0
+    },
+
+    // 智能共享备注知识图谱状态与沉浸阅读器状态
+    smartNotes: {
+        sharedNotesList: [],
+        currentReaderIndex: 0,
+        readerFilteredList: [],
+        isAutoCruising: false,
+        cruiseTimer: null,
+        cruiseIntervalSec: 6,
+        progressTimer: null
     },
     
     batchShieldMode: false, selectedShieldWords: new Set(), shieldedWords: new Set(),
@@ -183,7 +195,10 @@ function getColor(colorNameOrHex, type = 'css') {
 
 function getWordKey(word) {
     if (!word) return '';
-    return String(word.num != null ? word.num : ((word.words || '') + (word.chinese || '')));
+    if (word.num != null && String(word.num).trim() !== '') return String(word.num).trim();
+    const w = (word.words || '').trim().toLowerCase();
+    const c = (word.chinese || '').trim();
+    return w + '_' + c;
 }
 
 function getDateKey(d) {

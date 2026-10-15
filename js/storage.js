@@ -1,6 +1,5 @@
 /**
- * 3D单词宇宙 - 存储与离线容灾管理中枢
- * 修复学习日志记录逻辑与目标达成事件响应
+ * 3D单词宇宙 - 存储与离线容灾管理中枢 (含多词共享备注图谱与全量词元导出)
  */
 
 const SEED_CORE_WORDS = [
@@ -207,7 +206,6 @@ const AppStorage = {
         return (day && day.cards && typeof day.cards === 'object') ? Object.keys(day.cards).length : 0;
     },
 
-    // 记录点击复习并判断今日目标是否首次达成
     recordStudyClick(word) {
         if (!word) return { count: 0, justReached: false };
         const now = new Date();
@@ -247,6 +245,180 @@ const AppStorage = {
             justReached = true;
         }
         return { count, justReached };
+    },
+
+    // ==================== 智能共享备注知识图谱持久层 (多对一共享模型) ====================
+    loadSharedNotes() {
+        const raw = localStorage.getItem(APP_CONFIG.SHARED_NOTES_STORAGE_KEY);
+        let list = safeJSONParse(raw, []);
+        if (!Array.isArray(list)) list = [];
+
+        // 自动自愈：若从旧版迁移或首次使用，主动扫描 allWords 中散落的已有备注并聚合收录
+        if (list.length === 0 && appState.allWords && appState.allWords.length > 0) {
+            const seenMap = new Map();
+            appState.allWords.forEach(w => {
+                if (Array.isArray(w.notes)) {
+                    w.notes.forEach(n => {
+                        const uniqueKey = (n.title || '').trim() + '____' + (n.content || '').trim();
+                        if (seenMap.has(uniqueKey)) {
+                            const existing = seenMap.get(uniqueKey);
+                            const wKey = getWordKey(w);
+                            if (!existing.linkedWordKeys.includes(wKey)) {
+                                existing.linkedWordKeys.push(wKey);
+                            }
+                        } else {
+                            const newShared = {
+                                id: n.id || ('snote_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
+                                title: n.title || '知识笔记',
+                                content: n.content || '',
+                                date: n.date || getTodayYMD(),
+                                category: n.category || 'AI辨析',
+                                linkedWordKeys: [getWordKey(w)]
+                            };
+                            seenMap.set(uniqueKey, newShared);
+                        }
+                    });
+                }
+            });
+            list = Array.from(seenMap.values());
+            if (list.length > 0) {
+                this.saveSharedNotes(list);
+            }
+        }
+        return list;
+    },
+
+    saveSharedNotes(notesList) {
+        if (!Array.isArray(notesList)) return;
+        localStorage.setItem(APP_CONFIG.SHARED_NOTES_STORAGE_KEY, JSON.stringify(notesList));
+    },
+
+    /**
+     * 保存单条共享笔记实体，并自动将其同步挂载到所有被关联的单词对象上
+     * @param {Object} noteEntity 包含 id, title, content, category, date, linkedWordKeys
+     * @param {Array<Object>} selectedWordsArray 关联的单词对象数组
+     */
+    saveUnifiedSharedNote(noteEntity, selectedWordsArray) {
+        if (!noteEntity) return;
+        const list = this.loadSharedNotes();
+        const existingIdx = list.findIndex(n => n.id === noteEntity.id);
+
+        const linkedWordKeys = selectedWordsArray.map(w => getWordKey(w));
+        noteEntity.linkedWordKeys = Array.from(new Set(linkedWordKeys));
+
+        if (existingIdx >= 0) {
+            list[existingIdx] = noteEntity;
+        } else {
+            list.unshift(noteEntity);
+        }
+        this.saveSharedNotes(list);
+
+        // 强一致性同步：将该共享文本引用更新至当前词库所有选中的单词
+        const wordKeySet = new Set(noteEntity.linkedWordKeys);
+        if (appState.allWords && appState.allWords.length > 0) {
+            appState.allWords.forEach(w => {
+                const k = getWordKey(w);
+                if (!Array.isArray(w.notes)) w.notes = [];
+
+                if (wordKeySet.has(k)) {
+                    const noteInWordIdx = w.notes.findIndex(n => n.id === noteEntity.id);
+                    const wordNoteItem = {
+                        id: noteEntity.id,
+                        title: noteEntity.title,
+                        content: noteEntity.content,
+                        date: noteEntity.date,
+                        category: noteEntity.category,
+                        isShared: true
+                    };
+                    if (noteInWordIdx >= 0) {
+                        w.notes[noteInWordIdx] = wordNoteItem;
+                    } else {
+                        w.notes.unshift(wordNoteItem);
+                    }
+                } else {
+                    // 若之前关联但此次被取消勾选，则清理其引用
+                    w.notes = w.notes.filter(n => n.id !== noteEntity.id);
+                }
+            });
+            this.saveLibrary(appState.allWords);
+        }
+        return noteEntity;
+    },
+
+    deleteUnifiedSharedNote(noteId) {
+        let list = this.loadSharedNotes();
+        list = list.filter(n => n.id !== noteId);
+        this.saveSharedNotes(list);
+
+        if (appState.allWords && appState.allWords.length > 0) {
+            appState.allWords.forEach(w => {
+                if (Array.isArray(w.notes)) {
+                    w.notes = w.notes.filter(n => n.id !== noteId);
+                }
+            });
+            this.saveLibrary(appState.allWords);
+        }
+    },
+
+    /**
+     * 导出指定分类或全部笔记（同时携带关联单词的所有完整数据元结构）
+     * @param {string|null} categoryFilter 分类名称，传 null 或 'ALL' 为全部
+     */
+    exportNotesWithFullWordPayload(categoryFilter = null) {
+        const notes = this.loadSharedNotes();
+        const filteredNotes = (!categoryFilter || categoryFilter === 'ALL')
+            ? notes
+            : notes.filter(n => (n.category || '未分类') === categoryFilter);
+
+        if (filteredNotes.length === 0) {
+            return null;
+        }
+
+        const wordLookup = new Map();
+        if (appState.allWords) {
+            appState.allWords.forEach(w => wordLookup.set(getWordKey(w), w));
+        }
+
+        const exportPayload = filteredNotes.map(n => {
+            const fullWordsList = (n.linkedWordKeys || []).map(k => {
+                const w = wordLookup.get(k);
+                if (!w) return { words: k, chinese: '(外部词汇)' };
+                return {
+                    num: w.num,
+                    words: w.words,
+                    phonetic: w.phonetic,
+                    chinese: w.chinese,
+                    part_of_speech: w.part_of_speech,
+                    root_form: w.root_form,
+                    method: w.method,
+                    grade: w.grade,
+                    term: w.term,
+                    unit: w.unit,
+                    Source: w.Source
+                };
+            });
+
+            return {
+                noteId: n.id,
+                title: n.title,
+                content: n.content,
+                category: n.category || '近义辨析',
+                date: n.date,
+                linkedWordsCount: fullWordsList.length,
+                linkedWordsData: fullWordsList
+            };
+        });
+
+        return {
+            metadata: {
+                appName: "3DWordUniverse",
+                exportType: "SharedNotesFullBundle",
+                exportTime: new Date().toISOString(),
+                category: categoryFilter || 'ALL',
+                totalNotes: exportPayload.length
+            },
+            notes: exportPayload
+        };
     }
 };
 

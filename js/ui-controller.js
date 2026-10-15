@@ -1,9 +1,11 @@
 /**
- * 3D单词宇宙 - 全功能 UI 交互控制器与生命周期调度中心
- * 1. 移动端触摸手势全面隔离保护：防止手机原生缩放触发 HUD / 控件漂移丢失
+ * 3D单词宇宙 - 全功能 UI 交互控制器与生命周期调度中心 (V8.6 增强版)
+ * 1. 移动端触摸手势全面隔离保护：锁定视口并防止原生缩放触发 HUD / 控件漂移丢失
  * 2. 旋转速度调整 100% 写入持久化存储，下次启动默认生效
  * 3. 查词窗口呼出即时彻底刹停，窗口关闭/淡出后多阶段平缓渐进加速恢复旋转
- * 4. 智能响应式超宽裁剪放大：正常屏幕保持完整美学边距与拐角；超宽受限时忽略拐角外延，正文贴近2px屏幕缓冲放大展现
+ * 4. 智能响应式超宽裁剪放大：正常屏幕保持完整美学边距；超宽受限时贴近 2px 视口缓冲放大展现
+ * 5. 智能多词共享备注系统：首行 NLP 提取、当前批次优先匹配、全选关联、缺词双卡片兜底命令
+ * 6. 全景沉浸式备注阅读系统：50% 半透明悬浮控制岛、全屏阅读、分类/全量导出完整词元、自动轮播跳转
  */
 (function() {
     let _persistTimer = null;
@@ -43,9 +45,7 @@
         input.click();
     }
 
-    // ★ 核心优化：智能响应式视口自适应机制
-    // 未超宽（如电脑宽屏）：完整保留原本优雅的留白、边距和 4 个拐角，绝不粗暴裁剪；
-    // 超宽（如手机窄屏或大倍率缩放）：忽略外凸拐角，自动将卡片边缘边距延伸裁剪在屏幕外，使有效文字内容两端仅隔 2px 视口缓冲放大展现！
+    // 智能响应式视口自适应机制
     function updateHoverCardPosition(pxWidth, pxHeight, scaleFactor) {
         if (!appState.overlayCardTargetPosition) {
             appState.overlayCardTargetPosition = new THREE.Vector3();
@@ -67,42 +67,28 @@
 
         const userScale = Math.max(0.2, Math.min(5.0, scaleFactor || 1.0));
 
-        // 计算屏幕两侧留出 2 个物理像素缓冲对应的 3D 尺寸
         const screenPxW = window.innerWidth || 390;
         const pad2pxIn3D = (2 / screenPxW) * viewWidth3D;
         const maxContentUsableWidth3D = Math.max(1, viewWidth3D - pad2pxIn3D * 2);
         const maxAllowedHeight3D = viewHeight3D * 0.88;
 
-        // 获取卡片内部正文安全宽度占比（未设置时默认约 91.6%）
         const wordData = appState.hoveredObject?.userData?.word;
         const contentSafeRatio = wordData?.contentSafeRatio || appState.hoverOverlayCard?.userData?.contentSafeRatio || 0.916;
-
-        // 拐角向外扩展的系数（四个外凸拐角突出卡片主体边缘约 12%）
         const cornerOuterRatio = 1.12;
 
-        // 1. 计算未裁剪时，整张卡片（含留白与拐角）的理想自然呈现宽度
         const normalIdealWidth = viewWidth3D * (IS_MOBILE_DEVICE ? 0.88 : 0.65) * userScale;
-
         let targetWidth3D = normalIdealWidth;
 
-        // 2. 超宽判定：如果自然宽度连同拐角超出了屏幕可用宽度，或者当前属于极窄手机屏导致文字过小
         const isOverflowing = (normalIdealWidth * cornerOuterRatio > maxContentUsableWidth3D) || (IS_MOBILE_DEVICE && normalIdealWidth > maxContentUsableWidth3D * 0.82);
 
         if (isOverflowing) {
-            // ★ 触发超宽特写放大裁剪：
-            // 彻底忽略 4 个外突拐角的距离占用，并将两边多余的外围空白边距延伸裁剪在屏幕外，
-            // 使得正文内容区（contentSafeRatio 部分）正好贴近屏幕两端 2px 极微缓冲，文字大而饱满！
             const cropZoomWidth = maxContentUsableWidth3D / contentSafeRatio;
             targetWidth3D = cropZoomWidth;
         } else {
-            // ★ 未超宽（如电脑宽屏）：完整呈现原本的美学设计！
-            // 边框、边距留白、4个机甲拐角全部完好展现，绝不粗暴裁头剃光
             targetWidth3D = Math.min(normalIdealWidth, maxContentUsableWidth3D / cornerOuterRatio);
         }
 
         let targetHeight3D = targetWidth3D / cardAspect;
-
-        // 高度安全边界保护：防止垂直方向溢出视口
         if (targetHeight3D > maxAllowedHeight3D) {
             targetHeight3D = maxAllowedHeight3D;
             targetWidth3D = targetHeight3D * cardAspect;
@@ -142,7 +128,10 @@
             this.initSystemViews();
             this.loadCustomViews();
             this.initStudyLog();
-            this.initNoteModalHandlers();
+
+            // 智能共享备注与阅读系统初始化
+            this.initSmartNoteModalHandlers();
+            this.initImmersiveNoteReader();
 
             this.loadSettings();
             await this.loadWordDataAndBoot();
@@ -232,6 +221,8 @@
 
             const totalWordsDisplay = document.getElementById('totalWords');
             if (totalWordsDisplay) totalWordsDisplay.textContent = appState.allWords.length;
+            const entireCountEl = document.getElementById('entireLibTotalCount');
+            if (entireCountEl) entireCountEl.textContent = appState.allWords.length;
 
             this.displayCurrentBatch();
             this.updateStats();
@@ -401,6 +392,9 @@
             };
             update();
             setInterval(update, 1000);
+
+            // 双击时钟快捷呼出智能备注系统
+            clockEl?.addEventListener('dblclick', () => this.openSmartNoteModal(null));
         },
 
         enhanceSlidersWithSteppers() {
@@ -777,8 +771,14 @@
             document.getElementById('uploadBtn')?.addEventListener('click', () => this.handleFileUpload());
             document.getElementById('appendUploadBtn')?.addEventListener('click', () => this.handleAppendUpload());
             document.getElementById('exportJSONBtn')?.addEventListener('click', () => this.exportJSON());
+            document.getElementById('exportNotesUnifiedBtn')?.addEventListener('click', () => this.exportAllNotesPrompt());
             document.getElementById('exportSettingsBtn')?.addEventListener('click', () => this.exportSettings());
             document.getElementById('importSettingsBtn')?.addEventListener('click', () => this.importSettings());
+
+            document.getElementById('openSmartNoteBtnFromSettings')?.addEventListener('click', () => {
+                document.getElementById('controlsOverlay')?.classList.remove('visible');
+                this.openSmartNoteModal(null);
+            });
 
             document.getElementById('rotateToggle')?.addEventListener('click', () => {
                 appState.autoRotate = !appState.autoRotate;
@@ -828,22 +828,56 @@
                 if (appState.currentDetailWord?.words) AppAudio.speakWord(appState.currentDetailWord.words);
             });
             document.getElementById('detailAddNoteBtn')?.addEventListener('click', () => {
-                if (appState.currentDetailWord) this.openNoteEditModal(appState.currentDetailWord, null);
+                if (appState.currentDetailWord) this.openSmartNoteModal(appState.currentDetailWord, null);
             });
 
-            document.getElementById('helpBtn')?.addEventListener('click', () => {
-                document.getElementById('helpModalBackdrop')?.classList.add('visible');
+            // 右侧面板专属备注入口
+            document.getElementById('openNoteSystemBtn')?.addEventListener('click', () => {
+                this.openSmartNoteModal(null);
             });
 
+            // 右下角总开关按钮双模手势：单击折叠/展开，长按 700ms 秒入备注
             const masterBtn = document.getElementById('masterMenuToggleBtn');
             const viewControls = document.getElementById('viewControlsContainer');
             if (masterBtn && viewControls) {
+                let masterPressTimer = null;
+                let masterDidLongPress = false;
+
+                const startMasterPress = () => {
+                    masterDidLongPress = false;
+                    masterPressTimer = setTimeout(() => {
+                        masterDidLongPress = true;
+                        if (navigator.vibrate) navigator.vibrate([40, 30, 60]);
+                        this.showToast('📝 长按激活：智能备注系统已呼出！', 1600);
+                        this.openSmartNoteModal(null);
+                    }, 700);
+                };
+
+                const cancelMasterPress = () => {
+                    if (masterPressTimer) {
+                        clearTimeout(masterPressTimer);
+                        masterPressTimer = null;
+                    }
+                };
+
+                masterBtn.addEventListener('pointerdown', startMasterPress);
+                masterBtn.addEventListener('pointerup', cancelMasterPress);
+                masterBtn.addEventListener('pointercancel', cancelMasterPress);
+
                 masterBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    if (masterDidLongPress) {
+                        masterDidLongPress = false;
+                        return;
+                    }
                     viewControls.classList.toggle('expanded');
                     masterBtn.textContent = viewControls.classList.contains('expanded') ? '❌' : '🔮';
                 });
             }
+
+            document.getElementById('helpBtn')?.addEventListener('click', () => {
+                alert('3D单词宇宙使用指南：\n1. 点击卡片可呼出查词并立即静止；\n2. 长按右下角 🔮 按钮(700ms)或单击右侧 📝 按钮可进入智能多词备注系统；\n3. 在备注系统中输入首行单词，自动识别并关联球面卡片，多词共享同一份AI辨析；\n4. 沉浸式阅读器自带50%防打扰半透明控制岛，支持自动轮播与全量带词元导出！');
+            });
         },
 
         showNumberPromptModal(options) {
@@ -906,16 +940,124 @@
             setTimeout(() => { inputEl.focus(); inputEl.select(); }, 100);
         },
 
-        initNoteModalHandlers() {
+        // ==================== 智能多词关联备注录入控制器 ====================
+        initSmartNoteModalHandlers() {
             const modal = document.getElementById('wordNoteModalBackdrop');
             const titleInput = document.getElementById('noteInputTitle');
+            const categoryInput = document.getElementById('noteInputCategory');
             const contentInput = document.getElementById('noteInputContent');
             const submitBtn = document.getElementById('saveNoteSubmitBtn');
             const cancelBtn = document.getElementById('closeNoteModalBtn');
+            const closeXBtn = document.getElementById('closeNoteModalTopBtn');
+            const selectAllBtn = document.getElementById('smartSelectAllBtn');
+            const selectNoneBtn = document.getElementById('smartSelectNoneBtn');
+            const openReaderBtn = document.getElementById('openReaderFromModalBtn');
+            const searchAllLibCard = document.getElementById('searchInEntireLibraryCard');
+            const searchExtFileCard = document.getElementById('searchInExternalFileCard');
 
             let titleDebounceTimer = null;
             let isComposing = false;
             let lastAutoCopiedTitle = "";
+
+            // 核心分词匹配器：解析第一行并匹配单词
+            const analyzeFirstLineAndMatch = (forceAllLib = false, customWordsPool = null) => {
+                if (!titleInput) return;
+                const fullText = titleInput.value;
+                const firstLine = fullText.split('\n')[0].trim();
+                const tokensBar = document.getElementById('smartExtractedTokensBar');
+                const matchedListEl = document.getElementById('smartMatchedCardsList');
+                const countLabel = document.getElementById('smartMatchedCountLabel');
+                const fallbackGroup = document.getElementById('smartFallbackActionGroup');
+                const statusLabel = document.getElementById('smartWordAnalyzeStatus');
+
+                if (!firstLine) {
+                    if (tokensBar) tokensBar.innerHTML = '';
+                    if (matchedListEl) matchedListEl.innerHTML = '<div style="color:#7d94b2; font-size:0.8rem; padding:8px;">请输入或粘贴标题，系统将自动识别并匹配卡片...</div>';
+                    if (countLabel) countLabel.textContent = '0';
+                    if (fallbackGroup) fallbackGroup.classList.add('hidden');
+                    return;
+                }
+
+                // 提取英文单词 (长度>=2，去除常见停用连词)
+                const rawTokens = firstLine.match(/[a-zA-Z]+(?:'[a-zA-Z]+)?/g) || [];
+                const stopWords = new Set(['vs', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'the', 'a', 'an', 'between', 'difference', 'compare']);
+                const validTokens = Array.from(new Set(rawTokens.map(t => t.toLowerCase()).filter(t => t.length >= 2 && !stopWords.has(t))));
+
+                if (tokensBar) {
+                    tokensBar.innerHTML = validTokens.map(tok => `<span class="smart-token-pill">${tok}</span>`).join('');
+                }
+
+                // 优先在当前球面显示的卡片中查找匹配
+                let candidatePool = appState.currentBatchWords || [];
+                if (customWordsPool && Array.isArray(customWordsPool)) {
+                    candidatePool = customWordsPool;
+                } else if (forceAllLib) {
+                    candidatePool = appState.allWords || [];
+                }
+
+                const matchedWords = [];
+                const matchedKeys = new Set();
+
+                validTokens.forEach(token => {
+                    candidatePool.forEach(w => {
+                        const wordText = (w.words || '').trim().toLowerCase();
+                        const rootText = (w.root_form || '').trim().toLowerCase();
+                        if (wordText === token || rootText === token) {
+                            const k = getWordKey(w);
+                            if (!matchedKeys.has(k)) {
+                                matchedKeys.add(k);
+                                matchedWords.push(w);
+                            }
+                        }
+                    });
+                });
+
+                // 若编辑模式且有绑定的主单词，确保主单词始终在列表中
+                if (appState.activeNoteWord) {
+                    const activeKey = getWordKey(appState.activeNoteWord);
+                    if (!matchedKeys.has(activeKey)) {
+                        matchedWords.unshift(appState.activeNoteWord);
+                        matchedKeys.add(activeKey);
+                    }
+                }
+
+                // 挂载到弹窗临时缓存中供勾选与保存提取
+                modal._currentMatchedWordsPool = matchedWords;
+
+                if (countLabel) countLabel.textContent = String(matchedWords.length);
+
+                if (matchedWords.length > 0) {
+                    if (statusLabel) statusLabel.textContent = `成功匹配到 ${matchedWords.length} 个单词卡片`;
+                    matchedListEl.innerHTML = matchedWords.map(w => {
+                        const k = getWordKey(w);
+                        return `
+                            <div class="smart-word-card checked" data-key="${k}">
+                                <input type="checkbox" checked id="chk_${k}" data-key="${k}">
+                                <div class="smart-word-info">
+                                    <span class="smart-word-title">${w.words || 'N/A'}</span>
+                                    <span class="smart-word-sub">${w.phonetic || ''} ${w.chinese || ''}</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    matchedListEl.querySelectorAll('.smart-word-card').forEach(cardEl => {
+                        cardEl.addEventListener('click', (e) => {
+                            const chk = cardEl.querySelector('input[type="checkbox"]');
+                            if (e.target !== chk) chk.checked = !chk.checked;
+                            cardEl.classList.toggle('checked', chk.checked);
+                        });
+                    });
+
+                    // 匹配成功时收起兜底命令卡片
+                    if (fallbackGroup) fallbackGroup.classList.add('hidden');
+                } else {
+                    if (statusLabel) statusLabel.textContent = '当前球面未找到记录';
+                    matchedListEl.innerHTML = '<div style="color:#fca5a5; font-size:0.82rem; padding:10px; text-align:center;">⚠️ 当前球面显示的卡片中未匹配到相关单词。请选择下方两条命令之一：</div>';
+                    // 展露两条命令卡片供用户深搜或外置检索
+                    if (fallbackGroup) fallbackGroup.classList.remove('hidden');
+                }
+            };
 
             const doAutoCopyTitle = () => {
                 if (!titleInput) return;
@@ -930,132 +1072,427 @@
                 });
             };
 
-            const scheduleAutoCopy = () => {
+            const scheduleAutoAnalyzeAndCopy = () => {
                 if (titleDebounceTimer) {
                     clearTimeout(titleDebounceTimer);
                     titleDebounceTimer = null;
                 }
                 if (isComposing) return;
                 titleDebounceTimer = setTimeout(() => {
+                    analyzeFirstLineAndMatch();
                     doAutoCopyTitle();
-                }, 1000);
+                }, 800);
             };
 
             titleInput?.addEventListener('compositionstart', () => { isComposing = true; });
             titleInput?.addEventListener('compositionend', () => {
                 isComposing = false;
-                scheduleAutoCopy();
+                scheduleAutoAnalyzeAndCopy();
             });
 
             titleInput?.addEventListener('input', () => {
-                scheduleAutoCopy();
+                analyzeFirstLineAndMatch();
+                scheduleAutoAnalyzeAndCopy();
             });
 
             titleInput?.addEventListener('blur', () => {
-                if (titleDebounceTimer) {
-                    clearTimeout(titleDebounceTimer);
-                    titleDebounceTimer = null;
-                }
+                if (titleDebounceTimer) clearTimeout(titleDebounceTimer);
                 doAutoCopyTitle();
             });
 
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'hidden') {
-                    if (modal && modal.classList.contains('visible')) {
-                        if (titleDebounceTimer) {
-                            clearTimeout(titleDebounceTimer);
-                            titleDebounceTimer = null;
-                        }
-                        doAutoCopyTitle();
-                    }
-                } else if (document.visibilityState === 'visible') {
-                    if (modal && modal.classList.contains('visible')) {
-                        if (contentInput && !contentInput.value.trim()) {
-                            setTimeout(() => contentInput.focus(), 150);
-                        }
-                    }
-                }
+            // 命令 1：在当前魔法球完整大词库中深搜
+            searchAllLibCard?.addEventListener('click', () => {
+                analyzeFirstLineAndMatch(true);
+                AppUI.showToast('🔍 已在当前完整大词库中完成全量深搜！', 1500);
             });
 
-            cancelBtn?.addEventListener('click', () => {
+            // 命令 2：指定打开手机/电脑外部词库文件深度匹配
+            searchExtFileCard?.addEventListener('click', () => {
+                selectLocalFile('application/json,.json', (file) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const extWords = JSON.parse(e.target.result);
+                            if (!Array.isArray(extWords)) throw new Error('词库必须是数组结构');
+                            analyzeFirstLineAndMatch(false, extWords);
+                            AppUI.showToast(`📂 已从外部词库 (${extWords.length} 词) 完成匹配检索！`, 2000);
+                        } catch (err) {
+                            alert('外部词库解析失败: ' + err.message);
+                        }
+                    };
+                    reader.readAsText(file);
+                });
+            });
+
+            selectAllBtn?.addEventListener('click', () => {
+                const matchedListEl = document.getElementById('smartMatchedCardsList');
+                matchedListEl?.querySelectorAll('.smart-word-card').forEach(card => {
+                    const chk = card.querySelector('input[type="checkbox"]');
+                    if (chk) chk.checked = true;
+                    card.classList.add('checked');
+                });
+            });
+
+            selectNoneBtn?.addEventListener('click', () => {
+                const matchedListEl = document.getElementById('smartMatchedCardsList');
+                matchedListEl?.querySelectorAll('.smart-word-card').forEach(card => {
+                    const chk = card.querySelector('input[type="checkbox"]');
+                    if (chk) chk.checked = false;
+                    card.classList.remove('checked');
+                });
+            });
+
+            openReaderBtn?.addEventListener('click', () => {
+                modal.classList.remove('visible');
+                this.openNoteReader();
+            });
+
+            const closeModal = () => {
                 modal.classList.remove('visible');
                 appState.activeNoteWord = null;
                 appState.editingNoteId = null;
                 lastAutoCopiedTitle = "";
                 if (titleDebounceTimer) clearTimeout(titleDebounceTimer);
-            });
+            };
+
+            cancelBtn?.addEventListener('click', closeModal);
+            closeXBtn?.addEventListener('click', closeModal);
 
             submitBtn?.addEventListener('click', () => {
                 const title = titleInput.value.trim();
                 const content = contentInput.value.trim();
+                const category = (categoryInput.value.trim()) || '近义辨析';
+
                 if (!title) {
                     alert('请输入备注标题！');
                     return;
                 }
-                if (!appState.activeNoteWord) return;
 
-                const word = appState.activeNoteWord;
-                if (!Array.isArray(word.notes)) word.notes = [];
+                const matchedListEl = document.getElementById('smartMatchedCardsList');
+                const checkedCheckboxes = matchedListEl ? matchedListEl.querySelectorAll('input[type="checkbox"]:checked') : [];
+                const checkedKeys = new Set(Array.from(checkedCheckboxes).map(c => c.getAttribute('data-key')));
 
-                if (appState.editingNoteId) {
-                    const note = word.notes.find(n => n.id === appState.editingNoteId);
-                    if (note) {
-                        note.title = title;
-                        note.content = content;
-                        note.date = getTodayYMD();
-                    }
-                    this.showToast('📝 备注已更新');
-                } else {
-                    const newNote = {
-                        id: 'note_' + Date.now(),
-                        date: getTodayYMD(),
-                        title: title,
-                        content: content
-                    };
-                    word.notes.unshift(newNote);
-                    this.showToast('🎉 新备注已保存');
+                const pool = modal._currentMatchedWordsPool || [];
+                const selectedWords = pool.filter(w => checkedKeys.has(getWordKey(w)));
+
+                if (selectedWords.length === 0 && appState.activeNoteWord) {
+                    selectedWords.push(appState.activeNoteWord);
                 }
 
-                AppStorage.saveLibrary(appState.allWords);
-                modal.classList.remove('visible');
+                const noteEntity = {
+                    id: appState.editingNoteId || ('snote_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)),
+                    title: title,
+                    content: content,
+                    category: category,
+                    date: getTodayYMD(),
+                    linkedWordKeys: selectedWords.map(w => getWordKey(w))
+                };
 
-                if (appState.currentDetailWord && getWordKey(appState.currentDetailWord) === getWordKey(word)) {
-                    this.renderDetailNotesList(word);
+                // 执行多对一知识图谱持久化保存
+                AppStorage.saveUnifiedSharedNote(noteEntity, selectedWords);
+                this.showToast(`🎉 成功保存！已将辨析材料同步共享至 ${selectedWords.length} 个单词！`, 2500);
+
+                closeModal();
+
+                if (appState.currentDetailWord) {
+                    this.renderDetailNotesList(appState.currentDetailWord);
                 }
-                if (appState.hoveredObject && getWordKey(appState.hoveredObject.userData.word) === getWordKey(word)) {
+                if (appState.hoveredObject && appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
                     this.triggerCardDisplay(appState.hoveredObject);
                 }
             });
         },
 
-        openNoteEditModal(word, existingNote = null) {
-            appState.activeNoteWord = word;
+        openSmartNoteModal(targetWord = null, existingNote = null) {
+            appState.activeNoteWord = targetWord;
             appState.editingNoteId = existingNote ? existingNote.id : null;
 
             const modal = document.getElementById('wordNoteModalBackdrop');
             const header = document.getElementById('noteModalHeaderTitle');
             const titleInput = document.getElementById('noteInputTitle');
+            const categoryInput = document.getElementById('noteInputCategory');
             const contentInput = document.getElementById('noteInputContent');
 
-            header.textContent = existingNote ? `✏️ 编辑备注 - ${word.words}` : `📝 添加新备注 - ${word.words}`;
-            titleInput.value = existingNote ? existingNote.title : '';
+            header.textContent = existingNote 
+                ? `✏️ 编辑 AI 知识辨析 - ${existingNote.title}` 
+                : (targetWord ? `📝 为 [${targetWord.words}] 录入共享备注` : `📝 智能多词关联 AI 备注系统`);
+
+            titleInput.value = existingNote ? existingNote.title : (targetWord ? `辨析 ${targetWord.words} 与 ` : '');
+            categoryInput.value = existingNote ? (existingNote.category || '近义辨析') : '近义辨析';
             contentInput.value = existingNote ? existingNote.content : '';
 
             modal.classList.add('visible');
-            setTimeout(() => titleInput.focus(), 100);
+
+            setTimeout(() => {
+                titleInput.focus();
+                // 立即触发一次首行识别
+                const titleChangeEvent = new Event('input', { bubbles: true });
+                titleInput.dispatchEvent(titleChangeEvent);
+            }, 100);
         },
 
-        deleteNote(word, noteId) {
-            if (!word || !Array.isArray(word.notes)) return;
-            if (confirm('确定要删除这条备注吗？')) {
-                word.notes = word.notes.filter(n => n.id !== noteId);
-                AppStorage.saveLibrary(appState.allWords);
-                this.renderDetailNotesList(word);
-                if (appState.hoveredObject && getWordKey(appState.hoveredObject.userData.word) === getWordKey(word)) {
-                    this.triggerCardDisplay(appState.hoveredObject);
+        // ==================== 沉浸式高级备注阅读系统控制器 ====================
+        initImmersiveNoteReader() {
+            const backdrop = document.getElementById('immersiveNoteReaderBackdrop');
+            const closeBtn = document.getElementById('closeNoteReaderBtn');
+            const prevBtn = document.getElementById('readerPrevNoteBtn');
+            const nextBtn = document.getElementById('readerNextNoteBtn');
+            const cruiseBtn = document.getElementById('readerAutoCruiseToggleBtn');
+            const cruiseIntervalSelect = document.getElementById('readerCruiseIntervalSelect');
+            const cruiseStatusText = document.getElementById('readerCruiseStatusText');
+            const progressFill = document.getElementById('readerCruiseProgressFill');
+            const categorySelect = document.getElementById('readerCategorySelect');
+            const searchInput = document.getElementById('readerSearchInput');
+            const exportCategoryBtn = document.getElementById('readerExportCurrentCategoryBtn');
+            const exportAllBtn = document.getElementById('readerExportAllNotesBtn');
+            const fullscreenBtn = document.getElementById('readerToggleFullscreenBtn');
+            const addNewBtn = document.getElementById('readerAddNewNoteBtn');
+            const editBtn = document.getElementById('readerEditCurrentNoteBtn');
+            const delBtn = document.getElementById('readerDeleteCurrentNoteBtn');
+            const speakBtn = document.getElementById('readerSpeakNoteBtn');
+
+            const sn = appState.smartNotes;
+
+            const stopCruise = () => {
+                sn.isAutoCruising = false;
+                if (sn.cruiseTimer) clearInterval(sn.cruiseTimer);
+                if (sn.progressTimer) clearInterval(sn.progressTimer);
+                sn.cruiseTimer = null;
+                sn.progressTimer = null;
+                if (cruiseStatusText) cruiseStatusText.textContent = '关';
+                if (progressFill) progressFill.style.width = '0%';
+            };
+
+            const startCruise = () => {
+                stopCruise();
+                sn.isAutoCruising = true;
+                if (cruiseStatusText) cruiseStatusText.textContent = '开';
+                const intervalSec = parseInt(cruiseIntervalSelect?.value || '6', 10);
+                let elapsedMs = 0;
+                const totalMs = intervalSec * 1000;
+
+                sn.progressTimer = setInterval(() => {
+                    elapsedMs += 100;
+                    const pct = Math.min(100, (elapsedMs / totalMs) * 100);
+                    if (progressFill) progressFill.style.width = pct + '%';
+                    if (elapsedMs >= totalMs) {
+                        elapsedMs = 0;
+                        this.navigateReaderNote(1);
+                    }
+                }, 100);
+            };
+
+            cruiseBtn?.addEventListener('click', () => {
+                if (sn.isAutoCruising) stopCruise();
+                else startCruise();
+            });
+
+            cruiseIntervalSelect?.addEventListener('change', () => {
+                if (sn.isAutoCruising) startCruise();
+            });
+
+            closeBtn?.addEventListener('click', () => {
+                stopCruise();
+                backdrop.classList.remove('visible');
+            });
+
+            prevBtn?.addEventListener('click', () => {
+                this.navigateReaderNote(-1);
+            });
+
+            nextBtn?.addEventListener('click', () => {
+                this.navigateReaderNote(1);
+            });
+
+            // 键盘左右箭头翻页支持
+            window.addEventListener('keydown', (e) => {
+                if (!backdrop.classList.contains('visible')) return;
+                if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+                if (e.key === 'ArrowLeft') {
+                    this.navigateReaderNote(-1);
+                } else if (e.key === 'ArrowRight') {
+                    this.navigateReaderNote(1);
+                } else if (e.key === 'Escape') {
+                    stopCruise();
+                    backdrop.classList.remove('visible');
                 }
-                this.showToast('🗑️ 备注已删除');
+            });
+
+            categorySelect?.addEventListener('change', () => {
+                this.filterReaderNotes();
+            });
+
+            searchInput?.addEventListener('input', () => {
+                this.filterReaderNotes();
+            });
+
+            fullscreenBtn?.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    backdrop.requestFullscreen().catch(() => {});
+                } else {
+                    document.exitFullscreen().catch(() => {});
+                }
+            });
+
+            addNewBtn?.addEventListener('click', () => {
+                this.openSmartNoteModal(null);
+            });
+
+            editBtn?.addEventListener('click', () => {
+                const cur = sn.readerFilteredList[sn.currentReaderIndex];
+                if (cur) {
+                    this.openSmartNoteModal(null, cur);
+                }
+            });
+
+            delBtn?.addEventListener('click', () => {
+                const cur = sn.readerFilteredList[sn.currentReaderIndex];
+                if (!cur) return;
+                if (confirm(`确定要彻底删除笔记 "${cur.title}" 吗？此操作将解除所有关联单词的引用。`)) {
+                    AppStorage.deleteUnifiedSharedNote(cur.id);
+                    this.showToast('🗑️ 共享笔记已彻底删除');
+                    this.filterReaderNotes();
+                }
+            });
+
+            speakBtn?.addEventListener('click', () => {
+                const cur = sn.readerFilteredList[sn.currentReaderIndex];
+                if (!cur || !cur.linkedWordKeys || cur.linkedWordKeys.length === 0) return;
+                const textToSpeak = cur.linkedWordKeys.map(k => k.split('_')[0]).join(', ');
+                AppAudio.speakWord(textToSpeak, 1);
+                this.showToast(`🔊 朗读词群: ${textToSpeak}`);
+            });
+
+            exportCategoryBtn?.addEventListener('click', () => {
+                const cat = categorySelect?.value || 'ALL';
+                this.exportAllNotesPrompt(cat);
+            });
+
+            exportAllBtn?.addEventListener('click', () => {
+                this.exportAllNotesPrompt('ALL');
+            });
+        },
+
+        openNoteReader(startNoteId = null) {
+            const backdrop = document.getElementById('immersiveNoteReaderBackdrop');
+            if (!backdrop) return;
+            this.pauseMotionOnHover();
+            this.populateReaderCategories();
+            this.filterReaderNotes(startNoteId);
+            backdrop.classList.add('visible');
+        },
+
+        populateReaderCategories() {
+            const select = document.getElementById('readerCategorySelect');
+            if (!select) return;
+            const notes = AppStorage.loadSharedNotes();
+            const categories = Array.from(new Set(notes.map(n => n.category || '近义辨析'))).filter(Boolean);
+
+            const curVal = select.value;
+            select.innerHTML = '<option value="ALL">全部知识分类</option>' + categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            if (categories.includes(curVal)) select.value = curVal;
+        },
+
+        filterReaderNotes(targetNoteId = null) {
+            const sn = appState.smartNotes;
+            const notes = AppStorage.loadSharedNotes();
+            const cat = document.getElementById('readerCategorySelect')?.value || 'ALL';
+            const kw = (document.getElementById('readerSearchInput')?.value || '').trim().toLowerCase();
+
+            sn.readerFilteredList = notes.filter(n => {
+                const matchCat = (cat === 'ALL' || (n.category || '近义辨析') === cat);
+                let matchKw = true;
+                if (kw) {
+                    const inTitle = (n.title || '').toLowerCase().includes(kw);
+                    const inContent = (n.content || '').toLowerCase().includes(kw);
+                    const inWords = (n.linkedWordKeys || []).some(k => k.toLowerCase().includes(kw));
+                    matchKw = inTitle || inContent || inWords;
+                }
+                return matchCat && matchKw;
+            });
+
+            if (targetNoteId) {
+                const idx = sn.readerFilteredList.findIndex(n => n.id === targetNoteId);
+                sn.currentReaderIndex = (idx >= 0) ? idx : 0;
+            } else {
+                sn.currentReaderIndex = 0;
             }
+
+            this.renderCurrentReaderNote();
+        },
+
+        navigateReaderNote(step) {
+            const sn = appState.smartNotes;
+            if (!sn.readerFilteredList || sn.readerFilteredList.length === 0) return;
+            sn.currentReaderIndex = (sn.currentReaderIndex + step + sn.readerFilteredList.length) % sn.readerFilteredList.length;
+            this.renderCurrentReaderNote();
+        },
+
+        renderCurrentReaderNote() {
+            const sn = appState.smartNotes;
+            const counterTag = document.getElementById('readerNoteCounterTag');
+            const categoryTag = document.getElementById('readerCardCategoryTag');
+            const dateTag = document.getElementById('readerCardDateTag');
+            const wordsCountTag = document.getElementById('readerCardWordsCountTag');
+            const titleEl = document.getElementById('readerCardTitle');
+            const contentEl = document.getElementById('readerCardText');
+            const pillsContainer = document.getElementById('readerLinkedWordsPills');
+
+            if (!sn.readerFilteredList || sn.readerFilteredList.length === 0) {
+                if (counterTag) counterTag.textContent = '0 / 0';
+                if (titleEl) titleEl.textContent = '暂无符合条件的笔记';
+                if (contentEl) contentEl.textContent = '点击下方“➕ 录入新辨析”开始整理知识材料吧！';
+                if (pillsContainer) pillsContainer.innerHTML = '';
+                return;
+            }
+
+            const cur = sn.readerFilteredList[sn.currentReaderIndex];
+            if (counterTag) counterTag.textContent = `${sn.currentReaderIndex + 1} / ${sn.readerFilteredList.length}`;
+            if (categoryTag) categoryTag.textContent = cur.category || '近义辨析';
+            if (dateTag) dateTag.textContent = cur.date || getTodayYMD();
+            if (wordsCountTag) wordsCountTag.textContent = `共享 ${cur.linkedWordKeys?.length || 0} 词`;
+            if (titleEl) titleEl.textContent = cur.title || '无标题辨析';
+            if (contentEl) contentEl.textContent = cur.content || '(该笔记暂无详细正文)';
+
+            if (pillsContainer) {
+                const wordsList = cur.linkedWordKeys || [];
+                pillsContainer.innerHTML = wordsList.map(k => {
+                    const rawName = k.split('_')[0] || k;
+                    return `<span class="linked-word-pill" data-word="${rawName}" title="点击朗读该单词">🔊 ${rawName}</span>`;
+                }).join('');
+
+                pillsContainer.querySelectorAll('.linked-word-pill').forEach(pill => {
+                    pill.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const wd = pill.getAttribute('data-word');
+                        if (wd) {
+                            AppAudio.speakWord(wd, 1);
+                            AppUI.showToast(`🔊 朗读: ${wd}`);
+                        }
+                    });
+                });
+            }
+        },
+
+        exportAllNotesPrompt(category = 'ALL') {
+            const data = AppStorage.exportNotesWithFullWordPayload(category);
+            if (!data) {
+                alert('所选分类下暂无任何可供导出的笔记！');
+                return;
+            }
+
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const catLabel = category === 'ALL' ? '全部全量' : category;
+            a.download = `3DWordUniverse_Notes_${catLabel}_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.showToast(`📦 成功导出 ${data.metadata.totalNotes} 条笔记 (已携带完整单词全要素词元数据)！`, 3000);
         },
 
         renderDetailNotesList(word) {
@@ -1074,16 +1511,29 @@
             container.innerHTML = notes.map(note => `
                 <div class="note-item-card" id="noteCard_${note.id}">
                     <div class="note-item-head" onclick="document.getElementById('noteCard_${note.id}').classList.toggle('expanded')">
-                        <span class="note-item-tag">📅 ${note.date}</span>
+                        <span class="note-item-tag">📅 ${note.date || '2026'}</span>
                         <span class="note-item-title">${note.title}</span>
                         <div class="note-item-ops" onclick="event.stopPropagation()">
-                            <button class="note-op-btn" title="编辑" onclick="AppUI.openNoteEditModal(AppUI.getCurrentWord(), ${JSON.stringify(note).replace(/"/g, '&quot;')})">✏️</button>
+                            <button class="note-op-btn" title="在阅读系统中全屏精读" onclick="AppUI.openNoteReader('${note.id}')">📖</button>
+                            <button class="note-op-btn" title="编辑" onclick="AppUI.openSmartNoteModal(AppUI.getCurrentWord(), ${JSON.stringify(note).replace(/"/g, '&quot;')})">✏️</button>
                             <button class="note-op-btn del" title="删除" onclick="AppUI.deleteNote(AppUI.getCurrentWord(), '${note.id}')">🗑️</button>
                         </div>
                     </div>
                     <div class="note-item-content">${note.content || '(无正文内容)'}</div>
                 </div>
             `).join('');
+        },
+
+        deleteNote(word, noteId) {
+            if (!word || !Array.isArray(word.notes)) return;
+            if (confirm('确定要删除这条备注吗？')) {
+                AppStorage.deleteUnifiedSharedNote(noteId);
+                this.renderDetailNotesList(word);
+                if (appState.hoveredObject && getWordKey(appState.hoveredObject.userData.word) === getWordKey(word)) {
+                    this.triggerCardDisplay(appState.hoveredObject);
+                }
+                this.showToast('🗑️ 备注已删除');
+            }
         },
 
         getCurrentWord() {
@@ -1558,13 +2008,13 @@
                                             appState.overlayCardTargetOpacity = 0;
                                             AppUI.resumeMotionAfterHover();
                                             appState.needsRender = true;
-                                            this.showToast('📝 卡片已关闭，正在打开 AI 备忘录...', 2000);
+                                            this.showToast('📝 卡片已关闭，正在打开 AI 智能备注系统...', 2000);
                                             setTimeout(() => {
-                                                this.openNoteEditModal(wordData, null);
+                                                this.openSmartNoteModal(wordData, null);
                                             }, 150);
                                         }
                                     } else if (zone.type === 'note') {
-                                        this.openNoteEditModal(wordData, null);
+                                        this.openSmartNoteModal(wordData, null);
                                     } else if (zone.type === 'shield') {
                                         if (confirm('确定要将单词 "' + wordData.words + '" 移入屏蔽词库吗？')) {
                                             const key = getWordKey(wordData);
@@ -1897,6 +2347,18 @@
             const goalValEl = document.getElementById('studyGoalValue');
             const settleModal = document.getElementById('studySettleModalBackdrop');
 
+            // 长按学习计数器快速呼出智能备注系统
+            let counterHudPressTimer = null;
+            counterHud?.addEventListener('pointerdown', () => {
+                counterHudPressTimer = setTimeout(() => {
+                    this.openSmartNoteModal(null);
+                    this.showToast('📝 学习面板长按：打开智能备注系统！');
+                }, 750);
+            });
+            const cancelCounterPress = () => { if (counterHudPressTimer) clearTimeout(counterHudPressTimer); };
+            counterHud?.addEventListener('pointerup', cancelCounterPress);
+            counterHud?.addEventListener('pointercancel', cancelCounterPress);
+
             counterValEl?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const curCount = AppStorage.getTodayStudiedCount();
@@ -2085,6 +2547,7 @@
             fullBackup[APP_CONFIG.STUDY_LOG_STORAGE_KEY] = AppStorage.loadStudyLog();
             fullBackup[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY] = Array.from(AppStorage.loadViewedWords());
             fullBackup['shieldedWordsV8'] = Array.from(AppStorage.loadShieldedWords());
+            fullBackup[APP_CONFIG.SHARED_NOTES_STORAGE_KEY] = AppStorage.loadSharedNotes();
 
             const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -2095,7 +2558,7 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            this.showToast('⚙️ 系统全量配置(含暂停恢复、速度、受光度、查词卡与视角)已成功导出！');
+            this.showToast('⚙️ 系统全量配置(含共享知识库、视角与参数)已成功导出！');
         },
 
         importSettings() {
@@ -2134,6 +2597,9 @@
                         }
                         if (imported['shieldedWordsV8']) {
                             AppStorage.saveShieldedWords(new Set(imported['shieldedWordsV8']));
+                        }
+                        if (imported[APP_CONFIG.SHARED_NOTES_STORAGE_KEY]) {
+                            AppStorage.saveSharedNotes(imported[APP_CONFIG.SHARED_NOTES_STORAGE_KEY]);
                         }
 
                         alert('全量系统配置已成功恢复导入！即将刷新页面以应用所有新参数。');
