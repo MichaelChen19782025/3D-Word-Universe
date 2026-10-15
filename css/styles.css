@@ -53,6 +53,7 @@ html, body {
     color: #ffffff;
 }
 
+/* ★ CPU 降温核心：移除高负荷 JS 涂色循环，由 GPU 合成层硬件加速承载 */
 .universe-background {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
     background:
@@ -61,17 +62,32 @@ html, body {
         radial-gradient(ellipse at center,
         hsl(var(--dynamic-bg-hue-start), var(--dynamic-bg-saturation), calc(var(--dynamic-bg-lightness) + 5%)) 0%,
         hsl(var(--dynamic-bg-hue-end), var(--dynamic-bg-saturation), var(--dynamic-bg-lightness)) 78%);
-    transition: background 5s linear;
 }
 
-.nebula { position: absolute; border-radius: 50%; filter: blur(85px); opacity: 0.24; z-index: 0; pointer-events: none; transition: background 5s linear; }
-.nebula-1 { width: 620px; height: 620px; top: 7%; left: 11%; animation: nebulaFloat 42s infinite alternate; }
-.nebula-2 { width: 720px; height: 720px; bottom: 5%; right: 7%; animation: nebulaFloat 52s infinite alternate-reverse; }
+.nebula {
+    position: absolute; border-radius: 50%; filter: blur(75px); opacity: 0.22; z-index: 0; pointer-events: none;
+    will-change: transform, opacity;
+}
+.nebula-1 {
+    width: 580px; height: 580px; top: 7%; left: 11%;
+    background: radial-gradient(circle, rgba(70, 110, 240, 0.6) 0%, transparent 70%);
+    animation: nebulaFloat1 45s infinite alternate ease-in-out;
+}
+.nebula-2 {
+    width: 680px; height: 680px; bottom: 5%; right: 7%;
+    background: radial-gradient(circle, rgba(160, 60, 220, 0.5) 0%, transparent 70%);
+    animation: nebulaFloat2 55s infinite alternate-reverse ease-in-out;
+}
 
-@keyframes nebulaFloat { 
-    from { transform: translate(0, 0) scale(1); opacity: 0.24; } 
-    50% { opacity: 0.32; } 
-    to { transform: translate(105px, -65px) scale(1.38); opacity: 0.22; } 
+@keyframes nebulaFloat1 { 
+    0% { transform: translate(0, 0) scale(1); opacity: 0.20; } 
+    50% { opacity: 0.30; } 
+    100% { transform: translate(90px, -55px) scale(1.3); opacity: 0.18; } 
+}
+@keyframes nebulaFloat2 { 
+    0% { transform: translate(0, 0) scale(1); opacity: 0.18; } 
+    50% { opacity: 0.28; } 
+    100% { transform: translate(-80px, 60px) scale(1.25); opacity: 0.22; } 
 }
 
 .main-content, #wordSphere, #wordSphere canvas { 
@@ -214,27 +230,12 @@ html, body {
     left: -56px;
     box-shadow: -10px 0 40px rgba(0, 240, 255, 0.85);
 }
-#closeDetailBtn:active {
-    transform: translateY(-50%) scale(0.95);
-}
-#closeDetailBtn .close-icon {
-    font-size: 1.6rem;
-    line-height: 1;
-    font-weight: 900;
-}
-#closeDetailBtn .close-text {
-    writing-mode: vertical-rl;
-    font-size: 0.82rem;
-    letter-spacing: 3px;
-    color: #b9f6ff;
-    font-weight: 700;
-}
+#closeDetailBtn:active { transform: translateY(-50%) scale(0.95); }
+#closeDetailBtn .close-icon { font-size: 1.6rem; line-height: 1; font-weight: 900; }
+#closeDetailBtn .close-text { writing-mode: vertical-rl; font-size: 0.82rem; letter-spacing: 3px; color: #b9f6ff; font-weight: 700; }
 
 .immersive-detail-panel:not(.visible) #closeDetailBtn {
-    display: none !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    visibility: hidden !important;
+    display: none !important; opacity: 0 !important; pointer-events: none !important; visibility: hidden !important;
 }
 
 .immersive-detail-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border-color); gap: 15px; }
@@ -245,8 +246,7 @@ html, body {
     padding: 20px; overflow-y: auto; flex-grow: 1;
     background: linear-gradient(155deg, rgba(var(--panel-bg-rgb), 0.8), rgba(var(--panel-bg-rgb), 0.99));
     box-shadow: inset 6px 6px 13px rgba(0,0,0,0.38), inset -2.5px -2.5px 7px rgba(70,90,130,0.28);
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
     font-size: calc(1rem * var(--detail-panel-font-scale));
 }
 .immersive-detail-content::-webkit-scrollbar { width: 6px; }
@@ -338,7 +338,7 @@ html, body {
 .smart-fallback-card .card-body p { font-size: 0.76rem; color: #b9f6ff; line-height: 1.35; margin: 0; }
 .smart-fallback-card.secondary-card .card-body p { color: #fed7aa; }
 
-/* 📖 全景沉浸式备注阅读器 (50%透明度浮动控制条与全屏阅读腔室) */
+/* 📖 全景沉浸式备注阅读器 */
 .note-reader-backdrop { z-index: 10005; background: rgba(3, 8, 20, 0.94); backdrop-filter: blur(16px); }
 .note-reader-container { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
 .reader-content-body { flex: 1; overflow-y: auto; display: flex; justify-content: center; padding: 75px 20px 85px 20px; -webkit-overflow-scrolling: touch; }
@@ -362,7 +362,7 @@ html, body {
 .reader-divider-line { height: 1px; background: linear-gradient(90deg, transparent, rgba(135, 205, 255, 0.4), transparent); margin-bottom: 22px; }
 .reader-article-content { font-size: 1.12rem; line-height: 1.85; color: #eaf0ff; white-space: pre-wrap; word-break: break-word; letter-spacing: 0.3px; }
 
-/* ★ 关键规则：必须使用 50% 透明度显示控制按钮，鼠标悬停或激活时恢复 100% 透明度，彻底避免遮挡干扰 */
+/* 50% 半透明控制浮岛 */
 .reader-translucent-control {
     opacity: 0.50 !important;
     backdrop-filter: blur(14px);
@@ -443,34 +443,31 @@ html, body {
     pointer-events: none;
     transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-#dailyGoalToast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-    pointer-events: auto;
-}
+#dailyGoalToast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
 
-/* ==================== 左右上角 HUD 控件 ==================== */
+/* ==================== ★ 顶层 HUD 控件 (桌面端全线减小 40%，杜绝视觉遮挡) ==================== */
 #clockHud {
     position: fixed; 
-    top: calc(18px + env(safe-area-inset-top, 0px)); 
-    left: calc(20px + env(safe-area-inset-left, 0px)); 
+    top: calc(12px + env(safe-area-inset-top, 0px)); 
+    left: calc(14px + env(safe-area-inset-left, 0px)); 
     z-index: 45;
     transform: translateZ(0);
-    font-size: 2.15rem;
+    font-size: 1.30rem; /* 从 2.15rem 减小 40% */
     font-weight: 800; 
     color: #eaf6ff;
-    letter-spacing: 1.5px;
-    text-shadow: 0 0 15px rgba(0, 200, 255, 0.75);
+    letter-spacing: 1px;
+    text-shadow: 0 0 10px rgba(0, 200, 255, 0.7);
     opacity: 0.50;
     pointer-events: auto; 
     user-select: none;
-    padding: 8px 18px; 
-    border-radius: 14px;
+    padding: 5px 12px; /* 从 8px 18px 减小 */
+    border-radius: 10px; /* 从 14px 减小 */
     background: rgba(10, 20, 48, 0.42); 
     backdrop-filter: blur(8px);
-    border: 1.5px solid rgba(135, 205, 255, 0.35);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    border: 1.2px solid rgba(135, 205, 255, 0.35);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.45);
     transition: opacity 0.25s ease, transform 0.25s ease;
+    white-space: nowrap;
 }
 #clockHud:hover, #clockHud:active {
     opacity: 1.0 !important;
@@ -480,56 +477,57 @@ html, body {
 
 #topRightHudBar {
     position: fixed; 
-    top: calc(16px + env(safe-area-inset-top, 0px)); 
-    right: calc(16px + env(safe-area-inset-right, 0px)); 
+    top: calc(10px + env(safe-area-inset-top, 0px)); 
+    right: calc(12px + env(safe-area-inset-right, 0px)); 
     z-index: 46;
     display: flex; 
     align-items: center; 
-    gap: 12px; 
+    gap: 8px; /* 从 12px 减小 */
     pointer-events: auto;
 }
 
 #studyCounterHud {
     display: flex; 
     align-items: center; 
-    gap: 10px; 
-    font-size: 1.95rem;
+    gap: 6px; /* 从 10px 减小 */
+    font-size: 1.15rem; /* 从 1.95rem 减小 40% */
     font-weight: 800;
     color: #b9f6ff; 
     opacity: 0.50;
     cursor: pointer; 
     user-select: none;
-    padding: 8px 18px; 
-    border-radius: 16px;
-    min-height: 48px;
+    padding: 5px 12px; /* 从 8px 18px 减小 */
+    border-radius: 10px; /* 从 16px 减小 */
+    min-height: 32px; /* 从 48px 减小 */
     background: rgba(10, 20, 48, 0.45); 
     backdrop-filter: blur(8px);
-    border: 1.5px solid rgba(135, 205, 255, 0.35);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    border: 1.2px solid rgba(135, 205, 255, 0.35);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.45);
     transition: opacity 0.25s ease, transform 0.25s ease;
+    white-space: nowrap;
 }
 #studyCounterHud:hover, #studyCounterHud:active {
     opacity: 1.0 !important;
     transform: scale(1.03);
     border-color: var(--accent-color-2);
 }
-.study-counter-icon { font-size: 1.85rem; }
-.study-goal-sep { font-size: 1.55rem; opacity: 0.6; }
+.study-counter-icon { font-size: 1.10rem; } /* 从 1.85rem 减小 */
+.study-goal-sep { font-size: 0.95rem; opacity: 0.6; } /* 从 1.55rem 减小 */
 
 #focusCruiseHud {
     display: flex; 
     align-items: center; 
-    font-size: 1.25rem;
+    font-size: 0.85rem; /* 从 1.25rem 减小 */
     font-weight: 800;
     user-select: none; 
-    padding: 8px 14px; 
-    border-radius: 16px;
-    min-height: 48px;
+    padding: 4px 10px; /* 从 8px 14px 减小 */
+    border-radius: 10px;
+    min-height: 32px;
     backdrop-filter: blur(8px); 
     cursor: pointer; 
     white-space: nowrap;
     opacity: 0.50;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.45);
     transition: opacity 0.25s ease, transform 0.25s ease;
 }
 #focusCruiseHud:hover, 
@@ -540,20 +538,20 @@ html, body {
 }
 #focusCruiseHud.enabled {
     color: #ffd875; 
-    border: 1.5px solid rgba(255, 216, 117, 0.65);
+    border: 1.2px solid rgba(255, 216, 117, 0.65);
     background: rgba(14, 28, 60, 0.88);
 }
 #focusCruiseHud.disabled {
     color: #8fa0b5; 
-    border: 1.5px dashed rgba(140, 160, 190, 0.35);
+    border: 1.2px dashed rgba(140, 160, 190, 0.35);
     background: rgba(10, 20, 48, 0.45);
 }
-.focus-cruise-trigger { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 8px; font-size: 1.25rem; }
-.focus-cruise-expand-panel { display: none; align-items: center; gap: 8px; margin-left: 8px; padding-left: 8px; border-left: 1.5px solid rgba(255, 255, 255, 0.28); }
+.focus-cruise-trigger { display: flex; align-items: center; gap: 4px; padding: 1px 4px; border-radius: 6px; font-size: 0.85rem; }
+.focus-cruise-expand-panel { display: none; align-items: center; gap: 6px; margin-left: 6px; padding-left: 6px; border-left: 1.2px solid rgba(255, 255, 255, 0.28); }
 #focusCruiseHud.expanded .focus-cruise-expand-panel { display: flex; }
-.focus-pill { cursor: pointer; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 8px; padding: 3px 8px; font-family: 'Consolas', monospace; font-size: 1.12rem; }
+.focus-pill { cursor: pointer; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 6px; padding: 2px 6px; font-family: 'Consolas', monospace; font-size: 0.78rem; }
 .focus-pill:hover { background: rgba(0, 240, 255, 0.30); border-color: var(--accent-color-2); color: #fff; }
-.hud-status-tag { font-size: 1.15rem; padding: 2px 8px; border-radius: 6px; background: rgba(255, 216, 117, 0.22); border: 1px solid rgba(255, 216, 117, 0.55); }
+.hud-status-tag { font-size: 0.80rem; padding: 1px 6px; border-radius: 5px; background: rgba(255, 216, 117, 0.22); border: 1px solid rgba(255, 216, 117, 0.55); }
 
 /* 右侧悬浮垂直操作栏 */
 .view-controls {
@@ -651,10 +649,54 @@ html, body {
 
 .hidden { display: none !important; }
 
+/* ==================== ★ 移动端响应式核心优化：彻底杜绝时间与学习计数重叠 ==================== */
 @media (max-width: 768px) {
     :root {
         --immersive-panel-width: 100%;
     }
+
+    /* ★ 核心修复：移动端字体和内边距缩小 40%，两端锁定绝不重叠 */
+    #clockHud {
+        top: calc(8px + env(safe-area-inset-top, 0px)) !important;
+        left: calc(8px + env(safe-area-inset-left, 0px)) !important;
+        font-size: 0.95rem !important; /* 从 1.65rem 缩减超 40% */
+        padding: 3px 8px !important;
+        border-radius: 8px !important;
+        max-width: 90px !important;
+    }
+
+    #topRightHudBar {
+        top: calc(8px + env(safe-area-inset-top, 0px)) !important;
+        right: calc(8px + env(safe-area-inset-right, 0px)) !important;
+        gap: 6px !important;
+        max-width: calc(100vw - 110px) !important; /* 强制为左侧时钟保留充裕空间 */
+    }
+    #studyCounterHud {
+        font-size: 0.92rem !important; /* 从 1.55rem 缩减超 40% */
+        padding: 3px 8px !important;
+        min-height: 28px !important; /* 从 42px 降为 28px */
+        border-radius: 8px !important;
+        gap: 4px !important;
+    }
+    .study-counter-icon { font-size: 0.88rem !important; }
+    .study-goal-sep { font-size: 0.75rem !important; }
+
+    #focusCruiseHud {
+        font-size: 0.75rem !important;
+        padding: 3px 7px !important;
+        min-height: 28px !important;
+        border-radius: 8px !important;
+    }
+    .focus-cruise-trigger { font-size: 0.75rem !important; }
+    .focus-pill {
+        font-size: 0.70rem !important;
+        padding: 1px 4px !important;
+    }
+    .hud-status-tag {
+        font-size: 0.70rem !important;
+        padding: 1px 4px !important;
+    }
+
     .reader-paper-card { padding: 22px 18px !important; }
     .reader-article-title { font-size: 1.35rem !important; }
     .reader-article-content { font-size: 0.98rem !important; }
