@@ -44,6 +44,8 @@
 <div id="mainContent" class="main-content">
 <div id="wordSphere"></div>
 </div>
+
+<!-- ★ 顶层 HUD：尺寸缩减 40%，杜绝移动端左右重叠碰撞 -->
 <div id="clockHud" aria-label="当前时间" title="双击或长按可快速呼出智能备注系统">00:00</div>
 
 <div id="topRightHudBar">
@@ -72,7 +74,7 @@
 <button id="closeControlsOverlayBtn" class="controls-overlay-close-btn" title="关闭设置面板">&times;</button>
 <div class="panel-header">
 <h1>3D单词宇宙</h1>
-<p>控制与设置中心 (V8.6 增强版)</p>
+<p>控制与设置中心 (V8.6 极速降耗版)</p>
 </div>
 <div class="panel-content">
 <div class="control-section">
@@ -232,7 +234,6 @@
     </div>
     <div class="setting-item checkbox-item"><input type="checkbox" id="cardSelfRotation" checked><label for="cardSelfRotation">启用卡片自转</label></div>
 
-    <!-- ⏸️ 查词暂停与阶梯平滑恢复专项调控 -->
     <div class="appearance-group">
         <h4>⏸️ 查词暂停与阶梯平滑恢复</h4>
         <div class="setting-item checkbox-item">
@@ -281,7 +282,7 @@
 </div>
 
 <div class="control-section" id="visualEffectsSettingsSection">
-    <h3>视觉增强系统 (Vortex & Bloom)</h3>
+    <h3>视觉增强系统 (Vortex & Bloom - 低能耗调优)</h3>
     <div class="setting-item checkbox-item">
         <input type="checkbox" id="visualEffectsEnabled">
         <label for="visualEffectsEnabled">启用视觉增强系统</label>
@@ -297,11 +298,11 @@
             <input type="range" id="vortexCoreRadiusRange" min="0" max="250" value="70" step="5">
         </div>
         <div class="setting-item">
-            <label for="vortexSpeed" title="范围0.001~0.01，无复数">旋臂旋转速度</label>
+            <label for="vortexSpeed" title="范围0.001~0.01">旋臂旋转速度</label>
             <input type="range" id="vortexSpeed" min="0.001" max="0.01" value="0.003" step="0.0005">
         </div>
         <div class="setting-item"><label for="vortexTightness">旋臂弯曲度</label><input type="range" id="vortexTightness" min="0.1" max="10.0" value="1.5" step="0.1"></div>
-        <div class="setting-item"><label for="vortexParticleCount">粒子数量</label><input type="number" id="vortexParticleCount" value="40000" min="100" max="400000" step="1000"></div>
+        <div class="setting-item"><label for="vortexParticleCount">粒子数量 (低功耗推荐 6000)</label><input type="number" id="vortexParticleCount" value="6000" min="100" max="40000" step="500"></div>
         <div class="setting-item"><label for="vortexColor">粒子颜色</label><input type="color" id="vortexColor" value="#5588ff"></div>
         <div class="setting-item"><label for="vortexSize">粒子大小</label><input type="range" id="vortexSize" min="0.01" max="10.0" value="1.2" step="0.05"></div>
     </div>
@@ -314,9 +315,9 @@
 </div>
 
 <div class="control-section" id="starfieldSettingsSection">
-    <h3>星空背景设置 (实时生效)</h3>
+    <h3>星空背景设置 (低能耗优化 2500 颗)</h3>
     <div class="setting-item checkbox-item"><input type="checkbox" id="starfieldEnabled" checked><label for="starfieldEnabled">启用星空</label></div>
-    <div class="setting-item"><label for="starCount">星星数量</label><input type="number" id="starCount" value="25000" min="0" max="200000" step="2000"></div>
+    <div class="setting-item"><label for="starCount">星星数量 (降温优化)</label><input type="number" id="starCount" value="2500" min="0" max="25000" step="500"></div>
     <div class="setting-item"><label for="starColor">星星颜色</label><input type="color" id="starColor" value="#ffffff"></div>
     <div class="setting-item"><label for="starSize">星星基础大小</label><input type="range" id="starSize" min="0.1" max="6.0" value="0.8" step="0.1"></div>
 </div>
@@ -376,7 +377,6 @@
 </div>
 <div class="data-grid-section" id="overlayDataGrid"></div>
 
-<!-- 📝 知识笔记与 AI 备注专属板块 -->
 <div class="notes-container-box">
     <div class="notes-header-row">
         <h3>📝 知识笔记与 AI 拓展备注 (<span id="detailNotesCount">0</span>)</h3>
@@ -389,7 +389,7 @@
 </div>
 </div>
 
-<!-- 📝 智能多词关联备注录入/编辑弹窗 (首行分析 + 多词勾选 + 兜底引导卡片) -->
+<!-- 📝 智能多词关联备注录入/编辑弹窗 -->
 <div id="wordNoteModalBackdrop" class="modal-backdrop">
 <div class="modal-content-box note-modal-box smart-note-modal-box">
 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
@@ -400,7 +400,7 @@
 <div class="smart-note-flow-container">
     <div style="margin-top: 10px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-            <label style="font-size:0.85rem; color:#87cdff; font-weight:bold;">第 1 步：输入标题/首行 (输入即自动分析其中的所有单词)</label>
+            <label style="font-size:0.85rem; color:#87cdff; font-weight:bold;">第 1 步：输入标题/首行 (自动分析其中的所有单词)</label>
             <span id="smartWordAnalyzeStatus" style="font-size:0.75rem; color:#68FFC0;">已就绪</span>
         </div>
         <input type="text" id="noteInputTitle" placeholder="如输入: 辨析 affect 与 effect 的用法区别 (静止1秒自动复制到剪贴板)..." style="width:100%; height:38px; background:rgba(10,20,50,0.85); border:1px solid var(--border-color); color:#fff; padding:6px 12px; border-radius:8px; font-size:0.92rem; margin-bottom:8px;">
@@ -411,7 +411,6 @@
         </div>
     </div>
 
-    <!-- 智能匹配卡片呈现区 -->
     <div id="smartMatchedSection" class="smart-matched-section">
         <div class="smart-section-header">
             <span>🎯 识别到的关联单词卡片 (<span id="smartMatchedCountLabel">0</span>) - 勾选的单词将共享同一份材料</span>
@@ -422,7 +421,6 @@
         </div>
         <div id="smartMatchedCardsList" class="smart-matched-cards-grid"></div>
 
-        <!-- 缺失单词时出现的两条命令卡片 -->
         <div id="smartFallbackActionGroup" class="smart-fallback-action-group hidden">
             <div class="smart-fallback-card" id="searchInEntireLibraryCard">
                 <div class="card-icon">🔍</div>
@@ -458,10 +456,9 @@
 </div>
 </div>
 
-<!-- 📖 沉浸式高级备注阅读系统 (全屏阅读 + 50%透明度浮动控制 + 自动轮播跳转 + 分类/全量导出) -->
+<!-- 📖 沉浸式高级备注阅读系统 -->
 <div id="immersiveNoteReaderBackdrop" class="modal-backdrop note-reader-backdrop">
 <div class="note-reader-container" id="noteReaderContainer">
-    <!-- 顶部半透浮动导航条 -->
     <div class="reader-floating-header reader-translucent-control" id="readerTopNav">
         <div style="display: flex; align-items: center; gap: 10px;">
             <span class="reader-logo-icon">🪐</span>
@@ -480,7 +477,6 @@
         </div>
     </div>
 
-    <!-- 核心文本阅读主腔室 -->
     <div class="reader-content-body" id="readerContentBody">
         <div class="reader-paper-card" id="readerPaperCard">
             <div class="reader-card-topbar">
@@ -497,7 +493,6 @@
 
             <h1 id="readerCardTitle" class="reader-article-title">正在载入笔记...</h1>
 
-            <!-- 关联单词展示胶囊群 -->
             <div class="reader-linked-words-wrap">
                 <span class="linked-words-label">🔗 关联单词 (点击可发音朗读):</span>
                 <div id="readerLinkedWordsPills" class="linked-words-pills-box"></div>
@@ -511,7 +506,6 @@
         </div>
     </div>
 
-    <!-- 底部 50% 半透明悬浮控制岛 (鼠标离开自动半透50%，悬浮即恢复100%) -->
     <div class="reader-floating-dock reader-translucent-control" id="readerBottomDock">
         <button id="readerPrevNoteBtn" class="dock-btn" title="上一条 (快捷键: ← 方向键)">◀ 上一条</button>
         
@@ -533,7 +527,7 @@
 </div>
 </div>
 
-<!-- 🔢 全功能数字参数步进模态弹窗 (学习目标/计数/巡航参数/恢复时长) -->
+<!-- 🔢 全功能数字参数步进模态弹窗 -->
 <div id="numberPromptModalBackdrop" class="modal-backdrop">
 <div class="prompt-modal-box">
     <h3 id="promptModalTitle">调节参数</h3>
@@ -612,7 +606,7 @@
 <!-- 目标达成专属 HUD 胶囊提示 -->
 <div id="dailyGoalToast">🎉 恭喜！您已完成今日复习目标！</div>
 
-<!-- 右侧悬浮操作栏 (含专属备注按钮，主总开关支持单击展开与长按700ms秒入备注) -->
+<!-- 右侧悬浮操作栏 -->
 <div class="view-controls" id="viewControlsContainer">
 <button class="control-btn master-toggle-btn" id="masterMenuToggleBtn" title="单击: 展开/折叠控制菜单 | 长按(700ms): 直接呼出智能备注系统">🔮</button>
 <div class="view-controls-child-group" id="viewControlsChildGroup">
