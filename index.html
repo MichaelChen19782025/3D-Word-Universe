@@ -44,10 +44,10 @@
 <div id="mainContent" class="main-content">
 <div id="wordSphere"></div>
 </div>
-<div id="clockHud" aria-label="当前时间">00:00</div>
+<div id="clockHud" aria-label="当前时间" title="双击或长按可快速呼出智能备注系统">00:00</div>
 
 <div id="topRightHudBar">
-<div id="studyCounterHud" title="点击查看今日学习结算">
+<div id="studyCounterHud" title="点击查看今日学习结算；长按可打开智能备注管理">
 <span class="study-counter-icon">📖</span>
 <span id="studyCounterValue" title="点击修改今日复习单词数">0</span>
 <span class="study-goal-sep">/</span>
@@ -72,7 +72,7 @@
 <button id="closeControlsOverlayBtn" class="controls-overlay-close-btn" title="关闭设置面板">&times;</button>
 <div class="panel-header">
 <h1>3D单词宇宙</h1>
-<p>控制与设置中心 (V8.6 修复版)</p>
+<p>控制与设置中心 (V8.6 增强版)</p>
 </div>
 <div class="panel-content">
 <div class="control-section">
@@ -80,8 +80,10 @@
 <button id="uploadBtn" class="action-btn">导入单词数据 (JSON)</button>
 <button id="appendUploadBtn" class="action-btn secondary-btn" style="margin-top: 8px;">追加单词数据 (JSON)</button>
 <button id="openPasteModalBtn" class="action-btn secondary-btn" style="margin-top: 8px;">通过复制粘贴导入数据</button>
+<button id="openSmartNoteBtnFromSettings" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #d97706, #b45309);">📝 打开智能备注管理系统</button>
 <button id="clearShieldedBtn" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #7c3aed, #4f46e5);">清除屏蔽词库 (0)</button>
 <button id="exportJSONBtn" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #059669, #10b981);">导出词库数据 (含备注 JSON)</button>
+<button id="exportNotesUnifiedBtn" class="action-btn secondary-btn" style="margin-top: 8px; background: linear-gradient(45deg, #2563eb, #1d4ed8);">📤 导出所有单词备注 (含完整词元)</button>
 <button id="filterBtn" class="action-btn secondary-btn" style="margin-top: 8px;">筛选与学习模式</button>
 <button id="exportSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导出系统全量设置 (JSON)</button>
 <button id="importSettingsBtn" class="action-btn secondary-btn" style="margin-top: 8px;">导入系统全量设置 (JSON)</button>
@@ -387,21 +389,147 @@
 </div>
 </div>
 
-<!-- 📝 备注编辑/新增双步输入弹窗 -->
+<!-- 📝 智能多词关联备注录入/编辑弹窗 (首行分析 + 多词勾选 + 兜底引导卡片) -->
 <div id="wordNoteModalBackdrop" class="modal-backdrop">
-<div class="modal-content-box note-modal-box">
-<h2 id="noteModalHeaderTitle" style="color: #ffd875;">添加/编辑 AI 知识备注</h2>
-<div style="margin-top: 10px;">
-    <label style="display:block; font-size:0.85rem; color:#87cdff; margin-bottom:5px;">第一步：输入备注主题/标题 (如: AI构词联想 / 近义辨析)</label>
-    <input type="text" id="noteInputTitle" placeholder="输入简明扼要的主题或提问 (静止1秒自动复制至剪贴板)..." style="width:100%; height:38px; background:rgba(10,20,50,0.85); border:1px solid var(--border-color); color:#fff; padding:6px 12px; border-radius:8px; font-size:0.9rem; margin-bottom:14px;">
-    
-    <label style="display:block; font-size:0.85rem; color:#87cdff; margin-bottom:5px;">第二步：粘贴或输入 AI 生成的详细知识点内容</label>
-    <textarea id="noteInputContent" placeholder="在此粘贴 ChatGPT/Claude 针对该词的详细解析、例句或知识拓展..." style="width:100%; height:180px; background:rgba(10,20,50,0.85); border:1px solid var(--border-color); color:#fff; padding:10px; border-radius:8px; font-size:0.9rem; resize:vertical;"></textarea>
+<div class="modal-content-box note-modal-box smart-note-modal-box">
+<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+    <h2 id="noteModalHeaderTitle" style="color: #ffd875; font-size: 1.25rem; margin: 0;">📝 智能多词关联 AI 备注系统</h2>
+    <button id="closeNoteModalTopBtn" class="panel-close-x-btn">&times;</button>
 </div>
-<div class="modal-actions">
-    <button id="saveNoteSubmitBtn" class="modal-btn" style="background: linear-gradient(45deg, #ffd875, #f59e0b); color: #1e1b4b;">保存备注</button>
+
+<div class="smart-note-flow-container">
+    <div style="margin-top: 10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <label style="font-size:0.85rem; color:#87cdff; font-weight:bold;">第 1 步：输入标题/首行 (输入即自动分析其中的所有单词)</label>
+            <span id="smartWordAnalyzeStatus" style="font-size:0.75rem; color:#68FFC0;">已就绪</span>
+        </div>
+        <input type="text" id="noteInputTitle" placeholder="如输入: 辨析 affect 与 effect 的用法区别 (静止1秒自动复制到剪贴板)..." style="width:100%; height:38px; background:rgba(10,20,50,0.85); border:1px solid var(--border-color); color:#fff; padding:6px 12px; border-radius:8px; font-size:0.92rem; margin-bottom:8px;">
+        
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <input type="text" id="noteInputCategory" placeholder="分类标签 (如: 近义辨析 / 词根扩展 / 考点)" value="近义辨析" style="width:170px; height:32px; background:rgba(10,20,50,0.7); border:1px solid rgba(135,205,255,0.4); color:#ffd875; padding:4px 8px; border-radius:6px; font-size:0.8rem;">
+            <div id="smartExtractedTokensBar" class="smart-tokens-bar"></div>
+        </div>
+    </div>
+
+    <!-- 智能匹配卡片呈现区 -->
+    <div id="smartMatchedSection" class="smart-matched-section">
+        <div class="smart-section-header">
+            <span>🎯 识别到的关联单词卡片 (<span id="smartMatchedCountLabel">0</span>) - 勾选的单词将共享同一份材料</span>
+            <div class="smart-select-ops">
+                <button type="button" id="smartSelectAllBtn" class="smart-mini-btn">全选</button>
+                <button type="button" id="smartSelectNoneBtn" class="smart-mini-btn">全不选</button>
+            </div>
+        </div>
+        <div id="smartMatchedCardsList" class="smart-matched-cards-grid"></div>
+
+        <!-- 缺失单词时出现的两条命令卡片 -->
+        <div id="smartFallbackActionGroup" class="smart-fallback-action-group hidden">
+            <div class="smart-fallback-card" id="searchInEntireLibraryCard">
+                <div class="card-icon">🔍</div>
+                <div class="card-body">
+                    <h4>命令 1：搜索魔法球所在全部词库</h4>
+                    <p>当前球面上未完全展示。点击在此词库全部 <span id="entireLibTotalCount">0</span> 个单词中深度检索匹配并关联！</p>
+                </div>
+                <button type="button" class="action-btn" style="width:auto; padding:6px 14px;">立即深搜</button>
+            </div>
+
+            <div class="smart-fallback-card secondary-card" id="searchInExternalFileCard">
+                <div class="card-icon">📂</div>
+                <div class="card-body">
+                    <h4>命令 2：请指定要搜索的外部单词库</h4>
+                    <p>若该单词属于其他备用词库文件，点击调出手机/电脑文件对话框载入检索！</p>
+                </div>
+                <button type="button" class="action-btn secondary-btn" style="width:auto; padding:6px 14px;">选择文件</button>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top: 10px;">
+        <label style="display:block; font-size:0.85rem; color:#87cdff; margin-bottom:5px; font-weight:bold;">第 2 步：粘贴或输入 AI 生成的详细解说文本 (一份材料多词通用)</label>
+        <textarea id="noteInputContent" placeholder="在此粘贴 ChatGPT/Claude 针对上述辨析词的详细解析、例句或知识拓展..." style="width:100%; height:160px; background:rgba(10,20,50,0.85); border:1px solid var(--border-color); color:#fff; padding:10px; border-radius:8px; font-size:0.9rem; resize:vertical;"></textarea>
+    </div>
+</div>
+
+<div class="modal-actions" style="margin-top: 14px; padding-top: 10px;">
+    <button id="saveNoteSubmitBtn" class="modal-btn" style="background: linear-gradient(45deg, #ffd875, #f59e0b); color: #1e1b4b;">💾 保存并共享至所选单词</button>
+    <button id="openReaderFromModalBtn" class="modal-btn secondary-btn" style="background: linear-gradient(45deg, #0284c7, #0369a1);">📖 打开阅读系统</button>
     <button id="closeNoteModalBtn" class="modal-btn secondary-btn">取消</button>
 </div>
+</div>
+</div>
+
+<!-- 📖 沉浸式高级备注阅读系统 (全屏阅读 + 50%透明度浮动控制 + 自动轮播跳转 + 分类/全量导出) -->
+<div id="immersiveNoteReaderBackdrop" class="modal-backdrop note-reader-backdrop">
+<div class="note-reader-container" id="noteReaderContainer">
+    <!-- 顶部半透浮动导航条 -->
+    <div class="reader-floating-header reader-translucent-control" id="readerTopNav">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="reader-logo-icon">🪐</span>
+            <h2 class="reader-main-title">全景知识笔记精读中心</h2>
+            <span id="readerNoteCounterTag" class="reader-counter-tag">0 / 0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <select id="readerCategorySelect" class="reader-category-dropdown" title="按分类过滤笔记">
+                <option value="ALL">全部知识分类</option>
+            </select>
+            <input type="text" id="readerSearchInput" placeholder="🔍 检索单词/标题/正文..." class="reader-search-input">
+            <button id="readerExportCurrentCategoryBtn" class="reader-btn" title="导出当前分类笔记 (含单词数据)">📤 导出此类</button>
+            <button id="readerExportAllNotesBtn" class="reader-btn highlight-btn" title="一键全量导出所有笔记 (含完整词元)">📦 全部导出</button>
+            <button id="readerToggleFullscreenBtn" class="reader-btn" title="切换全屏模式">⛶ 全屏</button>
+            <button id="closeNoteReaderBtn" class="reader-close-btn" title="退出阅读器">&times;</button>
+        </div>
+    </div>
+
+    <!-- 核心文本阅读主腔室 -->
+    <div class="reader-content-body" id="readerContentBody">
+        <div class="reader-paper-card" id="readerPaperCard">
+            <div class="reader-card-topbar">
+                <div class="reader-tag-cluster">
+                    <span id="readerCardCategoryTag" class="reader-tag category-tag">近义辨析</span>
+                    <span id="readerCardDateTag" class="reader-tag date-tag">2026-10-15</span>
+                    <span id="readerCardWordsCountTag" class="reader-tag words-count-tag">关联 2 词</span>
+                </div>
+                <div class="reader-quick-actions">
+                    <button id="readerEditCurrentNoteBtn" class="reader-mini-btn" title="编辑本条笔记">✏️ 编辑</button>
+                    <button id="readerDeleteCurrentNoteBtn" class="reader-mini-btn del" title="删除本条笔记">🗑️ 删除</button>
+                </div>
+            </div>
+
+            <h1 id="readerCardTitle" class="reader-article-title">正在载入笔记...</h1>
+
+            <!-- 关联单词展示胶囊群 -->
+            <div class="reader-linked-words-wrap">
+                <span class="linked-words-label">🔗 关联单词 (点击可发音朗读):</span>
+                <div id="readerLinkedWordsPills" class="linked-words-pills-box"></div>
+            </div>
+
+            <div class="reader-divider-line"></div>
+
+            <div id="readerCardText" class="reader-article-content">
+                请稍候，正在为您翻开知识篇章...
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部 50% 半透明悬浮控制岛 (鼠标离开自动半透50%，悬浮即恢复100%) -->
+    <div class="reader-floating-dock reader-translucent-control" id="readerBottomDock">
+        <button id="readerPrevNoteBtn" class="dock-btn" title="上一条 (快捷键: ← 方向键)">◀ 上一条</button>
+        
+        <div class="dock-cruise-widget" title="点击开启/暂停自动轮播跳转阅读">
+            <button id="readerAutoCruiseToggleBtn" class="dock-cruise-btn">⏯ 自动轮播: <span id="readerCruiseStatusText">关</span></button>
+            <select id="readerCruiseIntervalSelect" class="dock-cruise-select" title="轮换停留时间">
+                <option value="4">4秒</option>
+                <option value="6" selected>6秒</option>
+                <option value="10">10秒</option>
+                <option value="15">15秒</option>
+            </select>
+            <div id="readerCruiseProgressBar" class="dock-progress-bar"><div id="readerCruiseProgressFill" class="dock-progress-fill"></div></div>
+        </div>
+
+        <button id="readerSpeakNoteBtn" class="dock-btn" title="朗读关联单词列表">🔊 朗读词群</button>
+        <button id="readerAddNewNoteBtn" class="dock-btn highlight-btn" title="为新单词创建共享笔记">➕ 录入新辨析</button>
+        <button id="readerNextNoteBtn" class="dock-btn" title="下一条 (快捷键: → 方向键)">下一条 ▶</button>
+    </div>
 </div>
 </div>
 
@@ -467,14 +595,6 @@
 </div>
 </div>
 
-<!-- 批量屏蔽 HUD -->
-<div id="batchShieldHUD" class="hidden" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(10, 20, 48, 0.95); border: 2px solid #ef4444; border-radius: 12px; padding: 12px 20px; z-index: 1000; display: flex; align-items: center; gap: 15px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); backdrop-filter: blur(10px);">
-<span style="color: #fca5a5; font-weight: bold; font-size: 0.92rem;">🛡️ 批量屏蔽模式已开启（点击球面卡片多选）</span>
-<span id="shieldCountLabel" style="color: #ffffff; font-size: 0.88rem;">已选择: 0 个单词</span>
-<button id="confirmBatchShieldBtn" class="modal-btn" style="background: linear-gradient(45deg, #ef4444, #b91c1c);">确认屏蔽</button>
-<button id="cancelBatchShieldBtn" class="modal-btn secondary-btn">取消</button>
-</div>
-
 <!-- 今日学习结算弹窗 -->
 <div id="studySettleModalBackdrop" class="modal-backdrop">
 <div class="modal-content-box" style="max-width: 520px;">
@@ -492,10 +612,11 @@
 <!-- 目标达成专属 HUD 胶囊提示 -->
 <div id="dailyGoalToast">🎉 恭喜！您已完成今日复习目标！</div>
 
-<!-- 右侧悬浮操作栏 -->
+<!-- 右侧悬浮操作栏 (含专属备注按钮，主总开关支持单击展开与长按700ms秒入备注) -->
 <div class="view-controls" id="viewControlsContainer">
-<button class="control-btn master-toggle-btn" id="masterMenuToggleBtn" title="展开/折叠控制菜单">🔮</button>
+<button class="control-btn master-toggle-btn" id="masterMenuToggleBtn" title="单击: 展开/折叠控制菜单 | 长按(700ms): 直接呼出智能备注系统">🔮</button>
 <div class="view-controls-child-group" id="viewControlsChildGroup">
+<button class="control-btn" id="openNoteSystemBtn" title="智能多词备注与沉浸阅读系统 (📝)" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.45), rgba(180, 83, 9, 0.85)) !important; border-color: #f59e0b !important; color: #ffd875;">📝</button>
 <button class="control-btn" id="rotateToggle" title="切换自动旋转 (←)">🔁</button>
 <button class="control-btn" id="speedUpBtn" title="加速旋转 (🚀)">🚀</button>
 <button class="control-btn" id="speedDownBtn" title="减速旋转 (🐢)">🐢</button>
