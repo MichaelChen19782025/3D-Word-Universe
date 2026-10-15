@@ -1,7 +1,7 @@
 /**
- * 3D单词宇宙 - 空间粒子特效体系
- * 1. 旋臂粒子圆心避让空心化：彻底消除原先圆心数万粒子重叠堆积产生的过曝耀眼白斑
- * 2. 引入旋臂亮度专用参数：支持任意调低或直接调至0彻底熄灭
+ * 3D单词宇宙 - 空间粒子特效体系 (极速降耗架构版)
+ * 1. 彻底移除 JS 驱动每帧改写 DOM 背景造成的 CPU 100% 满载元凶
+ * 2. 优化星空与旋臂默认粒子缓冲区，大幅减轻 CPU 调度与移动端发热
  */
 (function() {
     let _burstVelocities = null;
@@ -18,7 +18,7 @@
             let radius = appState.sphereRadius * (radiusPercent / 100);
             if (isNaN(radius) || radius <= 0.1) radius = 0.1;
 
-            const geometry = new THREE.SphereGeometry(radius, 48, 48);
+            const geometry = new THREE.SphereGeometry(radius, 32, 32);
             const opacity = safeParseFloat(document.getElementById('coreSphereOpacity')?.value, 0.35);
             const color = getColor(document.getElementById('coreSphereColor')?.value || '#80D0FF', 'three');
             const emissive = getColor(document.getElementById('coreSphereEmissive')?.value || '#30A0FF', 'three');
@@ -51,7 +51,7 @@
             const r = Math.max(0.1, appState.sphereRadius * (radiusPercent / 100));
 
             appState.coreSphere.geometry.dispose();
-            appState.coreSphere.geometry = new THREE.SphereGeometry(r, 48, 48);
+            appState.coreSphere.geometry = new THREE.SphereGeometry(r, 32, 32);
 
             const color = getColor(document.getElementById('coreSphereColor')?.value || '#80D0FF', 'three');
             const emissive = getColor(document.getElementById('coreSphereEmissive')?.value || '#30A0FF', 'three');
@@ -67,7 +67,7 @@
             appState.needsRender = true;
         },
 
-        // ==================== 2. 宇宙涡旋 (Vortex) 与 辉光 (Bloom) ====================
+        // ==================== 2. 宇宙涡旋 (Vortex - 6000粒子清爽版) ====================
         initVortex() {
             const enabled = document.getElementById('visualEffectsEnabled')?.checked || false;
 
@@ -86,11 +86,11 @@
             const brightness = safeParseFloat(document.getElementById('vortexBrightnessRange')?.value, 0.55);
             if (brightness <= 0.001) {
                 appState.needsRender = true;
-                return; // 用户已将亮度调至 0，彻底不生成或渲染旋臂光芒
+                return;
             }
 
             const coreRadius = safeParseFloat(document.getElementById('vortexCoreRadiusRange')?.value, 70);
-            const defaultCount = IS_MOBILE_DEVICE ? 6000 : 40000;
+            const defaultCount = IS_MOBILE_DEVICE ? 1500 : 6000;
             let particleCount = safeParseInt(document.getElementById('vortexParticleCount')?.value, defaultCount);
             if (isNaN(particleCount) || particleCount <= 0) particleCount = defaultCount;
 
@@ -110,7 +110,6 @@
                 const spinAngle = (i / particleCount) * tightness * 2 * Math.PI;
                 const armAngle = (armIndex / numArms) * 2 * Math.PI;
 
-                // ★ 核心修复：引入 coreRadius 避开圆心区域，且粒子按 1.35 次方发散，绝不在 (0,0) 堆积白斑
                 const randomRadius = coreRadius + Math.pow(Math.random(), 1.35) * (radius - coreRadius);
                 const angle = spinAngle + armAngle;
 
@@ -173,27 +172,10 @@
             }
 
             this.updateBloomSettings();
-
-            if (appState.vortexParticles && enabled) {
-                const colorHex = document.getElementById('vortexColor')?.value || '#5588ff';
-                const brightness = safeParseFloat(document.getElementById('vortexBrightnessRange')?.value, 0.55);
-                const color = new THREE.Color(colorHex);
-                const colors = appState.vortexParticles.geometry.attributes.color;
-                if (colors) {
-                    for (let i = 0; i < colors.count; i++) {
-                        const variation = (Math.random() * 0.4 + 0.6) * Math.min(1.0, brightness);
-                        colors.setXYZ(i, color.r * variation, color.g * variation, color.b * variation);
-                    }
-                    colors.needsUpdate = true;
-                }
-                const vSize = safeParseFloat(document.getElementById('vortexSize')?.value, 1.2);
-                appState.vortexParticles.material.size = vSize;
-                appState.vortexParticles.material.needsUpdate = true;
-            }
             appState.needsRender = true;
         },
 
-        // ==================== 3. 星空背景 ====================
+        // ==================== 3. 星空背景 (2500颗超轻量化，无损美感) ====================
         initStarfield() {
             if (appState.starfield) {
                 appState.scene.remove(appState.starfield);
@@ -208,7 +190,7 @@
                 return;
             }
 
-            const defaultCount = IS_MOBILE_DEVICE ? 2000 : APP_CONFIG.DEFAULT_STAR_COUNT;
+            const defaultCount = IS_MOBILE_DEVICE ? 600 : APP_CONFIG.DEFAULT_STAR_COUNT;
             let starCount = safeParseInt(document.getElementById('starCount')?.value, defaultCount);
             if (isNaN(starCount) || starCount <= 0) starCount = defaultCount;
 
@@ -261,7 +243,7 @@
                 appState.dynamicBgParticles = null;
             }
 
-            const defaultCount = IS_MOBILE_DEVICE ? 40 : 300;
+            const defaultCount = IS_MOBILE_DEVICE ? 20 : 80;
             let particleCount = safeParseInt(document.getElementById('dynamicBgParticleCount')?.value, defaultCount);
             if (isNaN(particleCount) || particleCount <= 0) return;
 
@@ -300,27 +282,15 @@
 
             appState.dynamicBgParticles = new THREE.Points(geometry, material);
             appState.dynamicBgParticles.renderOrder = -2;
-            if (IS_MOBILE_DEVICE) {
-                appState.dynamicBgParticles.matrixAutoUpdate = false;
-            }
+            appState.dynamicBgParticles.matrixAutoUpdate = false;
 
             appState.scene.add(appState.dynamicBgParticles);
-            this.updateDynamicBackgroundCSS();
             appState.needsRender = true;
-        },
-
-        updateDynamicBackgroundCSS() {
-            const hueStart = document.getElementById('dynamicBgHueStart')?.value || '230';
-            const hueEnd = document.getElementById('dynamicBgHueEnd')?.value || '270';
-            const lightness = document.getElementById('dynamicBgLightness')?.value || '10';
-            document.documentElement.style.setProperty('--dynamic-bg-hue-start', hueStart);
-            document.documentElement.style.setProperty('--dynamic-bg-hue-end', hueEnd);
-            document.documentElement.style.setProperty('--dynamic-bg-lightness', `${lightness}%`);
         },
 
         // ==================== 5. 点击爆发粒子 ====================
         initClickBurstParticles() {
-            const count = 80;
+            const count = 40;
             const positions = new Float32Array(count * 3);
             const colors = new Float32Array(count * 3);
             const baseSizes = new Float32Array(count);
@@ -402,19 +372,9 @@
             run();
         },
 
+        // ★ 核心除害：彻底废弃每帧暴力修改 DOM 和触发 needsRender 的死循环，转由纯 CSS GPU 承接
         initNebulaColors() {
-            const neb1 = document.querySelector('.nebula-1');
-            const neb2 = document.querySelector('.nebula-2');
-            let h1 = 260, h2 = 210;
-            function update() {
-                h1 = (h1 + 0.035) % 360;
-                h2 = (h2 + 0.055) % 360;
-                if (neb1) neb1.style.background = `radial-gradient(circle, hsla(${h1}, 80%, 60%, 0.8) 0%, transparent 70%)`;
-                if (neb2) neb2.style.background = `radial-gradient(circle, hsla(${h2}, 70%, 65%, 0.7) 0%, transparent 70%)`;
-                appState.needsRender = true;
-                requestAnimationFrame(update);
-            }
-            requestAnimationFrame(update);
+            // 已完全交接至 CSS .nebula-1 / .nebula-2 的硬件加速动画，此处不再占用任何主线程 CPU
         }
     };
     window.AppParticles = AppParticles;

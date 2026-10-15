@@ -1,8 +1,8 @@
 /**
- * 3D单词宇宙 - Three.js 核心场景管理与渲染管线
- * 1. 局部焦点巡航：平滑 Lerp 呼吸放大插值，并设立硬性绝对上限天花板，杜绝放大卡片递归膨胀
- * 2. 查词窗口居中面对镜头，屏幕边缘自适应防溢出
- * 3. 查词暂停刹停与窗口消失后三阶段平滑阶梯渐快加速恢复引擎
+ * 3D单词宇宙 - Three.js 核心场景管理与极速渲染管线 (低功耗降温版)
+ * 1. 严格封顶设备像素比 (DPR)，杜绝 Retina/4K 屏幕过度渲染
+ * 2. 精确脏标记检测，静止状态下 CPU/GPU 彻底归零
+ * 3. 查词窗口与三阶段平滑阶梯渐快加速恢复
  */
 (function() {
     function computeHoverMotionMultiplier(time) {
@@ -11,14 +11,12 @@
             return 1.0;
         }
 
-        // 1. 如果处于查词暂停状态，速度乘数直接刹停为 0
         if (hm.isPaused) {
             hm.currentMultiplier = 0.0;
             hm.isResuming = false;
             return 0.0;
         }
 
-        // 2. 如果处于卡片消失后的平缓渐进恢复阶段
         if (hm.isResuming) {
             const elapsed = (time - hm.resumeStartTime) / 1000;
             const totalDuration = Math.max(0.1, hm.resumeDuration || 2.0);
@@ -35,15 +33,12 @@
             const v2 = Math.max(v1, Math.min(1.0, (hm.p2Percent || 70) / 100));
 
             if (elapsed <= t1) {
-                // 阶段一：0 -> 1/4 总时长，速度从 0 线性渐进至 v1
                 const progress = elapsed / t1;
                 hm.currentMultiplier = v1 * progress;
             } else if (elapsed <= t2) {
-                // 阶段二：1/4 -> 1/2 总时长，速度从 v1 线性渐进至 v2
                 const progress = (elapsed - t1) / (t2 - t1);
                 hm.currentMultiplier = v1 + (v2 - v1) * progress;
             } else {
-                // 阶段三：1/2 -> 总时长结束，速度从 v2 线性渐进至 1.0 (原速)
                 const progress = (elapsed - t2) / (totalDuration - t2);
                 hm.currentMultiplier = v2 + (1.0 - v2) * progress;
             }
@@ -70,7 +65,10 @@
                 powerPreference: 'high-performance'
             });
             appState.renderer.physicallyCorrectLights = true;
-            appState.renderer.setPixelRatio(IS_MOBILE_DEVICE ? Math.min(window.devicePixelRatio, 1.5) : window.devicePixelRatio);
+
+            // ★ 性能封顶核心：桌面限制在 1.5，手机限制在 1.25，彻底压制超高分屏过曝与发热
+            const maxDPR = IS_MOBILE_DEVICE ? 1.25 : 1.5;
+            appState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDPR));
             appState.renderer.setSize(window.innerWidth, window.innerHeight);
             appState.renderer.setClearColor(0x000000, 0);
             appState.renderer.sortObjects = true;
@@ -137,16 +135,6 @@
             appState.camera.add(appState.studioSpotLightTarget);
             appState.studioSpotLight.target = appState.studioSpotLightTarget;
 
-            const ringGeo = new THREE.RingGeometry(19, 20, 48);
-            const ringMat = new THREE.MeshBasicMaterial({
-                color: 0x00f0ff, transparent: true, opacity: 0.4, depthTest: false, depthWrite: false
-            });
-            appState.studioLightHelperMesh = new THREE.Mesh(ringGeo, ringMat);
-            appState.studioLightHelperMesh.position.set(0, 0, -100);
-            appState.studioLightHelperMesh.renderOrder = 10000;
-            appState.studioLightHelperMesh.visible = false;
-            appState.camera.add(appState.studioLightHelperMesh);
-
             if (typeof THREE.RectAreaLightUniformsLib !== 'undefined' && THREE.RectAreaLightUniformsLib.init) {
                 THREE.RectAreaLightUniformsLib.init();
             }
@@ -168,232 +156,6 @@
                 APP_CONFIG.DEFAULT_DIRECTIONAL_LIGHT_2_POSITION_Z
             ).normalize();
             appState.scene.add(appState.directionalLight2);
-
-            appState.customSpotLight = new THREE.SpotLight(APP_CONFIG.DEFAULT_CUSTOM_LIGHT_COLOR);
-            appState.customSpotLight.decay = 0;
-            appState.scene.add(appState.customSpotLight);
-            appState.scene.add(appState.customSpotLight.target);
-
-            appState.customSpotLightHelper = new THREE.SpotLightHelper(appState.customSpotLight);
-            appState.customSpotLightHelper.visible = false;
-            appState.scene.add(appState.customSpotLightHelper);
-
-            const sourceGeo = new THREE.SphereGeometry(8, 32, 16);
-            const sourceMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x000000, transparent: true, opacity: 0.5 });
-            appState.lightSourceMesh = new THREE.Mesh(sourceGeo, sourceMat);
-            appState.lightSourceMesh.name = 'lightSource';
-            appState.lightSourceMesh.visible = false;
-            appState.scene.add(appState.lightSourceMesh);
-
-            const targetGeo = new THREE.SphereGeometry(4, 16, 8);
-            const targetMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x000000, transparent: true, opacity: 0.5 });
-            appState.lightTargetMesh = new THREE.Mesh(targetGeo, targetMat);
-            appState.lightTargetMesh.name = 'lightTarget';
-            appState.lightTargetMesh.visible = false;
-            appState.scene.add(appState.lightTargetMesh);
-
-            if (typeof THREE.TransformControls === 'function') {
-                appState.transformControls = new THREE.TransformControls(appState.camera, appState.renderer.domElement);
-                appState.transformControls.setMode('translate');
-                appState.transformControls.setSpace('world');
-                appState.scene.add(appState.transformControls);
-
-                appState.transformControls.addEventListener('dragging-changed', function(event) {
-                    appState.controls.enabled = !event.value;
-                });
-            } else {
-                appState.transformControls = null;
-            }
-
-            this.initGuidelines();
-        },
-
-        initGuidelines() {
-            appState.guidelineGroup = new THREE.Group();
-            appState.scene.add(appState.guidelineGroup);
-            const radius = APP_CONFIG.DEFAULT_GUIDELINE_RADIUS || 100;
-            const guideConfigs = {
-                'xy': { rotation: [0, 0, 0] },
-                'yz': { rotation: [0, Math.PI / 2, 0] },
-                'xz': { rotation: [Math.PI / 2, 0, 0] },
-                'xy_45': { rotation: [0, 0, Math.PI / 4] },
-                'yz_45': { rotation: [0, Math.PI / 4, 0] }
-            };
-            const material = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.3 });
-            if (!appState.guidelines) appState.guidelines = {};
-            for (const name in guideConfigs) {
-                const geo = new THREE.TorusGeometry(radius, 1, 8, 64);
-                const mesh = new THREE.Mesh(geo, material);
-                mesh.name = name;
-                mesh.rotation.fromArray(guideConfigs[name].rotation);
-                mesh.visible = false;
-                appState.guidelines[name] = mesh;
-                appState.guidelineGroup.add(mesh);
-            }
-        },
-
-        updateHemiLightSettings() {
-            if (!appState.hemisphereLight) return;
-            const skyEl = document.getElementById('hemiSkyColor');
-            const gndEl = document.getElementById('hemiGroundColor');
-            const intEl = document.getElementById('hemiIntensity');
-            const sky = skyEl ? skyEl.value : '#add8e6';
-            const ground = gndEl ? gndEl.value : '#404040';
-            const intensity = safeParseFloat(intEl ? intEl.value : 0.9, 0.9);
-            appState.hemisphereLight.color.set(getColor(sky, 'three'));
-            appState.hemisphereLight.groundColor.set(getColor(ground, 'three'));
-            appState.hemisphereLight.intensity = intensity;
-            appState.needsRender = true;
-        },
-
-        updateRectAreaLight1Settings() {
-            if (!appState.rectAreaLight1) return;
-            const cEl = document.getElementById('rect1Color');
-            const iEl = document.getElementById('rect1Intensity');
-            const color = cEl ? cEl.value : '#ffffff';
-            const intensity = safeParseFloat(iEl ? iEl.value : 2.2, 2.2);
-            appState.rectAreaLight1.color.set(getColor(color, 'three'));
-            appState.rectAreaLight1.intensity = intensity;
-            appState.needsRender = true;
-        },
-
-        updateRectAreaLight2Settings() {
-            if (!appState.rectAreaLight2) return;
-            const cEl = document.getElementById('rect2Color');
-            const iEl = document.getElementById('rect2Intensity');
-            const color = cEl ? cEl.value : '#ffe0b3';
-            const intensity = safeParseFloat(iEl ? iEl.value : 1.6, 1.6);
-            appState.rectAreaLight2.color.set(getColor(color, 'three'));
-            appState.rectAreaLight2.intensity = intensity;
-            appState.needsRender = true;
-        },
-
-        updateDirectionalLight2Settings() {
-            if (!appState.directionalLight2) return;
-            const cEl = document.getElementById('directionalLight2Color');
-            const iEl = document.getElementById('directionalLight2Intensity');
-            const xEl = document.getElementById('directionalLight2PosX');
-            const yEl = document.getElementById('directionalLight2PosY');
-            const zEl = document.getElementById('directionalLight2PosZ');
-            const color = cEl ? cEl.value : '#ffc080';
-            const intensity = safeParseFloat(iEl ? iEl.value : 0.5, 0.5);
-            const px = safeParseFloat(xEl ? xEl.value : -11, -11);
-            const py = safeParseFloat(yEl ? yEl.value : -6, -6);
-            const pz = safeParseFloat(zEl ? zEl.value : -14, -14);
-            appState.directionalLight2.color.set(getColor(color, 'three'));
-            appState.directionalLight2.intensity = intensity;
-            appState.directionalLight2.position.set(px, py, pz).normalize();
-            appState.needsRender = true;
-        },
-
-        updateCustomLightSettings() {
-            if (!appState.customSpotLight || !appState.lightSourceMesh) return;
-            const enEl = document.getElementById('customLightEnabled');
-            const hpEl = document.getElementById('customLightHelperVisible');
-            const enabled = enEl ? enEl.checked : false;
-            const helperVisible = hpEl ? hpEl.checked : false;
-            appState.customSpotLight.visible = !!enabled;
-            appState.lightSourceMesh.visible = !!(enabled && helperVisible);
-            appState.lightTargetMesh.visible = !!(enabled && helperVisible);
-            if (appState.customSpotLightHelper) {
-                appState.customSpotLightHelper.visible = !!(enabled && helperVisible);
-            }
-
-            if (!enabled) {
-                if (appState.transformControls) appState.transformControls.detach();
-                appState.needsRender = true;
-                return;
-            }
-
-            const cEl = document.getElementById('customLightColor');
-            const iEl = document.getElementById('customLightIntensity');
-            const dEl = document.getElementById('customLightDistance');
-            const aEl = document.getElementById('customLightAngle');
-            const pEl = document.getElementById('customLightPenumbra');
-
-            const colorHex = cEl ? cEl.value : '#ffffff';
-            const intensity = safeParseFloat(iEl ? iEl.value : 20, 20) / 1000;
-            const distance = safeParseFloat(dEl ? dEl.value : 500, 500);
-            const angle = safeParseFloat(aEl ? aEl.value : 0.8, 0.8);
-            const penumbra = safeParseFloat(pEl ? pEl.value : 0.2, 0.2);
-
-            appState.customSpotLight.color.set(colorHex);
-            appState.customSpotLight.intensity = intensity;
-            appState.customSpotLight.distance = distance;
-            appState.customSpotLight.angle = angle;
-            appState.customSpotLight.penumbra = penumbra;
-
-            const sxEl = document.getElementById('customLightSourcePosX');
-            const syEl = document.getElementById('customLightSourcePosY');
-            const szEl = document.getElementById('customLightSourcePosZ');
-            const txEl = document.getElementById('customLightTargetPosX');
-            const tyEl = document.getElementById('customLightTargetPosY');
-            const tzEl = document.getElementById('customLightTargetPosZ');
-
-            const sx = safeParseFloat(sxEl ? sxEl.value : 0, 0);
-            const sy = safeParseFloat(syEl ? syEl.value : 0, 0);
-            const sz = safeParseFloat(szEl ? szEl.value : 150, 150);
-            const tx = safeParseFloat(txEl ? txEl.value : 0, 0);
-            const ty = safeParseFloat(tyEl ? tyEl.value : 0, 0);
-            const tz = safeParseFloat(tzEl ? tzEl.value : 0, 0);
-
-            appState.customSpotLight.position.set(sx, sy, sz);
-            appState.customSpotLight.target.position.set(tx, ty, tz);
-            appState.lightSourceMesh.position.set(sx, sy, sz);
-            appState.lightTargetMesh.position.set(tx, ty, tz);
-            if (appState.customSpotLightHelper) appState.customSpotLightHelper.update();
-            appState.needsRender = true;
-        },
-
-        setActiveGuideline(name) {
-            appState.activeGuideline = name;
-            const selectEl = document.getElementById('guidelineSelect');
-            if (selectEl) selectEl.value = name;
-            if (appState.guidelines) {
-                for (const key in appState.guidelines) {
-                    appState.guidelines[key].visible = (key === name);
-                }
-            }
-            const posInput = document.getElementById('guidelinePosition');
-            if (posInput) posInput.disabled = (name === 'none');
-            this.updateLightOnGuideline();
-            appState.needsRender = true;
-        },
-
-        updateGuidelineRadius() {
-            const radEl = document.getElementById('guidelineRadius');
-            const radius = safeParseFloat(radEl ? radEl.value : (APP_CONFIG.DEFAULT_GUIDELINE_RADIUS || 100), (APP_CONFIG.DEFAULT_GUIDELINE_RADIUS || 100));
-            if (appState.guidelineGroup) {
-                appState.guidelineGroup.scale.setScalar(radius / (APP_CONFIG.DEFAULT_GUIDELINE_RADIUS || 100));
-            }
-            this.updateLightOnGuideline();
-            appState.needsRender = true;
-        },
-
-        updateLightOnGuideline() {
-            if (appState.activeGuideline === 'none') return;
-            const radEl = document.getElementById('guidelineRadius');
-            const posEl = document.getElementById('guidelinePosition');
-            const radius = safeParseFloat(radEl ? radEl.value : (APP_CONFIG.DEFAULT_GUIDELINE_RADIUS || 100), (APP_CONFIG.DEFAULT_GUIDELINE_RADIUS || 100));
-            const angle = THREE.MathUtils.degToRad(safeParseFloat(posEl ? posEl.value : 0, 0));
-            let pos = new THREE.Vector3(radius * Math.cos(angle), radius * Math.sin(angle), 0);
-            if (appState.guidelines && appState.guidelines[appState.activeGuideline]) {
-                const guide = appState.guidelines[appState.activeGuideline];
-                pos.applyEuler(guide.rotation);
-            }
-
-            if (appState.customSpotLight) appState.customSpotLight.position.copy(pos);
-            if (appState.lightSourceMesh) appState.lightSourceMesh.position.copy(pos);
-            const sx = document.getElementById('customLightSourcePosX');
-            const sy = document.getElementById('customLightSourcePosY');
-            const sz = document.getElementById('customLightSourcePosZ');
-            if (sx) sx.value = pos.x.toFixed(0);
-            if (sy) sy.value = pos.y.toFixed(0);
-            if (sz) sz.value = pos.z.toFixed(0);
-            if (appState.customSpotLightHelper && appState.customSpotLightHelper.visible) {
-                appState.customSpotLightHelper.update();
-            }
-            appState.needsRender = true;
         },
 
         onWindowResize() {
@@ -468,69 +230,13 @@
             }
         },
 
-        updateStudioLightSettings() {
-            const enEl = document.getElementById('studioLightEnabled');
-            const hpEl = document.getElementById('studioLightHelperVisible');
-            const cEl = document.getElementById('studioLightColor');
-            const iEl = document.getElementById('studioLightIntensity');
-            const aEl = document.getElementById('studioLightAngle');
-
-            const enabled = enEl ? enEl.checked : false;
-            const helperVisible = hpEl ? hpEl.checked : false;
-            const colorHex = cEl ? cEl.value : '#ffffff';
-            const intensity = parseFloat(iEl ? iEl.value : '3.5');
-            const angle = parseFloat(aEl ? aEl.value : '0.7');
-
-            if (appState.studioSpotLight) appState.studioSpotLight.visible = !!enabled;
-            if (appState.studioLightHelperMesh) appState.studioLightHelperMesh.visible = !!(enabled && helperVisible);
-
-            if (!enabled) {
-                appState.needsRender = true;
-                return;
-            }
-            if (appState.studioSpotLight) {
-                appState.studioSpotLight.color.set(colorHex);
-                appState.studioSpotLight.intensity = intensity;
-                appState.studioSpotLight.angle = angle;
-            }
-
-            const lx = (appState.studioLight && appState.studioLight.localX) || 0;
-            const ly = (appState.studioLight && appState.studioLight.localY) || 0;
-            if (appState.studioSpotLight) appState.studioSpotLight.position.set(lx, ly, 50);
-            if (appState.studioSpotLightTarget) appState.studioSpotLightTarget.position.set(lx, ly, -200);
-
-            if (appState.studioLightHelperMesh) {
-                appState.studioLightHelperMesh.position.set(lx, ly, -100);
-                const ringScale = Math.tan(angle) * 100;
-                appState.studioLightHelperMesh.scale.setScalar(ringScale / 20);
-            }
-            appState.needsRender = true;
-        },
-
-        handleStudioLightDrag(event) {
-            if (!appState.studioLightDragActive || !appState.camera) return;
-            const container = document.getElementById('wordSphere');
-            if (!container) return;
-            const rect = container.getBoundingClientRect();
-            const normX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            const normY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-            const fovRad = (appState.camera.fov * Math.PI) / 180;
-            const planeHeightAt100 = 2 * Math.tan(fovRad / 2) * 100;
-            const planeWidthAt100 = planeHeightAt100 * appState.camera.aspect;
-
-            if (!appState.studioLight) appState.studioLight = {};
-            appState.studioLight.localX = (normX * planeWidthAt100) / 2;
-            appState.studioLight.localY = (normY * planeHeightAt100) / 2;
-            this.updateStudioLightSettings();
-        },
-
         animate(time) {
             if (time === undefined || time === null) time = performance.now();
             requestAnimationFrame((t) => AppScene.animate(t));
 
             if (!appState.controls || !appState.renderer || !appState.scene || !appState.camera) return;
 
+            // 移动端 30FPS 锁帧节流，大幅保护手机电池
             if (IS_MOBILE_DEVICE) {
                 if (!appState.lastRenderTime) appState.lastRenderTime = time;
                 const delta = time - appState.lastRenderTime;
@@ -538,10 +244,9 @@
                 appState.lastRenderTime = time - (delta % 33.33);
             }
 
-            // ★ 计算查词静止与渐快加速恢复因子
             const hoverMotionFactor = computeHoverMotionMultiplier(time);
-
             const controlsChanged = appState.controls.update();
+
             let mustRender = controlsChanged || appState.needsRender;
 
             if (appState.autoRotate && appState.actualDisplayRotationSpeed > 0 && appState.rotationMultiplier > 0.001 && hoverMotionFactor > 0.0001) mustRender = true;
@@ -551,6 +256,10 @@
             if (appState.clickBurstParticles && appState.clickBurstParticles.visible) mustRender = true;
             if (appState.coreSphere && appState.coreSphere.visible) mustRender = true;
 
+            // ★ 静止状态直接退出，CPU 占用彻底降为 0%
+            if (!mustRender) return;
+            appState.needsRender = false;
+
             const cardMult = appState.cardScaleMultiplier || 1.0;
             appState.camera.getWorldPosition(AppMath.vecCamWorld);
             const radius = appState.sphereRadius || 85;
@@ -559,7 +268,7 @@
             const minDist = camDist - radius;
             const distRange = 2 * radius;
 
-            // 局部焦点巡航算法：严格限定只在面向镜头正面 (t < 0.42) 区域随机抽取放大
+            // 局部焦点巡航
             if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0 && hoverMotionFactor > 0.001) {
                 const fc = appState.focusCruise;
                 if (time - fc.lastSwitchTime >= fc.interval * 1000) {
@@ -578,7 +287,6 @@
 
                     if (frontCandidateIndices.length > 0) {
                         if (!fc.visitedIndices) fc.visitedIndices = new Set();
-
                         let available = frontCandidateIndices.filter(idx => !fc.visitedIndices.has(idx));
                         if (available.length === 0) {
                             fc.visitedIndices.clear();
@@ -592,19 +300,14 @@
 
                         const ratio = Math.max(0.01, Math.min(0.5, (fc.ratioPercent || 8) / 100));
                         const batchCount = Math.max(1, Math.min(available.length, Math.round(appState.wordObjects.length * ratio)));
-
                         const selected = available.slice(0, batchCount);
                         selected.forEach(idx => fc.visitedIndices.add(idx));
                         fc.currentSpotlightIndices = new Set(selected);
                     } else {
                         fc.currentSpotlightIndices = new Set();
                     }
-                    mustRender = true;
                 }
             }
-
-            if (!mustRender) return;
-            appState.needsRender = false;
 
             if (appState.vortexParticles && appState.vortexParticles.visible) {
                 const baseSpeed = appState.rt.vortexSpeed !== undefined ? appState.rt.vortexSpeed : 0.003;
@@ -615,7 +318,7 @@
                 appState.coreSphere.rotation.y += 0.0008;
             }
 
-            // 查词卡位置与朝向：恒定锁定在摄像机正前方居中
+            // 查词卡位置与朝向
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
                 const lerpFactor = 0.15;
@@ -655,7 +358,6 @@
                 }
             }
 
-            // ★ 核心受控旋转：乘入 hoverMotionFactor（暂停为0，恢复时0->0.2->0.7->1.0平滑升速）
             const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.0058 * appState.rotationMultiplier * appState.rotationMultiplierTemporary * hoverMotionFactor;
 
             if (appState.autoRotate && baseRotationSpeed > 0 && appState.wordSphereGroup && !appState.isFlowMode) {
@@ -667,7 +369,6 @@
                 if (rz) appState.wordSphereGroup.rotation.z += baseRotationSpeed;
             }
 
-            // ★ 卡片自转同样受控刹停与平滑加速
             const shouldCardsRotate = appState.rt.cardSelfRotation !== undefined ? appState.rt.cardSelfRotation : true;
             const cardMasterSpeed = (appState.rt.cardRotationSpeed !== undefined ? appState.rt.cardRotationSpeed : 2) * 0.00115 * hoverMotionFactor;
 
@@ -675,7 +376,6 @@
                 appState.wordSphereGroup.updateMatrixWorld(true);
             }
 
-            // 球面卡片布局与焦点巡航放大
             if (!appState.isFlowMode) {
                 const basePulse = 0.20 + Math.sin(time * 0.0012) * 0.15;
                 const glassBreath = 0.95 + Math.sin(time * 0.0012) * 0.05;

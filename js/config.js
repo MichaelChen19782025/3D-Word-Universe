@@ -1,5 +1,7 @@
 /**
- * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量 (V8.6 智能共享备注与沉浸阅读版)
+ * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量 (V8.6 极速降耗调优版)
+ * 1. 彻底调优粒子发射基线（避免过载发热）
+ * 2. 封顶高分屏设备像素比，显著提升电池续航与帧率
  */
 const IS_MOBILE_DEVICE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
 
@@ -64,18 +66,20 @@ const APP_CONFIG = {
     DYNAMIC_BG_DEFAULT_HUE_END: 270,
     DYNAMIC_BG_DEFAULT_LIGHTNESS: 10,
     DYNAMIC_BG_DEFAULT_SATURATION: 30,
-    DYNAMIC_BG_DEFAULT_PARTICLE_COUNT: IS_MOBILE_DEVICE ? 40 : 300,
+    DYNAMIC_BG_DEFAULT_PARTICLE_COUNT: IS_MOBILE_DEVICE ? 20 : 80, // 从 300 降为 80 (手机 20)
     DYNAMIC_BG_DEFAULT_PARTICLE_SPEED: 0.05,
 
+    // ★ 星空背景参数：从 25000 降至极速清爽的 2500 (手机端仅需 600)
     DEFAULT_STARFIELD_ENABLED: true,
-    DEFAULT_STAR_COUNT: IS_MOBILE_DEVICE ? 2000 : 25000,
+    DEFAULT_STAR_COUNT: IS_MOBILE_DEVICE ? 600 : 2500,
     DEFAULT_STAR_COLOR: '#ffffff',
     DEFAULT_STAR_SIZE: 0.8,
 
-    // 视觉增强系统（Vortex 限速 0.001 ~ 0.01）
+    // ★ 视觉增强系统（Vortex 限速且降噪）
     DEFAULT_VORTEX_SPEED: 0.003,
     DEFAULT_VORTEX_MIN_SPEED: 0.001,
     DEFAULT_VORTEX_MAX_SPEED: 0.01,
+    DEFAULT_VORTEX_PARTICLE_COUNT: IS_MOBILE_DEVICE ? 1500 : 6000, // 从 40000 降为 6000
 
     HEMISPHERE_LAYOUT_THRESHOLD: 20,
     GRAPPLE_MAX_SPEED: 260,
@@ -87,9 +91,9 @@ const APP_CONFIG = {
 
     // 查词静止与渐快恢复参数默认值
     DEFAULT_CARD_PAUSE_ON_HOVER: true,
-    DEFAULT_HOVER_RESUME_DURATION: 2.0,   // 总恢复时长 (秒)
-    DEFAULT_HOVER_RESUME_P1: 20,          // 前 1/4 时长恢复至速度百分比 (%)
-    DEFAULT_HOVER_RESUME_P2: 70           // 前 1/2 时长恢复至速度百分比 (%)
+    DEFAULT_HOVER_RESUME_DURATION: 2.0,
+    DEFAULT_HOVER_RESUME_P1: 20,
+    DEFAULT_HOVER_RESUME_P2: 70
 };
 
 const appState = {
@@ -124,19 +128,17 @@ const appState = {
     editingNoteId: null,
     needsRender: true,
 
-    // 查词卡常驻保持状态 (锁定不自动淡出)
     isHoverCardPinned: false,
 
-    // 查词卡弹出暂停与阶梯平滑恢复运动控制器
     hoverMotion: {
         pauseEnabled: true,
-        resumeDuration: 2.0, // 总时长 (秒)
-        p1Percent: 20,       // 前 1/4 恢复百分比
-        p2Percent: 70,       // 前 1/2 恢复百分比
-        isPaused: false,     // 当前是否因查词卡处于静止状态
-        isResuming: false,   // 是否处于查词卡消失后的缓和加速过程
-        resumeStartTime: 0,  // 恢复开始的时间戳 (ms)
-        currentMultiplier: 1.0 // 当前计算得出的平滑系数 (0.0 ~ 1.0)
+        resumeDuration: 2.0,
+        p1Percent: 20,
+        p2Percent: 70,
+        isPaused: false,
+        isResuming: false,
+        resumeStartTime: 0,
+        currentMultiplier: 1.0
     },
     
     rt: {
@@ -157,7 +159,6 @@ const appState = {
         lastSwitchTime: 0
     },
 
-    // 智能共享备注知识图谱状态与沉浸阅读器状态
     smartNotes: {
         sharedNotesList: [],
         currentReaderIndex: 0,
