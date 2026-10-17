@@ -1932,7 +1932,7 @@
                 }
             });
 
-                        canvasEl.addEventListener('pointerup', (e) => {
+            canvasEl.addEventListener('pointerup', (e) => {
                 if (longPressTimer) {
                     clearTimeout(longPressTimer);
                     longPressTimer = null;
@@ -1947,31 +1947,36 @@
                 const dist = downPos.distanceTo(new THREE.Vector2(e.clientX, e.clientY));
 
                 if (dist < 8 && duration < 750 && !isMoving) {
+                    // 立即响应单击（点击卡片弹出查词，点击空白处关闭查词）
                     this.handleQuickTap(e);
-                } else if (e.pointerType === 'touch' && duration < 300 && dist < 20 && !isMoving) {
-                    // 手机端双击空白处切换提亮
-                    if (!this._lastTapTime) this._lastTapTime = 0;
-                    const now = performance.now();
-                    if (now - this._lastTapTime < 300) {
-                        const mouse = new THREE.Vector2(
-                            (e.clientX / window.innerWidth) * 2 - 1,
-                            -(e.clientY / window.innerHeight) * 2 + 1
-                        );
-                        const raycaster = new THREE.Raycaster();
-                        raycaster.setFromCamera(mouse, appState.camera);
-                        const intersects = raycaster.intersectObjects(appState.wordObjects || [], false);
 
-                        if (intersects.length === 0) {
+                    // 检测是否点在卡片外部的空白区域
+                    const mouse = new THREE.Vector2(
+                        (e.clientX / window.innerWidth) * 2 - 1,
+                        -(e.clientY / window.innerHeight) * 2 + 1
+                    );
+                    const raycaster = new THREE.Raycaster();
+                    raycaster.setFromCamera(mouse, appState.camera);
+                    const intersects = raycaster.intersectObjects(appState.wordObjects || [], false);
+
+                    // 只有空白处双击才触发提亮（鼠标和手机均已支持）
+                    if (intersects.length === 0) {
+                        if (!this._lastTapTime) this._lastTapTime = 0;
+                        const now = performance.now();
+                        if (now - this._lastTapTime < 350) {
                             appState.isLightBoosted = !appState.isLightBoosted;
                             appState.needsRender = true;
                             if (window.AppUI && typeof AppUI.showToast === 'function') {
                                 AppUI.showToast(appState.isLightBoosted ? '💡 卡片群亮度已提亮' : '💡 卡片群亮度已恢复');
                             }
                             if (navigator.vibrate) navigator.vibrate(20);
+                            this._lastTapTime = 0;
+                        } else {
+                            this._lastTapTime = now;
                         }
-                        this._lastTapTime = 0;
                     } else {
-                        this._lastTapTime = now;
+                        // 如果点到了卡片，重置计时
+                        this._lastTapTime = 0;
                     }
                 }
             });

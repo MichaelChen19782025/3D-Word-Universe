@@ -184,7 +184,7 @@
 
         // ==================== 3. 星空背景 ====================
         initStarfield() {
-            if (!appState.scene) return; // ★ 防御
+            if (!appState.scene) return;
 
             if (appState.starfield) {
                 appState.scene.remove(appState.starfield);
@@ -209,7 +209,8 @@
             const color = AppMath.color.set(colorHex);
 
             for (let i = 0; i < starCount; i++) {
-                const distance = Math.cbrt(Math.random()) * 3000;
+                // ★ 修复：强制星星分布在 1500 ~ 3000 的远景球壳内，杜绝近处出现方块亮块
+                const distance = 1500 + Math.random() * 1500;
                 const theta = Math.random() * Math.PI * 2;
                 const rawVal = (Math.random() * 2) - 1;
                 const acosVal = Math.min(Math.max(rawVal, -1), 1);
@@ -245,7 +246,7 @@
 
         // ==================== 4. 动态背景粒子 ====================
         initDynamicBackground() {
-            if (!appState.scene) return; // ★ 防御
+            if (!appState.scene) return;
 
             if (appState.dynamicBgParticles) {
                 appState.scene.remove(appState.dynamicBgParticles);
@@ -264,9 +265,14 @@
 
             const c = AppMath.color;
             for (let i = 0; i < particleCount; i++) {
-                positions[i * 3] = THREE.MathUtils.randFloatSpread(3000);
-                positions[i * 3 + 1] = THREE.MathUtils.randFloatSpread(3000);
-                positions[i * 3 + 2] = THREE.MathUtils.randFloatSpread(3000) - 1500;
+                // ★ 修复：动态粒子同样移远，分布在 800~3000 之间
+                const distance = 800 + Math.random() * 2200;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() * 2) - 1);
+
+                positions[i * 3] = distance * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = distance * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = distance * Math.cos(phi);
 
                 c.setHSL(Math.random() * 0.3 + 0.55, 0.8, Math.random() * 0.3 + 0.4);
                 colors[i * 3] = c.r;
