@@ -2,12 +2,15 @@
  * 3D单词宇宙 - 空间粒子特效体系 (极速降耗架构版)
  * 1. 彻底移除 JS 驱动每帧改写 DOM 背景造成的 CPU 100% 满载元凶
  * 2. 优化星空与旋臂默认粒子缓冲区，大幅减轻 CPU 调度与移动端发热
+ * 3. 增加安全防御机制，防止场景未初始化时的意外崩溃
  */
 (function() {
     let _burstVelocities = null;
     const AppParticles = {
         // ==================== 1. 核心能量球体 ====================
         initCoreSphere() {
+            if (!appState.scene) return; // ★ 防御性编程，防止场景未加载时报错
+
             if (appState.coreSphere) {
                 appState.scene.remove(appState.coreSphere);
                 if (appState.coreSphere.geometry) appState.coreSphere.geometry.dispose();
@@ -43,6 +46,7 @@
         },
 
         updateCoreSphereSettings() {
+            if (!appState.scene) return;
             if (!appState.coreSphere) {
                 this.initCoreSphere();
                 return;
@@ -69,6 +73,8 @@
 
         // ==================== 2. 宇宙涡旋 (Vortex - 6000粒子清爽版) ====================
         initVortex() {
+            if (!appState.scene) return; // ★ 防御
+
             const enabled = document.getElementById('visualEffectsEnabled')?.checked || false;
 
             if (appState.vortexParticles) {
@@ -157,6 +163,7 @@
         },
 
         updateVisualEffects() {
+            if (!appState.scene) return; // ★ 防御
             const enabled = document.getElementById('visualEffectsEnabled')?.checked || false;
             appState.rt.visualFxEnabled = enabled;
 
@@ -175,8 +182,10 @@
             appState.needsRender = true;
         },
 
-        // ==================== 3. 星空背景 (2500颗超轻量化，无损美感) ====================
+        // ==================== 3. 星空背景 ====================
         initStarfield() {
+            if (!appState.scene) return; // ★ 防御
+
             if (appState.starfield) {
                 appState.scene.remove(appState.starfield);
                 if (appState.starfield.geometry) appState.starfield.geometry.dispose();
@@ -234,8 +243,10 @@
             appState.needsRender = true;
         },
 
-        // ==================== 4. 动态背景粒子与 CSS 渐变 ====================
+        // ==================== 4. 动态背景粒子 ====================
         initDynamicBackground() {
+            if (!appState.scene) return; // ★ 防御
+
             if (appState.dynamicBgParticles) {
                 appState.scene.remove(appState.dynamicBgParticles);
                 if (appState.dynamicBgParticles.geometry) appState.dynamicBgParticles.geometry.dispose();
@@ -290,6 +301,8 @@
 
         // ==================== 5. 点击爆发粒子 ====================
         initClickBurstParticles() {
+            if (!appState.scene) return; // ★ 防御
+
             const count = 40;
             const positions = new Float32Array(count * 3);
             const colors = new Float32Array(count * 3);
@@ -372,10 +385,7 @@
             run();
         },
 
-        // ★ 核心除害：彻底废弃每帧暴力修改 DOM 和触发 needsRender 的死循环，转由纯 CSS GPU 承接
-        initNebulaColors() {
-            // 已完全交接至 CSS .nebula-1 / .nebula-2 的硬件加速动画，此处不再占用任何主线程 CPU
-        }
+        initNebulaColors() {}
     };
     window.AppParticles = AppParticles;
 })();

@@ -61,6 +61,9 @@
                         card.material[0].transparent = true;
                         card.material[0].visible = (targetOpacity > 0.001);
                         card.material[0].needsUpdate = true;
+                        
+                        // ★ 同步记录基础自发光强度，供渲染循环动态提亮使用
+                        if (card.userData) card.userData.baseEmissiveIntensity = targetBrightness;
                     }
                     if (card.material[1]) {
                         card.material[1].opacity = targetOpacity * 0.75;
@@ -74,6 +77,9 @@
                     card.material.transparent = true;
                     card.material.visible = (targetOpacity > 0.001);
                     card.material.needsUpdate = true;
+                    
+                    // ★ 同步记录基础自发光强度
+                    if (card.userData) card.userData.baseEmissiveIntensity = targetBrightness;
                 }
             }
             appState.needsRender = true;
@@ -364,7 +370,6 @@
             return card;
         },
 
-        // 经典的科技感机甲外延四角拐角装饰
         createCornerBrackets() {
             const bracketGroup = new THREE.Group();
             const bracketCanvas = document.createElement('canvas');
@@ -422,7 +427,6 @@
             return bracketGroup;
         },
 
-        // ★ 保留正常美学边距与优雅留白，并精确计算内容区安全占比（供超宽时智能放大裁剪）
         createOverlayTexture(word) {
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
@@ -442,12 +446,10 @@
             const canvasWidth = Math.round(1240 * scale);
             const baseSize = 1240 * 0.038 * scale;
 
-            // ★ 正常状态下保有优雅大方的留白边距 (绝不盲目贴边剃光头)
             const paddingX = Math.round(52 * scale);
             const paddingY = Math.round(36 * scale);
             const wrapWidth = canvasWidth - paddingX * 2;
 
-            // 记录核心内容安全宽度比例（供超宽裁剪算法动态使用）
             const contentSafeRatio = wrapWidth / canvasWidth;
 
             const englishWord = (word.words || 'N/A').trim();
@@ -482,7 +484,6 @@
             const fontMethod = `bold ${Math.round(baseSize * 1.15)}px ${fontFamily}`;
             const fontButton = `bold ${Math.round(baseSize * 0.76)}px ${fontFamily}`;
 
-            // 右上角功能胶囊纯图标化
             const btnHeight = baseSize * 0.95;
             const spacing = 5 * scale;
             const btnY = paddingY + (baseSize * 1.55 - btnHeight) / 2;
@@ -504,7 +505,6 @@
             const btnMinusX = btnPlusX - spacing - btnMinusW;
             const btnSpeakerX = btnMinusX - spacing - btnSpeakerW;
 
-            // 超长单词自适应微调字号防止遮挡胶囊
             testCtx.font = `bold ${mainFontSize}px ${fontFamily}`;
             let testWordW = testCtx.measureText(englishWord).width;
             const maxWordSpace = btnSpeakerX - paddingX - (18 * scale);
@@ -542,7 +542,6 @@
 
             context.textBaseline = 'top';
 
-            // 1. 主单词
             context.textAlign = "left";
             context.font = fontMain;
             context.fillStyle = mainWordColor;
@@ -555,7 +554,6 @@
             testCtx.font = fontMain;
             const wordWidth = testCtx.measureText(englishWord).width;
 
-            // 音标
             context.font = fontPhonetic;
             context.fillStyle = phoneticColor;
             context.save();
@@ -564,7 +562,6 @@
             context.fillText(phoneticSymbol, paddingX + wordWidth + 20 * scale, paddingY + (baseSize * 0.40));
             context.restore();
 
-            // 2. 右上角功能胶囊纯图标绘制
             const zones = [];
 
             function drawPillButton(label, x, y, w, h, variant = 'normal') {
@@ -643,7 +640,6 @@
 
             zones.push({ type: 'speak', xMin: paddingX - 10, xMax: btnSpeakerX - spacing, yMin: paddingY - 10, yMax: paddingY + mainWordHeight + 10 });
 
-            // 3. 中文释义
             let writeY = paddingY + mainWordHeight;
             context.font = fontMeaning;
             context.fillStyle = meaningColor;
@@ -656,7 +652,6 @@
             });
             context.restore();
 
-            // 4. 分割线
             writeY += baseSize * 0.4;
             context.strokeStyle = "rgba(104, 240, 255, 0.28)";
             context.lineWidth = Math.max(1, Math.round(1 * scale));
@@ -665,7 +660,6 @@
             context.lineTo(canvasWidth - paddingX, writeY);
             context.stroke();
 
-            // 5. 记忆方法标题
             writeY += baseSize * 0.6;
             context.font = fontTitle;
             context.fillStyle = methodTitleColor;
@@ -675,7 +669,6 @@
             context.fillText("💡 记忆方法 / Memory Association", paddingX, writeY);
             context.restore();
 
-            // 6. 记忆方法正文
             writeY += baseSize * 1.35;
             context.font = fontMethod;
             context.fillStyle = methodContentColor;

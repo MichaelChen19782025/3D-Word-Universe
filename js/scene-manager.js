@@ -3,6 +3,7 @@
  * 1. 严格封顶设备像素比 (DPR)，杜绝 Retina/4K 屏幕过度渲染
  * 2. 精确脏标记检测，静止状态下 CPU/GPU 彻底归零
  * 3. 查词窗口与三阶段平滑阶梯渐快加速恢复
+ * 4. 优化卡片深度衰减逻辑，背侧卡片不透明度与亮度衰减幅度控制在 10% 以内
  */
 (function() {
     function computeHoverMotionMultiplier(time) {
@@ -66,7 +67,6 @@
             });
             appState.renderer.physicallyCorrectLights = true;
 
-            // ★ 性能封顶核心：桌面限制在 1.5，手机限制在 1.25，彻底压制超高分屏过曝与发热
             const maxDPR = IS_MOBILE_DEVICE ? 1.25 : 1.5;
             appState.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDPR));
             appState.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -236,7 +236,6 @@
 
             if (!appState.controls || !appState.renderer || !appState.scene || !appState.camera) return;
 
-            // 移动端 30FPS 锁帧节流，大幅保护手机电池
             if (IS_MOBILE_DEVICE) {
                 if (!appState.lastRenderTime) appState.lastRenderTime = time;
                 const delta = time - appState.lastRenderTime;
@@ -256,7 +255,6 @@
             if (appState.clickBurstParticles && appState.clickBurstParticles.visible) mustRender = true;
             if (appState.coreSphere && appState.coreSphere.visible) mustRender = true;
 
-            // ★ 静止状态直接退出，CPU 占用彻底降为 0%
             if (!mustRender) return;
             appState.needsRender = false;
 
@@ -268,7 +266,6 @@
             const minDist = camDist - radius;
             const distRange = 2 * radius;
 
-            // 局部焦点巡航
             if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0 && hoverMotionFactor > 0.001) {
                 const fc = appState.focusCruise;
                 if (time - fc.lastSwitchTime >= fc.interval * 1000) {
@@ -318,7 +315,6 @@
                 appState.coreSphere.rotation.y += 0.0008;
             }
 
-            // 查词卡位置与朝向
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
                 const lerpFactor = 0.15;
@@ -376,9 +372,12 @@
                 appState.wordSphereGroup.updateMatrixWorld(true);
             }
 
+            // ★ 计算全局高亮倍率
+            const lightBoost = appState.isLightBoosted ? 1.6 : 1.0;
+
             if (!appState.isFlowMode) {
                 const basePulse = 0.20 + Math.sin(time * 0.0012) * 0.15;
-                const glassBreath = 0.95 + Math.sin(time * 0.0012) * 0.05;
+                const glassBreath = 0.98 + Math.sin(time * 0.0012) * 0.02;
 
                 appState.wordObjects.forEach((card, idx) => {
                     card.getWorldPosition(AppMath.vecCardWorld);
@@ -404,18 +403,29 @@
 
                     card.scale.set(finalScale, finalScale, finalScale);
 
-                    const frontOpacity = THREE.MathUtils.lerp(0.95, 0.15, t) * glassBreath;
-                    const sideOpacity = THREE.MathUtils.lerp(0.35, 0.05, t) * glassBreath;
+                    // 亮度衰减极大幅缩减：正面0.96 -> 背面0.90，衰减仅6%左右
+                    const frontOpacity = THREE.MathUtils.lerp(0.96, 0.90, t) * glassBreath;
+                    const sideOpacity = THREE.MathUtils.lerp(0.38, 0.35, t) * glassBreath;
 
                     if (Array.isArray(card.material)) {
-                        if (card.material[0]) card.material[0].opacity = frontOpacity;
+                        if (card.material[0]) {
+                            card.material[0].opacity = frontOpacity;
+                            // 光照补偿 + 全局高亮
+                            if (card.userData && card.userData.baseEmissiveIntensity !== undefined) {
+                                card.material[0].emissiveIntensity = card.userData.baseEmissiveIntensity * (1.0 + t * 1.5) * lightBoost;
+                            }
+                        }
                         if (card.material[1]) {
                             card.material[1].opacity = sideOpacity;
                             const spotlightBoost = isSpotlightTarget ? 1.6 : 1.0;
-                            card.material[1].emissiveIntensity = basePulse * (1.0 - t) * 1.5 * spotlightBoost;
+                            // 侧边厚度同步补偿 + 全局高亮
+                            card.material[1].emissiveIntensity = basePulse * (1.0 + t * 1.0) * 1.5 * spotlightBoost * lightBoost;
                         }
                     } else if (card.material) {
                         card.material.opacity = frontOpacity;
+                        if (card.userData && card.userData.baseEmissiveIntensity !== undefined) {
+                            card.material.emissiveIntensity = card.userData.baseEmissiveIntensity * (1.0 + t * 1.5) * lightBoost;
+                        }
                     }
                 });
 

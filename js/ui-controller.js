@@ -6,6 +6,7 @@
  * 4. 智能响应式超宽裁剪放大：正常屏幕保持完整美学边距；超宽受限时贴近 2px 视口缓冲放大展现
  * 5. 智能多词共享备注系统：首行 NLP 提取、当前批次优先匹配、全选关联、缺词双卡片兜底命令
  * 6. 全景沉浸式备注阅读系统：50% 半透明悬浮控制岛、全屏阅读、分类/全量导出完整词元、自动轮播跳转
+ * 7. ★ 新增 L 键一键提亮/恢复全局卡片亮度 40%
  */
 (function() {
     let _persistTimer = null;
@@ -136,6 +137,24 @@
             this.loadSettings();
             await this.loadWordDataAndBoot();
             this.loadAllPersistentStates();
+
+            // ★ 核心：监听键盘 L 键快捷键
+            window.addEventListener('keydown', (e) => {
+                // 如果用户正在输入框里打字，则忽略快捷键
+                if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+                    return;
+                }
+                if (e.key === 'l' || e.key === 'L') {
+                    e.preventDefault();
+                    appState.isLightBoosted = !appState.isLightBoosted;
+                    appState.needsRender = true;
+                    
+                    if (window.AppUI && typeof AppUI.showToast === 'function') {
+                        AppUI.showToast(appState.isLightBoosted ? '💡 卡片群亮度已提亮 40%' : '💡 卡片群亮度已恢复');
+                    }
+                    if (navigator.vibrate) navigator.vibrate(20);
+                }
+            });
 
             setTimeout(() => {
                 appState.isInitializing = false;
@@ -876,7 +895,7 @@
             }
 
             document.getElementById('helpBtn')?.addEventListener('click', () => {
-                alert('3D单词宇宙使用指南：\n1. 点击卡片可呼出查词并立即静止；\n2. 长按右下角 🔮 按钮(700ms)或单击右侧 📝 按钮可进入智能多词备注系统；\n3. 在备注系统中输入首行单词，自动识别并关联球面卡片，多词共享同一份AI辨析；\n4. 沉浸式阅读器自带50%防打扰半透明控制岛，支持自动轮播与全量带词元导出！');
+                alert('3D单词宇宙使用指南：\n1. 点击卡片可呼出查词并立即静止；\n2. 长按右下角 🔮 按钮(700ms)或单击右侧 📝 按钮可进入智能多词备注系统；\n3. 在备注系统中输入首行单词，自动识别并关联球面卡片，多词共享同一份AI辨析；\n4. 沉浸式阅读器自带50%防打扰半透明控制岛，支持自动轮播与全量带词元导出！\n5. 按 L 键可一键提亮 40% 或恢复卡片群亮度！');
             });
         },
 
@@ -959,7 +978,6 @@
             let isComposing = false;
             let lastAutoCopiedTitle = "";
 
-            // 核心分词匹配器：解析第一行并匹配单词
             const analyzeFirstLineAndMatch = (forceAllLib = false, customWordsPool = null) => {
                 if (!titleInput) return;
                 const fullText = titleInput.value;
@@ -978,7 +996,6 @@
                     return;
                 }
 
-                // 提取英文单词 (长度>=2，去除常见停用连词)
                 const rawTokens = firstLine.match(/[a-zA-Z]+(?:'[a-zA-Z]+)?/g) || [];
                 const stopWords = new Set(['vs', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'the', 'a', 'an', 'between', 'difference', 'compare']);
                 const validTokens = Array.from(new Set(rawTokens.map(t => t.toLowerCase()).filter(t => t.length >= 2 && !stopWords.has(t))));
@@ -987,7 +1004,6 @@
                     tokensBar.innerHTML = validTokens.map(tok => `<span class="smart-token-pill">${tok}</span>`).join('');
                 }
 
-                // 优先在当前球面显示的卡片中查找匹配
                 let candidatePool = appState.currentBatchWords || [];
                 if (customWordsPool && Array.isArray(customWordsPool)) {
                     candidatePool = customWordsPool;
@@ -1012,7 +1028,6 @@
                     });
                 });
 
-                // 若编辑模式且有绑定的主单词，确保主单词始终在列表中
                 if (appState.activeNoteWord) {
                     const activeKey = getWordKey(appState.activeNoteWord);
                     if (!matchedKeys.has(activeKey)) {
@@ -1021,7 +1036,6 @@
                     }
                 }
 
-                // 挂载到弹窗临时缓存中供勾选与保存提取
                 modal._currentMatchedWordsPool = matchedWords;
 
                 if (countLabel) countLabel.textContent = String(matchedWords.length);
@@ -1049,12 +1063,10 @@
                         });
                     });
 
-                    // 匹配成功时收起兜底命令卡片
                     if (fallbackGroup) fallbackGroup.classList.add('hidden');
                 } else {
                     if (statusLabel) statusLabel.textContent = '当前球面未找到记录';
                     matchedListEl.innerHTML = '<div style="color:#fca5a5; font-size:0.82rem; padding:10px; text-align:center;">⚠️ 当前球面显示的卡片中未匹配到相关单词。请选择下方两条命令之一：</div>';
-                    // 展露两条命令卡片供用户深搜或外置检索
                     if (fallbackGroup) fallbackGroup.classList.remove('hidden');
                 }
             };
@@ -1100,13 +1112,11 @@
                 doAutoCopyTitle();
             });
 
-            // 命令 1：在当前魔法球完整大词库中深搜
             searchAllLibCard?.addEventListener('click', () => {
                 analyzeFirstLineAndMatch(true);
                 AppUI.showToast('🔍 已在当前完整大词库中完成全量深搜！', 1500);
             });
 
-            // 命令 2：指定打开手机/电脑外部词库文件深度匹配
             searchExtFileCard?.addEventListener('click', () => {
                 selectLocalFile('application/json,.json', (file) => {
                     const reader = new FileReader();
@@ -1188,7 +1198,6 @@
                     linkedWordKeys: selectedWords.map(w => getWordKey(w))
                 };
 
-                // 执行多对一知识图谱持久化保存
                 AppStorage.saveUnifiedSharedNote(noteEntity, selectedWords);
                 this.showToast(`🎉 成功保存！已将辨析材料同步共享至 ${selectedWords.length} 个单词！`, 2500);
 
@@ -1225,7 +1234,6 @@
 
             setTimeout(() => {
                 titleInput.focus();
-                // 立即触发一次首行识别
                 const titleChangeEvent = new Event('input', { bubbles: true });
                 titleInput.dispatchEvent(titleChangeEvent);
             }, 100);
@@ -1304,7 +1312,6 @@
                 this.navigateReaderNote(1);
             });
 
-            // 键盘左右箭头翻页支持
             window.addEventListener('keydown', (e) => {
                 if (!backdrop.classList.contains('visible')) return;
                 if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
@@ -1925,7 +1932,7 @@
                 }
             });
 
-            canvasEl.addEventListener('pointerup', (e) => {
+                        canvasEl.addEventListener('pointerup', (e) => {
                 if (longPressTimer) {
                     clearTimeout(longPressTimer);
                     longPressTimer = null;
@@ -1941,6 +1948,31 @@
 
                 if (dist < 8 && duration < 750 && !isMoving) {
                     this.handleQuickTap(e);
+                } else if (e.pointerType === 'touch' && duration < 300 && dist < 20 && !isMoving) {
+                    // 手机端双击空白处切换提亮
+                    if (!this._lastTapTime) this._lastTapTime = 0;
+                    const now = performance.now();
+                    if (now - this._lastTapTime < 300) {
+                        const mouse = new THREE.Vector2(
+                            (e.clientX / window.innerWidth) * 2 - 1,
+                            -(e.clientY / window.innerHeight) * 2 + 1
+                        );
+                        const raycaster = new THREE.Raycaster();
+                        raycaster.setFromCamera(mouse, appState.camera);
+                        const intersects = raycaster.intersectObjects(appState.wordObjects || [], false);
+
+                        if (intersects.length === 0) {
+                            appState.isLightBoosted = !appState.isLightBoosted;
+                            appState.needsRender = true;
+                            if (window.AppUI && typeof AppUI.showToast === 'function') {
+                                AppUI.showToast(appState.isLightBoosted ? '💡 卡片群亮度已提亮' : '💡 卡片群亮度已恢复');
+                            }
+                            if (navigator.vibrate) navigator.vibrate(20);
+                        }
+                        this._lastTapTime = 0;
+                    } else {
+                        this._lastTapTime = now;
+                    }
                 }
             });
         },
