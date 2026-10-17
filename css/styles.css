@@ -704,4 +704,30 @@ html, body {
     .reader-search-input { width: 90px !important; }
     .reader-floating-dock { height: auto !important; padding: 8px 12px !important; flex-wrap: wrap !important; justify-content: center !important; }
     .dock-btn { height: 32px !important; font-size: 0.76rem !important; padding: 0 10px !important; }
+        /* 修复手机端详情面板关闭按钮因超出屏幕而看不见的问题 */
+    #closeDetailBtn {
+        left: auto !important;
+        right: 15px !important;
+        top: 15px !important;
+        transform: none !important;
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 50% !important;
+        border: 1.5px solid var(--accent-color-2) !important;
+        background: rgba(16, 44, 96, 0.9) !important;
+        box-shadow: 0 0 15px rgba(0, 240, 255, 0.4) !important;
+        display: flex !important;
+        z-index: 106 !important;
+    }
+    #closeDetailBtn:hover, #closeDetailBtn:active {
+        left: auto !important;
+        right: 15px !important;
+        transform: scale(0.95) !important;
+    }
+    #closeDetailBtn .close-text {
+        display: none !important;
+    }
+    #closeDetailBtn .close-icon {
+        font-size: 1.5rem !important;
+    }
 }
