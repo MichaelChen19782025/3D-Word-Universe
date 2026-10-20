@@ -1,7 +1,5 @@
 /**
  * 3D单词宇宙 - 全局配置中心、三维运算共享池与基础常量 (V8.6 极速降耗调优版)
- * 1. 彻底调优粒子发射基线（避免过载发热）
- * 2. 封顶高分屏设备像素比，显著提升电池续航与帧率
  */
 const IS_MOBILE_DEVICE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
 
@@ -58,6 +56,15 @@ const APP_CONFIG = {
     STUDY_LOG_STORAGE_KEY: '3DWordUniverseStudyLogV8',
     STUDY_GOAL_STORAGE_KEY: '3DWordUniverseStudyGoal',
     SHARED_NOTES_STORAGE_KEY: '3DWordUniverseSharedNotesV8',
+
+    // ★ 全卡片过一遍的天体谐波全览巡航周期默认值 (90秒恒定，任何手动设定不污染此默认值)
+    DEFAULT_TOUR_CYCLE_DURATION: 90,
+    TOUR_DURATION_STORAGE_KEY: '3DWordUniverseCustomTourDuration',
+    TOUR_YAW_HARMONIC: 3,
+    TOUR_PITCH_HARMONIC: 2,
+    TOUR_ROLL_HARMONIC: 1,
+    TOUR_PITCH_AMPLITUDE: 1.15,
+    TOUR_ROLL_AMPLITUDE: 0.52,
 
     CORE_SPHERE_DEFAULT_RADIUS_FACTOR: 0.8,
     DYNAMIC_BG_DEFAULT_HUE_START: 230,
@@ -124,7 +131,17 @@ const appState = {
     needsRender: true,
 
     isHoverCardPinned: false,
-    isLightBoosted: false, // ★ 新增：L键全局高亮状态
+    isLightBoosted: false,
+
+    // ★ 天体多轴谐波进动巡航系统状态核心
+    tourCycle: {
+        duration: APP_CONFIG.DEFAULT_TOUR_CYCLE_DURATION, // 当前生效的周期（秒）
+        customDuration: APP_CONFIG.DEFAULT_TOUR_CYCLE_DURATION, // 用户手动保存的默认基线
+        progress: 0.0, // 0.0 ~ 1.0 周期归一化相位
+        isManualSpeedOverride: false, // 是否由手动 🚀/🐢 或滑块强制接管速度
+        speedFactor: 1.0,
+        lastTime: 0
+    },
 
     hoverMotion: {
         pauseEnabled: true,

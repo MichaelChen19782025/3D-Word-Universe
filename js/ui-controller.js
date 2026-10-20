@@ -3,10 +3,8 @@
  * 1. 移动端触摸手势全面隔离保护：锁定视口并防止原生缩放触发 HUD / 控件漂移丢失
  * 2. 旋转速度调整 100% 写入持久化存储，下次启动默认生效
  * 3. 查词窗口呼出即时彻底刹停，窗口关闭/淡出后多阶段平缓渐进加速恢复旋转
- * 4. 智能响应式超宽裁剪放大：正常屏幕保持完整美学边距；超宽受限时贴近 2px 视口缓冲放大展现
- * 5. 智能多词共享备注系统：首行 NLP 提取、当前批次优先匹配、全选关联、缺词双卡片兜底命令
- * 6. 全景沉浸式备注阅读系统：50% 半透明悬浮控制岛、全屏阅读、分类/全量导出完整词元、自动轮播跳转
- * 7. ★ 新增 L 键一键提亮/恢复全局卡片亮度 40%
+ * 4. ★ 核心修复：悬浮查词卡片严格自适应屏幕视口宽度，绝不发生超宽裁剪溢出
+ * 5. ★ 核心新增：天体多轴全景巡航周期设定，出厂默认 (90s) 保护与手动设定持久化，调速优先级严密闭环
  */
 (function() {
     let _persistTimer = null;
@@ -46,7 +44,7 @@
         input.click();
     }
 
-    // 智能响应式视口自适应机制
+    // ★ 智能响应式视口自适应机制：严格约束最大宽度为屏幕宽度的 94%（保留微边距），杜绝任何超宽与文字溢出
     function updateHoverCardPosition(pxWidth, pxHeight, scaleFactor) {
         if (!appState.overlayCardTargetPosition) {
             appState.overlayCardTargetPosition = new THREE.Vector3();
@@ -66,28 +64,14 @@
         const viewWidth3D = viewHeight3D * aspect;
         const cardAspect = (pxHeight > 0) ? (pxWidth / pxHeight) : 2.0;
 
-        const userScale = Math.max(0.2, Math.min(5.0, scaleFactor || 1.0));
+        const userScale = Math.max(0.2, Math.min(3.0, scaleFactor || 1.0));
 
-        const screenPxW = window.innerWidth || 390;
-        const pad2pxIn3D = (2 / screenPxW) * viewWidth3D;
-        const maxContentUsableWidth3D = Math.max(1, viewWidth3D - pad2pxIn3D * 2);
-        const maxAllowedHeight3D = viewHeight3D * 0.88;
+        // 核心加固：手机端强制卡片总宽严格不超过可视区 94%，PC端不超过 72%
+        const maxSafeWidth3D = viewWidth3D * (IS_MOBILE_DEVICE ? 0.94 : 0.72);
+        const maxAllowedHeight3D = viewHeight3D * 0.85;
 
-        const wordData = appState.hoveredObject?.userData?.word;
-        const contentSafeRatio = wordData?.contentSafeRatio || appState.hoverOverlayCard?.userData?.contentSafeRatio || 0.916;
-        const cornerOuterRatio = 1.12;
-
-        const normalIdealWidth = viewWidth3D * (IS_MOBILE_DEVICE ? 0.88 : 0.65) * userScale;
-        let targetWidth3D = normalIdealWidth;
-
-        const isOverflowing = (normalIdealWidth * cornerOuterRatio > maxContentUsableWidth3D) || (IS_MOBILE_DEVICE && normalIdealWidth > maxContentUsableWidth3D * 0.82);
-
-        if (isOverflowing) {
-            const cropZoomWidth = maxContentUsableWidth3D / contentSafeRatio;
-            targetWidth3D = cropZoomWidth;
-        } else {
-            targetWidth3D = Math.min(normalIdealWidth, maxContentUsableWidth3D / cornerOuterRatio);
-        }
+        const normalIdealWidth = viewWidth3D * (IS_MOBILE_DEVICE ? 0.94 : 0.65) * userScale;
+        let targetWidth3D = Math.min(normalIdealWidth, maxSafeWidth3D);
 
         let targetHeight3D = targetWidth3D / cardAspect;
         if (targetHeight3D > maxAllowedHeight3D) {
@@ -138,9 +122,8 @@
             await this.loadWordDataAndBoot();
             this.loadAllPersistentStates();
 
-            // ★ 核心：监听键盘 L 键快捷键
+            // 监听键盘 L 键全局提亮快捷键
             window.addEventListener('keydown', (e) => {
-                // 如果用户正在输入框里打字，则忽略快捷键
                 if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
                     return;
                 }
@@ -165,17 +148,32 @@
             }, 300);
         },
 
+        // ★ 核心加固：全通道拦截浏览器移动端原生网页缩放，手势 100% 归属于 3D 画布，防止 HUD 控件飘出屏幕
         initPreventBrowserZoom() {
             const prevent = (e) => {
                 if (e.touches && e.touches.length > 1) {
                     e.preventDefault();
                 }
             };
+            window.addEventListener('touchstart', prevent, { passive: false });
+            window.addEventListener('touchmove', prevent, { passive: false });
             document.addEventListener('touchstart', prevent, { passive: false });
             document.addEventListener('touchmove', prevent, { passive: false });
-            window.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
-            window.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
-            window.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+
+            ['gesturestart', 'gesturechange', 'gestureend'].forEach(type => {
+                window.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+                document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+            });
+
+            // 防止移动端双击空白处触发布局缩放
+            let lastTouchEnd = 0;
+            document.addEventListener('touchend', (e) => {
+                const now = performance.now();
+                if (now - lastTouchEnd <= 300) {
+                    e.preventDefault();
+                }
+                lastTouchEnd = now;
+            }, { passive: false });
         },
 
         pauseMotionOnHover() {
@@ -689,11 +687,21 @@
                 schedulePersist();
             });
 
+            // 手动拖动速度滑块时：立即将手动调速优先级置顶
             document.getElementById('rotationSpeed')?.addEventListener('input', (e) => {
+                appState.tourCycle.isManualSpeedOverride = true;
                 const sliderVal = safeParseFloat(e.target.value, 1.0);
                 appState.actualDisplayRotationSpeed = sliderVal * appState.currentRotationSpeedBase;
+                const nominalBaseline = 90.0 / appState.tourCycle.duration;
+                appState.tourCycle.speedFactor = sliderVal / (nominalBaseline || 1.0);
                 appState.needsRender = true;
                 schedulePersist();
+            });
+
+            // 设置抽屉中的全卡巡航周期滑动条
+            document.getElementById('tourDurationRange')?.addEventListener('input', (e) => {
+                const val = safeParseFloat(e.target.value, APP_CONFIG.DEFAULT_TOUR_CYCLE_DURATION);
+                this.applyTourDuration(val, false);
             });
 
             ['rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation'].forEach(id => {
@@ -850,7 +858,6 @@
                 if (appState.currentDetailWord) this.openSmartNoteModal(appState.currentDetailWord, null);
             });
 
-            // 右侧面板专属备注入口
             document.getElementById('openNoteSystemBtn')?.addEventListener('click', () => {
                 this.openSmartNoteModal(null);
             });
@@ -895,10 +902,11 @@
             }
 
             document.getElementById('helpBtn')?.addEventListener('click', () => {
-                alert('3D单词宇宙使用指南：\n1. 点击卡片可呼出查词并立即静止；\n2. 长按右下角 🔮 按钮(700ms)或单击右侧 📝 按钮可进入智能多词备注系统；\n3. 在备注系统中输入首行单词，自动识别并关联球面卡片，多词共享同一份AI辨析；\n4. 沉浸式阅读器自带50%防打扰半透明控制岛，支持自动轮播与全量带词元导出！\n5. 按 L 键可一键提亮 40% 或恢复卡片群亮度！');
+                alert('3D单词宇宙使用指南：\n1. 点击卡片可呼出查词并立即静止；\n2. 右上角巡航设置新增【全览周期】：无论设定时长多久，系统均以精巧三维互质多轴进动轨迹让所有卡片毫无死角过一遍；\n3. 巡航设置内支持【恢复默认(90s)】与【手动设定】，手动设定将作为下次启动的默认值；\n4. 手动加速/减速与巡航设定具备严格优先级联动；\n5. 按 L 键或双击空白处可一键提亮 40% 或恢复卡片群亮度！');
             });
         },
 
+        // ★ 支持“恢复默认”独立动作按钮的全功能数字步进模态弹窗
         showNumberPromptModal(options) {
             const backdrop = document.getElementById('numberPromptModalBackdrop');
             const titleEl = document.getElementById('promptModalTitle');
@@ -907,14 +915,22 @@
             const stepPlusBtn = document.getElementById('promptModalPlus');
             const confirmBtn = document.getElementById('promptModalConfirm');
             const cancelBtn = document.getElementById('promptModalCancel');
+            const resetBtn = document.getElementById('promptModalReset');
             if (!backdrop || !inputEl) return;
 
-            const { title, value, min = 0, max = 5000, step = 1, onConfirm } = options;
+            const { title, value, min = 0, max = 5000, step = 1, showResetBtn = false, resetBtnText = "恢复默认", onReset, onConfirm } = options;
             titleEl.textContent = title;
             inputEl.value = value;
             inputEl.min = min;
             inputEl.max = max;
             inputEl.step = step;
+
+            if (showResetBtn && resetBtn) {
+                resetBtn.textContent = resetBtnText;
+                resetBtn.classList.remove('hidden');
+            } else if (resetBtn) {
+                resetBtn.classList.add('hidden');
+            }
 
             const updateVal = (delta) => {
                 let cur = parseFloat(inputEl.value) || 0;
@@ -931,6 +947,7 @@
                 stepPlusBtn.onclick = null;
                 confirmBtn.onclick = null;
                 cancelBtn.onclick = null;
+                if (resetBtn) resetBtn.onclick = null;
                 inputEl.onkeydown = null;
             };
 
@@ -941,6 +958,14 @@
                 }
                 close();
             };
+
+            if (showResetBtn && resetBtn) {
+                resetBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (onReset) onReset();
+                    close();
+                };
+            }
 
             cancelBtn.onclick = (e) => { e.stopPropagation(); close(); };
             confirmBtn.onclick = (e) => { e.stopPropagation(); doConfirm(); };
@@ -1947,7 +1972,6 @@
                 const dist = downPos.distanceTo(new THREE.Vector2(e.clientX, e.clientY));
 
                 if (dist < 8 && duration < 750 && !isMoving) {
-                    // 立即响应单击（点击卡片弹出查词，点击空白处关闭查词）
                     this.handleQuickTap(e);
 
                     // 检测是否点在卡片外部的空白区域
@@ -1959,7 +1983,7 @@
                     raycaster.setFromCamera(mouse, appState.camera);
                     const intersects = raycaster.intersectObjects(appState.wordObjects || [], false);
 
-                    // 只有空白处双击才触发提亮（鼠标和手机均已支持）
+                    // 只有空白处双击才触发提亮
                     if (intersects.length === 0) {
                         if (!this._lastTapTime) this._lastTapTime = 0;
                         const now = performance.now();
@@ -1975,7 +1999,6 @@
                             this._lastTapTime = now;
                         }
                     } else {
-                        // 如果点到了卡片，重置计时
                         this._lastTapTime = 0;
                     }
                 }
@@ -2250,7 +2273,12 @@
             }, duration);
         },
 
+        // 手动加速/减速：标记手动最高优先级，不受全卡巡航周期速度公式限制
         changeViewAwareSpeed(multiplier) {
+            appState.tourCycle.isManualSpeedOverride = true;
+            appState.tourCycle.speedFactor *= multiplier;
+            appState.tourCycle.speedFactor = Math.max(0.05, Math.min(20.0, appState.tourCycle.speedFactor));
+
             appState.currentRotationSpeedBase *= multiplier;
             appState.currentRotationSpeedBase = Math.max(0.0001, Math.min(20.0, appState.currentRotationSpeedBase));
             appState.autoRotate = true;
@@ -2261,7 +2289,40 @@
             const sliderVal = Math.max(0.001, safeParseFloat(rotSlider ? rotSlider.value : 1.0, 1.0));
             appState.actualDisplayRotationSpeed = sliderVal * appState.currentRotationSpeedBase;
 
-            this.showToast(multiplier > 1.0 ? ('🚀 旋转速度已加速并保存: ' + appState.actualDisplayRotationSpeed.toFixed(3)) : ('🐢 旋转速度已减速并保存: ' + appState.actualDisplayRotationSpeed.toFixed(3)));
+            this.showToast(multiplier > 1.0 
+                ? (`🚀 旋转已加速 (手动接管优先): ${appState.actualDisplayRotationSpeed.toFixed(2)}`) 
+                : (`🐢 旋转已减速 (手动接管优先): ${appState.actualDisplayRotationSpeed.toFixed(2)}`));
+            appState.needsRender = true;
+            schedulePersist();
+        },
+
+        // ★ 核心方法：设定或重置全卡巡航周期（秒），并自动刷新夺回第一优先级
+        applyTourDuration(seconds, isReset = false) {
+            const defaultSec = APP_CONFIG.DEFAULT_TOUR_CYCLE_DURATION || 90;
+            const val = Math.max(3, Math.min(600, Math.round(seconds)));
+            
+            appState.tourCycle.duration = val;
+            appState.tourCycle.customDuration = val;
+            appState.tourCycle.isManualSpeedOverride = false;
+            appState.tourCycle.speedFactor = 1.0;
+
+            // 存储为下一次启动的默认值，但不污染系统原始 90s 基线
+            localStorage.setItem(APP_CONFIG.TOUR_DURATION_STORAGE_KEY, String(val));
+
+            // 更新 HUD 药丸与设置滑块
+            const tourValEl = document.getElementById('focusCruiseTourVal');
+            if (tourValEl) tourValEl.textContent = String(val);
+
+            const tourRangeEl = document.getElementById('tourDurationRange');
+            if (tourRangeEl) tourRangeEl.value = val;
+
+            // 根据总时长巧妙换算等效旋转速度
+            const nominalSpeed = (defaultSec / val) * appState.currentRotationSpeedBase;
+            appState.actualDisplayRotationSpeed = nominalSpeed;
+
+            const rotSlider = document.getElementById('rotationSpeed');
+            if (rotSlider) rotSlider.value = (defaultSec / val).toFixed(2);
+
             appState.needsRender = true;
             schedulePersist();
         },
@@ -2275,6 +2336,7 @@
             const hud = document.getElementById('focusCruiseHud');
             const trigger = document.getElementById('focusCruiseTrigger');
             const statusTag = document.getElementById('focusCruiseStatusTag');
+            const tourPill = document.getElementById('focusCruiseTourPill');
             const intervalPill = document.getElementById('focusCruiseIntervalPill');
             const ratioPill = document.getElementById('focusCruiseRatioPill');
             const scalePill = document.getElementById('focusCruiseScalePill');
@@ -2297,17 +2359,43 @@
                 schedulePersist();
             });
 
+            // ★ 全卡过一遍巡航总时长调控药丸（支持恢复出厂 90s 与手动修改）
+            tourPill?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const defaultSec = APP_CONFIG.DEFAULT_TOUR_CYCLE_DURATION || 90;
+                const currentSec = Math.round(appState.tourCycle.duration || defaultSec);
+
+                this.showNumberPromptModal({
+                    title: '🌐 全览巡航周期 (所有卡片过一遍总时长)',
+                    value: currentSec,
+                    min: 3,
+                    max: 600,
+                    step: 5,
+                    showResetBtn: true,
+                    resetBtnText: `恢复默认 (${defaultSec}s)`,
+                    onReset: () => {
+                        this.applyTourDuration(defaultSec, true);
+                        this.showToast(`🌐 全览周期已恢复默认: ${defaultSec}秒 (已刷新优先级)`);
+                    },
+                    onConfirm: (sec) => {
+                        const val = Math.max(3, Math.min(600, Math.round(sec)));
+                        this.applyTourDuration(val, false);
+                        this.showToast(`🌐 全览周期已设为: ${val}秒 (设为默认，已刷新优先级)`);
+                    }
+                });
+            });
+
             intervalPill?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.showNumberPromptModal({
-                    title: '⏱️ 修改巡航轮换周期 (秒)',
+                    title: '⏱️ 修改焦点抽取轮换周期 (秒)',
                     value: appState.focusCruise.interval || 50,
                     min: 2, max: 600, step: 5,
                     onConfirm: (sec) => {
                         appState.focusCruise.interval = Math.round(sec);
                         appState.focusCruise.lastSwitchTime = performance.now();
                         this.updateFocusCruiseVisuals();
-                        this.showToast(`⏱️ 巡航轮换周期已修改为: ${Math.round(sec)} 秒`);
+                        this.showToast(`⏱️ 局部巡航周期已修改为: ${Math.round(sec)} 秒`);
                         schedulePersist();
                     }
                 });
@@ -2367,12 +2455,14 @@
             }
             const hud = document.getElementById('focusCruiseHud');
             const statusTag = document.getElementById('focusCruiseStatusTag');
+            const tourVal = document.getElementById('focusCruiseTourVal');
             const intervalVal = document.getElementById('focusCruiseIntervalVal');
             const ratioVal = document.getElementById('focusCruiseRatioVal');
             const scaleVal = document.getElementById('focusCruiseScaleVal');
 
             if (hud) hud.classList.toggle('enabled', enabled);
             if (statusTag) statusTag.textContent = enabled ? '开' : '关';
+            if (tourVal) tourVal.textContent = String(appState.tourCycle.duration || APP_CONFIG.DEFAULT_TOUR_CYCLE_DURATION);
             if (intervalVal) intervalVal.textContent = String(appState.focusCruise.interval || 50);
             if (ratioVal) ratioVal.textContent = String(appState.focusCruise.ratioPercent || 8);
             if (scaleVal) scaleVal.textContent = String(appState.focusCruise.scaleFactor || 1.5);
@@ -2585,6 +2675,7 @@
             fullBackup[APP_CONFIG.VIEWED_WORDS_STORAGE_KEY] = Array.from(AppStorage.loadViewedWords());
             fullBackup['shieldedWordsV8'] = Array.from(AppStorage.loadShieldedWords());
             fullBackup[APP_CONFIG.SHARED_NOTES_STORAGE_KEY] = AppStorage.loadSharedNotes();
+            fullBackup[APP_CONFIG.TOUR_DURATION_STORAGE_KEY] = appState.tourCycle.duration || APP_CONFIG.DEFAULT_TOUR_CYCLE_DURATION;
 
             const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -2595,7 +2686,7 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            this.showToast('⚙️ 系统全量配置(含共享知识库、视角与参数)已成功导出！');
+            this.showToast('⚙️ 系统全量配置已成功导出！');
         },
 
         importSettings() {
@@ -2638,6 +2729,9 @@
                         if (imported[APP_CONFIG.SHARED_NOTES_STORAGE_KEY]) {
                             AppStorage.saveSharedNotes(imported[APP_CONFIG.SHARED_NOTES_STORAGE_KEY]);
                         }
+                        if (imported[APP_CONFIG.TOUR_DURATION_STORAGE_KEY]) {
+                            localStorage.setItem(APP_CONFIG.TOUR_DURATION_STORAGE_KEY, String(imported[APP_CONFIG.TOUR_DURATION_STORAGE_KEY]));
+                        }
 
                         alert('全量系统配置已成功恢复导入！即将刷新页面以应用所有新参数。');
                         location.reload();
@@ -2675,6 +2769,7 @@
             const settings = {};
             const settingIds = [
                 'rotationSpeed', 'cardRotationSpeed', 'rotateX', 'rotateY', 'rotateZ', 'cardSelfRotation', 'batchSize',
+                'tourDurationRange',
                 'cardPauseOnHoverEnabled', 'hoverResumeDurationRange', 'hoverResumeP1Range', 'hoverResumeP2Range',
                 'focusCruiseEnabled', 'focusCruiseIntervalRange', 'focusCruiseRatioRange', 'focusCruiseScaleRange',
                 'coreSphereRadius', 'coreSphereColor', 'coreSphereEmissive', 'coreSphereEmissiveIntensity', 'coreSphereOpacity',
@@ -2717,6 +2812,18 @@
                     if (el.type === 'checkbox') el.checked = !!settings[key];
                     else el.value = settings[key];
                 }
+            }
+
+            // 读取巡航全览总时长持久化基线
+            const savedTourDuration = localStorage.getItem(APP_CONFIG.TOUR_DURATION_STORAGE_KEY);
+            if (savedTourDuration) {
+                const val = safeParseFloat(savedTourDuration, APP_CONFIG.DEFAULT_TOUR_CYCLE_DURATION);
+                appState.tourCycle.duration = val;
+                appState.tourCycle.customDuration = val;
+                const tourValEl = document.getElementById('focusCruiseTourVal');
+                if (tourValEl) tourValEl.textContent = String(val);
+                const tourRangeEl = document.getElementById('tourDurationRange');
+                if (tourRangeEl) tourRangeEl.value = val;
             }
 
             if (settings.cardPauseOnHoverEnabled !== undefined) {

@@ -1,9 +1,9 @@
 /**
- * 3D单词宇宙 - Three.js 核心场景管理与极速渲染管线 (低功耗降温版)
+ * 3D单词宇宙 - Three.js 核心场景管理与极速渲染管线 (V8.6 谐波进动巡航增强版)
  * 1. 严格封顶设备像素比 (DPR)，杜绝 Retina/4K 屏幕过度渲染
- * 2. 精确脏标记检测，静止状态下 CPU/GPU 彻底归零
- * 3. 查词窗口与三阶段平滑阶梯渐快加速恢复
- * 4. 优化卡片深度衰减逻辑，背侧卡片不透明度与亮度衰减幅度控制在 10% 以内
+ * 2. 查词卡片在 3D 视口内严格适配，杜绝镜头推进时由于比例放大超出屏幕宽度
+ * 3. ★ 核心升级：天体多轴谐波进动算法（Harmonic Spherical Tour），在指定周期内把所有卡片过一遍
+ * 4. 完美融合手动调速与周期自动换算的优先级体系
  */
 (function() {
     function computeHoverMotionMultiplier(time) {
@@ -248,7 +248,7 @@
 
             let mustRender = controlsChanged || appState.needsRender;
 
-            if (appState.autoRotate && appState.actualDisplayRotationSpeed > 0 && appState.rotationMultiplier > 0.001 && hoverMotionFactor > 0.0001) mustRender = true;
+            if (appState.autoRotate && appState.rotationMultiplier > 0.001 && hoverMotionFactor > 0.0001) mustRender = true;
             if (appState.hoverMotion && appState.hoverMotion.isResuming) mustRender = true;
             if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) mustRender = true;
             if (appState.vortexParticles && appState.vortexParticles.visible) mustRender = true;
@@ -266,6 +266,7 @@
             const minDist = camDist - radius;
             const distRange = 2 * radius;
 
+            // 局部焦点巡航定时抽取
             if (appState.focusCruise && appState.focusCruise.enabled && appState.wordObjects.length > 0 && hoverMotionFactor > 0.001) {
                 const fc = appState.focusCruise;
                 if (time - fc.lastSwitchTime >= fc.interval * 1000) {
@@ -315,9 +316,22 @@
                 appState.coreSphere.rotation.y += 0.0008;
             }
 
+            // 悬浮查词卡片渲染管线 (动态锁定，无论相机距离如何调整，绝不允许超出屏幕可视宽度)
             if (appState.hoverOverlayCard) {
                 const card = appState.hoverOverlayCard;
                 const lerpFactor = 0.15;
+
+                // 核心加固：动态刷新当前最佳尺寸，彻底根治相机推进导致的放大超宽溢出
+                if (card.visible && appState.hoveredObject && window.updateHoverCardPosition) {
+                    const screenMesh = card.getObjectByName("textScreen") || card.userData.refs?.screen;
+                    const tex = screenMesh?.material?.map;
+                    if (tex && tex.image) {
+                        const scEl = document.getElementById('hoverOverlayCardScale');
+                        const scaleVal = parseFloat(scEl ? scEl.value : '1.0');
+                        window.updateHoverCardPosition(tex.image.width, tex.image.height, scaleVal);
+                    }
+                }
+
                 card.scale.lerp(appState.overlayCardTargetScale, lerpFactor);
 
                 const screen = card.userData.refs && card.userData.refs.screen ? card.userData.refs.screen : card.getObjectByName('textScreen');
@@ -354,15 +368,43 @@
                 }
             }
 
-            const baseRotationSpeed = appState.actualDisplayRotationSpeed * 0.0058 * appState.rotationMultiplier * appState.rotationMultiplierTemporary * hoverMotionFactor;
+            // ==================== ★ 核心轨迹算法：天体多轴谐波进动巡弋引擎 ====================
+            // 在精确的 tourCycle.duration 时间内，通过互质谐波函数使得赤道与两极所有卡片 100% 毫无死角展现在视口正前方
+            if (appState.autoRotate && appState.wordSphereGroup && !appState.isFlowMode) {
+                if (!appState.tourCycle.lastTime) appState.tourCycle.lastTime = time;
+                const dt = Math.max(0, (time - appState.tourCycle.lastTime) / 1000);
+                appState.tourCycle.lastTime = time;
 
-            if (appState.autoRotate && baseRotationSpeed > 0 && appState.wordSphereGroup && !appState.isFlowMode) {
+                const T = Math.max(2.0, appState.tourCycle.duration || APP_CONFIG.DEFAULT_TOUR_CYCLE_DURATION);
+                
+                // 优先级判断：如果被手动加速/减速，使用手动的 speedFactor；否则严格遵守设定的总秒数 T
+                const effectiveSpeedFactor = appState.tourCycle.isManualSpeedOverride 
+                    ? appState.tourCycle.speedFactor 
+                    : 1.0;
+
+                const progressDelta = (dt / T) * effectiveSpeedFactor * appState.rotationMultiplier * appState.rotationMultiplierTemporary * hoverMotionFactor;
+                appState.tourCycle.progress = (appState.tourCycle.progress + progressDelta) % 1.0;
+
+                const tau = appState.tourCycle.progress; // 0.0 ~ 1.0
+                const phi = tau * Math.PI * 2;
+
+                // 谐波分量：Yaw（全经度3周转），Pitch（纬度南北俯仰扫射），Roll（天体进动横滚防死角）
+                const yaw = (APP_CONFIG.TOUR_YAW_HARMONIC || 3) * phi;
+                const pitch = (APP_CONFIG.TOUR_PITCH_AMPLITUDE || 1.15) * Math.sin((APP_CONFIG.TOUR_PITCH_HARMONIC || 2) * phi);
+                const roll = (APP_CONFIG.TOUR_ROLL_AMPLITUDE || 0.52) * Math.sin((APP_CONFIG.TOUR_ROLL_HARMONIC || 1) * phi + Math.PI / 4);
+
                 const rx = appState.rt.rotateX !== undefined ? appState.rt.rotateX : true;
                 const ry = appState.rt.rotateY !== undefined ? appState.rt.rotateY : true;
                 const rz = appState.rt.rotateZ !== undefined ? appState.rt.rotateZ : false;
-                if (rx) appState.wordSphereGroup.rotation.x += baseRotationSpeed;
-                if (ry) appState.wordSphereGroup.rotation.y += baseRotationSpeed;
-                if (rz) appState.wordSphereGroup.rotation.z += baseRotationSpeed;
+
+                appState.wordSphereGroup.rotation.set(
+                    rx ? pitch : 0,
+                    ry ? yaw : 0,
+                    rz ? roll : 0,
+                    'YXZ'
+                );
+            } else {
+                appState.tourCycle.lastTime = time;
             }
 
             const shouldCardsRotate = appState.rt.cardSelfRotation !== undefined ? appState.rt.cardSelfRotation : true;
@@ -372,7 +414,7 @@
                 appState.wordSphereGroup.updateMatrixWorld(true);
             }
 
-            // ★ 计算全局高亮倍率
+            // 全局高亮倍率 (L 键)
             const lightBoost = appState.isLightBoosted ? 1.6 : 1.0;
 
             if (!appState.isFlowMode) {
@@ -403,14 +445,13 @@
 
                     card.scale.set(finalScale, finalScale, finalScale);
 
-                    // 亮度衰减极大幅缩减：正面0.96 -> 背面0.90，衰减仅6%左右
+                    // 深度衰减优化：正面0.96 -> 背面0.90，仅衰减约 6%
                     const frontOpacity = THREE.MathUtils.lerp(0.96, 0.90, t) * glassBreath;
                     const sideOpacity = THREE.MathUtils.lerp(0.38, 0.35, t) * glassBreath;
 
                     if (Array.isArray(card.material)) {
                         if (card.material[0]) {
                             card.material[0].opacity = frontOpacity;
-                            // 光照补偿 + 全局高亮
                             if (card.userData && card.userData.baseEmissiveIntensity !== undefined) {
                                 card.material[0].emissiveIntensity = card.userData.baseEmissiveIntensity * (1.0 + t * 1.5) * lightBoost;
                             }
@@ -418,7 +459,6 @@
                         if (card.material[1]) {
                             card.material[1].opacity = sideOpacity;
                             const spotlightBoost = isSpotlightTarget ? 1.6 : 1.0;
-                            // 侧边厚度同步补偿 + 全局高亮
                             card.material[1].emissiveIntensity = basePulse * (1.0 + t * 1.0) * 1.5 * spotlightBoost * lightBoost;
                         }
                     } else if (card.material) {
