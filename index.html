@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<!-- ★ 核心视口修复：锁定移动端视口与安全边距，彻底杜绝手机双指缩放导致的 HUD 控件移出屏幕消失 -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<!-- ★ 视口极致加固：锁定移动端无缩放，彻底杜绝手机捏合手势导致网页整体缩放与 HUD 移出屏幕 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover">
 <meta name="HandheldFriendly" content="true">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,7 +12,7 @@
 <title>3D单词宇宙 (V8.6 极速联动版)</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230a1c3d' stroke='%2300f0ff' stroke-width='6'/><text x='50' y='58' font-size='32' text-anchor='middle' fill='%2368d0ff' font-family='sans-serif'>🪐</text></svg>">
 
-<!-- 安全按需载入 PWA Manifest：避免在 file:/// 协议下触发浏览器跨域安全拦截错误 -->
+<!-- 安全按需载入 PWA Manifest -->
 <script>
     if (window.location.protocol.startsWith('http')) {
         const link = document.createElement('link');
@@ -45,7 +45,7 @@
 <div id="wordSphere"></div>
 </div>
 
-<!-- ★ 顶层 HUD：尺寸缩减 40%，杜绝移动端左右重叠碰撞 -->
+<!-- ★ 顶层 HUD：尺寸与安全边距锁定 -->
 <div id="clockHud" aria-label="当前时间" title="双击或长按可快速呼出智能备注系统">00:00</div>
 
 <div id="topRightHudBar">
@@ -63,7 +63,9 @@
     </div>
     <div id="focusCruiseExpandPanel" class="focus-cruise-expand-panel">
         <span id="focusCruiseStatusTag" class="hud-status-tag" title="点击一键开关">开</span>
-        <span id="focusCruiseIntervalPill" class="focus-pill" title="点击修改轮换周期"><span id="focusCruiseIntervalVal">50</span>s</span>
+        <!-- ★ 新增：全卡片过一遍的全览巡航周期调控药丸 -->
+        <span id="focusCruiseTourPill" class="focus-pill" title="点击修改所有卡片完整过一遍的全览周期总时长 (支持重置默认与手动设定)"><span id="focusCruiseTourVal">90</span>s全览</span>
+        <span id="focusCruiseIntervalPill" class="focus-pill" title="点击修改局部焦点抽取轮换周期"><span id="focusCruiseIntervalVal">50</span>s抽</span>
         <span id="focusCruiseRatioPill" class="focus-pill" title="点击修改抽取卡片数量占比(%)"><span id="focusCruiseRatioVal">8</span>%量</span>
         <span id="focusCruiseScalePill" class="focus-pill" title="点击修改单卡放大倍数"><span id="focusCruiseScaleVal">1.5</span>x倍</span>
     </div>
@@ -258,6 +260,11 @@
         <div class="setting-item checkbox-item">
             <input type="checkbox" id="focusCruiseEnabled" checked>
             <label for="focusCruiseEnabled" style="color: #ffd875; font-weight: bold;">局部焦点巡航模式 (✨)</label>
+        </div>
+        <!-- ★ 新增抽屉设置：全卡巡航周期 -->
+        <div class="setting-item">
+            <label for="tourDurationRange" title="以精妙多轴谐波进动算法，在此时间内把所有卡片全景检阅一遍">全卡过一遍总时长 (秒)</label>
+            <input type="range" id="tourDurationRange" min="3" max="600" value="90" step="5">
         </div>
         <div class="setting-item"><label for="focusCruiseIntervalRange">轮换周期 (秒)</label><input type="range" id="focusCruiseIntervalRange" min="2" max="600" value="50" step="5"></div>
         <div class="setting-item"><label for="focusCruiseRatioRange">放大数量占比 (%)</label><input type="range" id="focusCruiseRatioRange" min="0.5" max="100" value="8" step="0.5"></div>
@@ -527,7 +534,7 @@
 </div>
 </div>
 
-<!-- 🔢 全功能数字参数步进模态弹窗 -->
+<!-- 🔢 全功能数字参数步进模态弹窗 (支持快捷恢复出厂默认值按钮) -->
 <div id="numberPromptModalBackdrop" class="modal-backdrop">
 <div class="prompt-modal-box">
     <h3 id="promptModalTitle">调节参数</h3>
@@ -536,7 +543,8 @@
         <input type="number" id="promptModalInput" class="prompt-num-input">
         <button type="button" id="promptModalPlus" class="prompt-step-btn">+</button>
     </div>
-    <div style="display: flex; justify-content: center; gap: 12px;">
+    <div class="modal-actions" style="justify-content: center;">
+        <button type="button" id="promptModalReset" class="modal-btn reset-btn hidden">恢复默认 (90s)</button>
         <button type="button" id="promptModalConfirm" class="modal-btn">确定</button>
         <button type="button" id="promptModalCancel" class="modal-btn secondary-btn">取消</button>
     </div>
