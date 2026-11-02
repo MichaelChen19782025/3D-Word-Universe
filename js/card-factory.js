@@ -567,8 +567,8 @@
             function drawPillButton(label, x, y, w, h, variant = 'normal') {
                 context.save();
                 if (variant === 'shield') {
-                    context.fillStyle = "rgba(220, 38, 38, 0.18)";
-                    context.strokeStyle = "rgba(255, 120, 120, 0.65)";
+                    context.fillStyle = "rgba(220, 38, 38, 0.25)";
+                    context.strokeStyle = "rgba(255, 120, 120, 0.85)";
                 } else if (variant === 'note') {
                     context.fillStyle = "rgba(255, 216, 117, 0.22)";
                     context.strokeStyle = "rgba(255, 216, 117, 0.75)";
@@ -619,24 +619,25 @@
             }
 
             drawPillButton("🔊", btnSpeakerX, btnY, btnSpeakerW, btnHeight, 'normal');
-            zones.push({ type: 'speak', xMin: btnSpeakerX - 6, xMax: btnSpeakerX + btnSpeakerW + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+            zones.push({ type: 'speak', xMin: btnSpeakerX - 6 * scale, xMax: btnSpeakerX + btnSpeakerW + 6 * scale, yMin: btnY - 8 * scale, yMax: btnY + btnHeight + 8 * scale });
 
             drawPillButton("A-", btnMinusX, btnY, btnMinusW, btnHeight, 'normal');
-            zones.push({ type: 'fontSizeDown', xMin: btnMinusX - 6, xMax: btnMinusX + btnMinusW + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+            zones.push({ type: 'fontSizeDown', xMin: btnMinusX - 6 * scale, xMax: btnMinusX + btnMinusW + 6 * scale, yMin: btnY - 8 * scale, yMax: btnY + btnHeight + 8 * scale });
 
             drawPillButton("A+", btnPlusX, btnY, btnPlusW, btnHeight, 'normal');
-            zones.push({ type: 'fontSizeUp', xMin: btnPlusX - 6, xMax: btnPlusX + btnPlusW + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+            zones.push({ type: 'fontSizeUp', xMin: btnPlusX - 6 * scale, xMax: btnPlusX + btnPlusW + 6 * scale, yMin: btnY - 8 * scale, yMax: btnY + btnHeight + 8 * scale });
 
             const pinIcon = isPinned ? "🔒" : "📌";
             drawPillButton(pinIcon, btnPinX, btnY, btnPinW, btnHeight, isPinned ? 'pinned' : 'pin');
-            zones.push({ type: 'togglePin', xMin: btnPinX - 6, xMax: btnPinX + btnPinW + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+            zones.push({ type: 'togglePin', xMin: btnPinX - 6 * scale, xMax: btnPinX + btnPinW + 6 * scale, yMin: btnY - 8 * scale, yMax: btnY + btnHeight + 8 * scale });
 
             const noteIcon = notesCount > 0 ? "📝" + notesCount : "📝";
             drawPillButton(noteIcon, btnNoteX, btnY, btnNoteW, btnHeight, 'note');
-            zones.push({ type: 'note', xMin: btnNoteX - 6, xMax: btnNoteX + btnNoteW + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+            zones.push({ type: 'note', xMin: btnNoteX - 6 * scale, xMax: btnNoteX + btnNoteW + 6 * scale, yMin: btnY - 8 * scale, yMax: btnY + btnHeight + 8 * scale });
 
+            // 🛡️ 屏蔽按钮：扩大命中热区，支持触控轻击
             drawPillButton("🛡️", btnShieldX, btnY, btnShieldW, btnHeight, 'shield');
-            zones.push({ type: 'shield', xMin: btnShieldX - 6, xMax: btnShieldX + btnShieldW + 6, yMin: btnY - 6, yMax: btnY + btnHeight + 6 });
+            zones.push({ type: 'shield', xMin: btnShieldX - 10 * scale, xMax: btnShieldX + btnShieldW + 16 * scale, yMin: btnY - 10 * scale, yMax: btnY + btnHeight + 12 * scale });
 
             zones.push({ type: 'speak', xMin: paddingX - 10, xMax: btnSpeakerX - spacing, yMin: paddingY - 10, yMax: paddingY + mainWordHeight + 10 });
 

@@ -330,6 +330,7 @@
             );
             backplate.name = "backplate";
             backplate.renderOrder = 999990;
+            backplate.raycast = () => {}; // 禁用射线检测，防止遮挡点击
             group.add(backplate);
 
             const glowCanvas = document.createElement('canvas');
@@ -359,6 +360,7 @@
             coreGlow.name = "coreGlow";
             coreGlow.position.z = 0.008;
             coreGlow.renderOrder = 999992;
+            coreGlow.raycast = () => {}; // 禁用射线检测，防止遮挡点击
             group.add(coreGlow);
 
             const screen = new THREE.Mesh(
@@ -382,11 +384,13 @@
             cornerBracketsGroup.renderOrder = 999998;
             cornerBracketsGroup.children.forEach(c => {
                 c.renderOrder = 999998;
+                c.raycast = () => {}; // ★ 关键修复：彻底禁用边角装饰的射线检测，绝不遮挡右上角屏蔽按钮
                 if (c.material) {
                     c.material.depthTest = false;
                     c.material.depthWrite = false;
                 }
             });
+            cornerBracketsGroup.raycast = () => {};
             group.add(cornerBracketsGroup);
 
             group.renderOrder = 999999;
@@ -802,6 +806,20 @@
             document.getElementById('exportSettingsBtn')?.addEventListener('click', () => this.exportSettings());
             document.getElementById('importSettingsBtn')?.addEventListener('click', () => this.importSettings());
 
+            // ★ 核心修复：绑定撤销屏蔽词库按钮
+            document.getElementById('clearShieldedBtn')?.addEventListener('click', () => this.clearOrManageShieldedWords());
+            // ★ 核心修复：绑定右侧悬浮栏中的屏蔽管理按钮
+            document.getElementById('batchShieldToggleBtn')?.addEventListener('click', () => this.clearOrManageShieldedWords());
+
+            // ★ 核心修复：绑定沉浸式详情面板底部的屏蔽按钮
+            document.getElementById('shieldSingleWordBtn')?.addEventListener('click', () => {
+                if (appState.currentDetailWord) {
+                    if (confirm(`确定要将单词 "${appState.currentDetailWord.words}" 移入屏蔽词库吗？`)) {
+                        this.shieldWord(appState.currentDetailWord);
+                    }
+                }
+            });
+
             document.getElementById('openSmartNoteBtnFromSettings')?.addEventListener('click', () => {
                 document.getElementById('controlsOverlay')?.classList.remove('visible');
                 this.openSmartNoteModal(null);
@@ -902,7 +920,7 @@
             }
 
             document.getElementById('helpBtn')?.addEventListener('click', () => {
-                alert('3D单词宇宙使用指南：\n1. 点击卡片可呼出查词并立即静止；\n2. 右上角巡航设置新增【全览周期】：无论设定时长多久，系统均以精巧三维互质多轴进动轨迹让所有卡片毫无死角过一遍；\n3. 巡航设置内支持【恢复默认(90s)】与【手动设定】，手动设定将作为下次启动的默认值；\n4. 手动加速/减速与巡航设定具备严格优先级联动；\n5. 按 L 键或双击空白处可一键提亮 40% 或恢复卡片群亮度！');
+                alert('3D单词宇宙使用指南：\n1. 点击卡片可呼出查词并立即静止；\n2. 卡片右上角【🛡️】可一键屏蔽该单词，被屏蔽单词可在左侧设置抽屉或右侧操作栏点击【清除屏蔽词库】一键撤销并恢复；\n3. 右上角巡航设置新增【全览周期】：无论设定时长多久，系统均以精巧三维互质多轴进动轨迹让所有卡片毫无死角过一遍；\n4. 巡航设置内支持【恢复默认(90s)】与【手动设定】，手动设定将作为下次启动的默认值；\n5. 手动加速/减速与巡航设定具备严格优先级联动；\n6. 按 L 键或双击空白处可一键提亮 40% 或恢复卡片群亮度！');
             });
         },
 
@@ -2014,95 +2032,85 @@
             raycaster.setFromCamera(mouse, appState.camera);
 
             if (appState.hoverOverlayCard && appState.hoverOverlayCard.visible) {
-                const intersectsCard = raycaster.intersectObjects([appState.hoverOverlayCard], true);
-                if (intersectsCard.length > 0) {
-                    const intersect = intersectsCard[0];
-                    const uv = intersect.uv;
-                    const screenMesh = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
-                    const texture = screenMesh?.material?.map;
+                const screenMesh = appState.hoverOverlayCard.getObjectByName("textScreen") || appState.hoverOverlayCard.userData.refs?.screen;
+                if (screenMesh) {
+                    // ★ 核心修复：精准只对显示内容的 textScreen 做射线检测，绝不被装饰框架干扰
+                    const intersectsCard = raycaster.intersectObject(screenMesh, false);
+                    if (intersectsCard.length > 0) {
+                        const intersect = intersectsCard[0];
+                        const uv = intersect.uv;
+                        const texture = screenMesh?.material?.map;
 
-                    if (texture && uv) {
-                        const canvasWidth = texture.image.width;
-                        const canvasHeight = texture.image.height;
-                        const clickX = uv.x * canvasWidth;
-                        const clickY = (1 - uv.y) * canvasHeight;
+                        if (texture && uv) {
+                            const canvasWidth = texture.image.width;
+                            const canvasHeight = texture.image.height;
+                            const clickX = uv.x * canvasWidth;
+                            const clickY = (1 - uv.y) * canvasHeight;
 
-                        const wordData = appState.hoveredObject?.userData?.word;
-                        const zones = wordData?.hover_click_zones || appState.hoverOverlayCard.userData.hover_click_zones || [];
+                            const wordData = appState.hoveredObject?.userData?.word || appState.hoverOverlayCard.userData.word;
+                            const zones = wordData?.hover_click_zones || appState.hoverOverlayCard.userData.hover_click_zones || [];
 
-                        if (wordData && zones.length > 0) {
-                            for (const zone of zones) {
-                                if (clickX >= zone.xMin && clickX <= zone.xMax && clickY >= zone.yMin && clickY <= zone.yMax) {
-                                    if (zone.type === 'speak') {
-                                        AppAudio.speakWord(wordData.words, 1);
-                                        this.showToast('🔊 朗读: ' + wordData.words);
-                                    } else if (zone.type === 'fontSizeDown') {
-                                        const scaleInput = document.getElementById('hoverOverlayCardScale');
-                                        let currentScale = Math.max(0.3, parseFloat(scaleInput?.value || 1.0) - 0.15);
-                                        if (scaleInput) {
-                                            scaleInput.value = currentScale.toFixed(2);
-                                            scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            if (wordData && zones.length > 0) {
+                                for (const zone of zones) {
+                                    if (clickX >= zone.xMin && clickX <= zone.xMax && clickY >= zone.yMin && clickY <= zone.yMax) {
+                                        if (zone.type === 'speak') {
+                                            AppAudio.speakWord(wordData.words, 1);
+                                            this.showToast('🔊 朗读: ' + wordData.words);
+                                        } else if (zone.type === 'fontSizeDown') {
+                                            const scaleInput = document.getElementById('hoverOverlayCardScale');
+                                            let currentScale = Math.max(0.3, parseFloat(scaleInput?.value || 1.0) - 0.15);
+                                            if (scaleInput) {
+                                                scaleInput.value = currentScale.toFixed(2);
+                                                scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                            }
+                                        } else if (zone.type === 'fontSizeUp') {
+                                            const scaleInput = document.getElementById('hoverOverlayCardScale');
+                                            let currentScale = Math.min(4.0, parseFloat(scaleInput?.value || 1.0) + 0.15);
+                                            if (scaleInput) {
+                                                scaleInput.value = currentScale.toFixed(2);
+                                                scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                            }
+                                        } else if (zone.type === 'togglePin') {
+                                            if (!appState.isHoverCardPinned) {
+                                                appState.isHoverCardPinned = true;
+                                                const wordText = (wordData.words || '').trim();
+                                                this.copyToClipboard(wordText).then((ok) => {
+                                                    if (ok) {
+                                                        this.showToast('📌 已锁定常驻，单词已复制至剪贴板', 2500);
+                                                    } else {
+                                                        this.showToast('📌 已锁定卡片常驻', 2000);
+                                                    }
+                                                });
+                                                this.triggerCardDisplay(appState.hoveredObject);
+                                            } else {
+                                                appState.isHoverCardPinned = false;
+                                                appState.hoveredObject = null;
+                                                appState.overlayCardTargetOpacity = 0;
+                                                AppUI.resumeMotionAfterHover();
+                                                appState.needsRender = true;
+                                                this.showToast('📝 卡片已关闭，正在打开 AI 智能备注系统...', 2000);
+                                                setTimeout(() => {
+                                                    this.openSmartNoteModal(wordData, null);
+                                                }, 150);
+                                            }
+                                        } else if (zone.type === 'note') {
+                                            this.openSmartNoteModal(wordData, null);
+                                        } else if (zone.type === 'shield') {
+                                            // ★ 核心修复：点击右上角 🛡️ 弹出确认并调用封装的 shieldWord
+                                            if (confirm('确定要将单词 "' + wordData.words + '" 移入屏蔽词库吗？\n(后续可在设置面板随时一键还原撤销)')) {
+                                                this.shieldWord(wordData);
+                                            }
+                                        } else if (zone.type === 'card_body') {
+                                            this.showImmersiveDetailPanel(wordData);
                                         }
-                                    } else if (zone.type === 'fontSizeUp') {
-                                        const scaleInput = document.getElementById('hoverOverlayCardScale');
-                                        let currentScale = Math.min(4.0, parseFloat(scaleInput?.value || 1.0) + 0.15);
-                                        if (scaleInput) {
-                                            scaleInput.value = currentScale.toFixed(2);
-                                            scaleInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                        }
-                                    } else if (zone.type === 'togglePin') {
-                                        if (!appState.isHoverCardPinned) {
-                                            appState.isHoverCardPinned = true;
-                                            const wordText = (wordData.words || '').trim();
-                                            this.copyToClipboard(wordText).then((ok) => {
-                                                if (ok) {
-                                                    this.showToast('📌 已锁定常驻，单词已复制至剪贴板', 2500);
-                                                } else {
-                                                    this.showToast('📌 已锁定卡片常驻', 2000);
-                                                }
-                                            });
-                                            this.triggerCardDisplay(appState.hoveredObject);
-                                        } else {
-                                            appState.isHoverCardPinned = false;
-                                            appState.hoveredObject = null;
-                                            appState.overlayCardTargetOpacity = 0;
-                                            AppUI.resumeMotionAfterHover();
-                                            appState.needsRender = true;
-                                            this.showToast('📝 卡片已关闭，正在打开 AI 智能备注系统...', 2000);
-                                            setTimeout(() => {
-                                                this.openSmartNoteModal(wordData, null);
-                                            }, 150);
-                                        }
-                                    } else if (zone.type === 'note') {
-                                        this.openSmartNoteModal(wordData, null);
-                                    } else if (zone.type === 'shield') {
-                                        if (confirm('确定要将单词 "' + wordData.words + '" 移入屏蔽词库吗？')) {
-                                            const key = getWordKey(wordData);
-                                            appState.shieldedWords.add(key);
-                                            AppStorage.saveShieldedWords(appState.shieldedWords);
-                                            appState.allWords = appState.allWords.filter(w => getWordKey(w) !== key);
-                                            appState.filteredWords = appState.filteredWords.filter(w => getWordKey(w) !== key);
-                                            appState.currentBatchWords = appState.currentBatchWords.filter(w => getWordKey(w) !== key);
-                                            this.displayCurrentBatch();
-                                            this.updateClearShieldedBtnLabel();
-                                            this.updateStats();
-
-                                            appState.isHoverCardPinned = false;
-                                            appState.hoveredObject = null;
-                                            appState.overlayCardTargetOpacity = 0;
-                                            AppUI.resumeMotionAfterHover();
-                                            this.showToast('🛡️ 已屏蔽单词: ' + wordData.words);
-                                        }
-                                    } else if (zone.type === 'card_body') {
-                                        this.showImmersiveDetailPanel(wordData);
+                                        appState.needsRender = true;
+                                        return;
                                     }
-                                    appState.needsRender = true;
-                                    return;
                                 }
                             }
                         }
+                        return;
                     }
-                    return;
                 }
             }
 
@@ -2134,6 +2142,44 @@
                     AppUI.resumeMotionAfterHover();
                 }
             }
+            appState.needsRender = true;
+        },
+
+        shieldWord(wordData) {
+            if (!wordData) return;
+            const key = getWordKey(wordData);
+
+            if (!appState.shieldedWords) {
+                appState.shieldedWords = new Set();
+            }
+            appState.shieldedWords.add(key);
+            AppStorage.saveShieldedWords(appState.shieldedWords);
+
+            // 从当前各级内存列表中剔除该词
+            appState.allWords = appState.allWords.filter(w => getWordKey(w) !== key);
+            appState.filteredWords = appState.filteredWords.filter(w => getWordKey(w) !== key);
+            appState.currentBatchWords = appState.currentBatchWords.filter(w => getWordKey(w) !== key);
+
+            // 彻底关闭并隐藏悬浮查词卡
+            appState.isHoverCardPinned = false;
+            appState.hoveredObject = null;
+            appState.overlayCardTargetOpacity = 0;
+            if (appState.hoverOverlayCard) {
+                appState.hoverOverlayCard.visible = false;
+            }
+
+            // 如果当前详情面板打开的是这个单词，则一并关闭
+            if (appState.currentDetailWord && getWordKey(appState.currentDetailWord) === key) {
+                this.hideImmersiveDetailPanel();
+            }
+
+            // 重绘批次球体并刷新统计
+            this.displayCurrentBatch();
+            this.updateClearShieldedBtnLabel();
+            this.updateStats();
+            this.resumeMotionAfterHover();
+
+            this.showToast('🛡️ 已将 [' + (wordData.words || '') + '] 移入屏蔽词库！', 2500);
             appState.needsRender = true;
         },
 
@@ -2176,7 +2222,35 @@
                 appState.scheduleHoverCardAutoDismiss();
             }
         },
+async clearOrManageShieldedWords() {
+            const count = appState.shieldedWords ? appState.shieldedWords.size : 0;
+            if (count === 0) {
+                this.showToast('当前屏蔽词库为空，没有被屏蔽的单词~', 2000);
+                return;
+            }
 
+            if (!confirm(`当前屏蔽词库中共有 ${count} 个单词。\n确定要全部撤销屏蔽并恢复到魔法球中吗？`)) {
+                return;
+            }
+
+            // 1. 清空已屏蔽集合并持久化写入
+            appState.shieldedWords.clear();
+            AppStorage.saveShieldedWords(appState.shieldedWords);
+
+            // 2. 从底层完整库（IndexedDB/备份源）重新读取全部单词
+            const fullLibrary = await AppStorage.loadLibrary();
+            appState.allWords = Array.isArray(fullLibrary) ? [...fullLibrary] : [];
+            appState.filteredWords = [...appState.allWords];
+            appState.currentBatchIndex = 0;
+
+            // 3. 刷新球面显示、批次与标签状态
+            this.displayCurrentBatch();
+            this.updateClearShieldedBtnLabel();
+            this.updateStats();
+
+            this.showToast(`✨ 撤销成功！已恢复全部 ${count} 个被屏蔽单词！`, 3000);
+            appState.needsRender = true;
+        },
         showImmersiveDetailPanel(word) {
             if (!word) return;
             appState.currentDetailWord = word;
